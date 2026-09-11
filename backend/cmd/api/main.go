@@ -52,7 +52,47 @@ func run() error {
 	dashboardService := service.NewDashboardService(transactionRepo)
 
 	handlers := httpapi.NewHandlers(categoryRepo, cardRepo, transactionService, dashboardService)
-	router := httpapi.NewRouter(handlers)
+
+	billRepo := postgres.NewBillRepo(db)
+	billService := service.NewBillService(billRepo, categoryRepo)
+	billHandlers := httpapi.NewBillHandlers(billService)
+
+	noteRepo := postgres.NewNoteRepo(db)
+	noteService := service.NewNoteService(noteRepo)
+	noteHandlers := httpapi.NewNoteHandlers(noteService)
+
+	reminderRepo := postgres.NewReminderRepo(db)
+	reminderService := service.NewReminderService(reminderRepo)
+	reminderHandlers := httpapi.NewReminderHandlers(reminderService)
+
+	eventRepo := postgres.NewEventRepo(db)
+	googleTokenRepo := postgres.NewGoogleTokenRepo(db)
+	googleService := service.NewGoogleService(googleTokenRepo)
+	eventService := service.NewEventService(eventRepo, googleService)
+	eventHandlers := httpapi.NewEventHandlers(eventService, googleService)
+
+	// The vault module needs VAULT_ENCRYPTION_KEY and the WEBAUTHN_* env vars
+	// to exist at all — treat their absence as "module disabled" rather than
+	// a fatal boot error, so the rest of the app still comes up on a fresh
+	// checkout before those are configured.
+	var vaultHandlers *httpapi.VaultHandlers
+	vaultRepo := postgres.NewVaultRepo(db)
+	webauthnCredRepo := postgres.NewWebAuthnCredentialRepo(db)
+	vaultService, vaultErr := service.NewVaultService(vaultRepo)
+	webauthnService, webauthnErr := service.NewWebAuthnService(webauthnCredRepo)
+	if vaultErr != nil || webauthnErr != nil {
+		slog.Warn("vault module disabled: set VAULT_ENCRYPTION_KEY and WEBAUTHN_* to enable /senhas", "vault_error", vaultErr, "webauthn_error", webauthnErr)
+	} else {
+		vaultHandlers = httpapi.NewVaultHandlers(vaultService, webauthnService)
+	}
+
+	router := httpapi.NewRouter(handlers, httpapi.Modules{
+		Bills:     billHandlers,
+		Vault:     vaultHandlers,
+		Notes:     noteHandlers,
+		Reminders: reminderHandlers,
+		Events:    eventHandlers,
+	})
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

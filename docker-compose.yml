@@ -22,6 +22,16 @@ services:
     environment:
       PORT: 8080
       DATABASE_URL: postgres://estus:estus@postgres:5432/estus_vault?sslmode=disable
+      # Cofre de senhas — deixe em branco para rodar sem esse módulo.
+      VAULT_ENCRYPTION_KEY: ${VAULT_ENCRYPTION_KEY:-}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_RP_ORIGIN: ${WEBAUTHN_RP_ORIGIN:-http://localhost:3000}
+      WEBAUTHN_RP_DISPLAY_NAME: Estus Vault
+      # Agenda / Google Calendar — deixe em branco para rodar só localmente.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/google/oauth/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy

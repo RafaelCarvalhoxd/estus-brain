@@ -1,14 +1,28 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   IconOverview,
-  IconList,
-  IconCard,
-  IconTag,
-  IconRepeat,
+  IconReceipt,
   IconLock,
+  IconNote,
+  IconBell,
+  IconCalendar,
 } from "./icons";
 
+const NAV = [
+  { href: "/", label: "Visão geral", icon: IconOverview },
+  { href: "/contas", label: "Contas", icon: IconReceipt },
+  { href: "/senhas", label: "Senhas", icon: IconLock },
+  { href: "/notas", label: "Notas", icon: IconNote },
+  { href: "/lembretes", label: "Lembretes", icon: IconBell },
+  { href: "/agenda", label: "Agenda", icon: IconCalendar },
+];
+
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="rail">
       <div className="brand">
@@ -23,26 +37,12 @@ export function Sidebar() {
       </div>
 
       <nav className="nav">
-        <Link className="active" href="/">
-          <IconOverview />
-          Visão geral
-        </Link>
-        <a href="#">
-          <IconList />
-          Lançamentos
-        </a>
-        <a href="#">
-          <IconCard />
-          Cartões
-        </a>
-        <a href="#">
-          <IconTag />
-          Categorias
-        </a>
-        <a href="#">
-          <IconRepeat />
-          Recorrentes
-        </a>
+        {NAV.map(({ href, label, icon: Icon }) => (
+          <Link key={href} className={pathname === href ? "active" : ""} href={href}>
+            <Icon />
+            {label}
+          </Link>
+        ))}
       </nav>
 
       <div className="rail-foot">
