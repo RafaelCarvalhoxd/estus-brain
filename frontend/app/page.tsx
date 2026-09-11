@@ -1,13 +1,21 @@
 import Link from "next/link";
 import { getMonthSummary } from "@/lib/api";
-import { getBillSummary, listBills } from "@/lib/bills";
+import { getBillsReceived } from "@/lib/bills";
 import { listReminders } from "@/lib/reminders";
 import { listEvents } from "@/lib/agenda";
 import { listNotes } from "@/lib/notes";
-import { currentYearMonth } from "@/lib/month";
+import { currentYearMonth, formatYearMonth } from "@/lib/month";
 import { Sidebar } from "@/components/Sidebar";
-import { DeltaPill } from "@/components/DeltaPill";
+import { IconBell, IconCalendar, IconNote } from "@/components/icons";
 import "./ui.css";
+
+function formatCents(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatSigned(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", signDisplay: "always" });
+}
 
 function formatDay(iso: string): string {
   const d = new Date(iso);
@@ -19,19 +27,21 @@ export default async function HomePage() {
   const now = new Date();
   const in14Days = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [finance, billSummary, overdueBills, reminders, events, notes] = await Promise.all([
+  const [finance, received, reminders, events, notes] = await Promise.all([
     getMonthSummary(month),
-    getBillSummary(),
-    listBills("pagar"),
+    getBillsReceived(month),
     listReminders(),
     listEvents(now, in14Days),
     listNotes(),
   ]);
 
-  const openReminders = reminders.filter((r) => !r.done).slice(0, 3);
-  const upcomingEvents = events.slice(0, 3);
-  const recentNotes = notes.slice(0, 3);
-  const lateBills = overdueBills.filter((b) => b.status === "atrasado").length;
+  const saidas = finance.total.cents;
+  const entradas = received.cents;
+  const saldo = entradas - saidas;
+
+  const openReminders = reminders.filter((r) => !r.done).slice(0, 4);
+  const upcomingEvents = events.filter((e) => new Date(e.ends_at) >= now).slice(0, 4);
+  const recentNotes = notes.slice(0, 4);
 
   return (
     <div className="shell">
@@ -42,43 +52,37 @@ export default async function HomePage() {
             <h1 className="page-title">Visão geral</h1>
           </div>
 
-          <section className="digest-grid">
-            <div className="panel">
-              <div className="panel-head">
-                <h2>Financeiro</h2>
-                <Link className="btn-text" href="/financeiro">
-                  Abrir
-                </Link>
-              </div>
-              <p className="tile-label">Gasto do mês</p>
-              <p className="tile-figure tab">{finance.total.formatted}</p>
-              <p className="tile-sub">
-                <DeltaPill currentCents={finance.total.cents} previousCents={finance.previous_month.cents} />
-                vs. mês anterior
-              </p>
+          <section className="hero-balance">
+            <div className="hero-balance-head">
+              <p className="hero-balance-label">Saldo · {formatYearMonth(month)}</p>
+              <Link className="btn-text" href="/financeiro">
+                Ver financeiro
+              </Link>
             </div>
-
-            <div className="panel">
-              <div className="panel-head">
-                <h2>Contas</h2>
-                <Link className="btn-text" href="/financeiro/contas">
-                  Abrir
-                </Link>
+            <p className={`hero-balance-figure tab ${saldo >= 0 ? "is-good" : "is-bad"}`}>{formatSigned(saldo)}</p>
+            <div className="hero-balance-breakdown">
+              <div className="hero-balance-stat">
+                <span className="hero-balance-dot dot-good" />
+                <span className="hero-balance-stat-label">Entradas</span>
+                <span className="hero-balance-stat-figure tab">{formatCents(entradas)}</span>
               </div>
-              <p className="tile-label">A pagar em aberto</p>
-              <p className="tile-figure tab">{billSummary.payable_open.formatted}</p>
-              {lateBills > 0 ? (
-                <p className="tile-sub">
-                  <span className="pill bad">{lateBills} atrasada{lateBills > 1 ? "s" : ""}</span>
-                </p>
-              ) : (
-                <p className="tile-sub">nada atrasado</p>
-              )}
+              <div className="hero-balance-stat">
+                <span className="hero-balance-dot dot-bad" />
+                <span className="hero-balance-stat-label">Saídas</span>
+                <span className="hero-balance-stat-figure tab">{formatCents(saidas)}</span>
+              </div>
             </div>
+          </section>
 
-            <div className="panel">
+          <section className="overview-grid">
+            <div className="panel overview-card">
               <div className="panel-head">
-                <h2>Lembretes</h2>
+                <div className="overview-card-title">
+                  <span className="overview-icon">
+                    <IconBell />
+                  </span>
+                  <h2>Lembretes</h2>
+                </div>
                 <Link className="btn-text" href="/lembretes">
                   Abrir
                 </Link>
@@ -86,18 +90,25 @@ export default async function HomePage() {
               {openReminders.length === 0 ? (
                 <p className="empty-note">Nada pendente.</p>
               ) : (
-                openReminders.map((r) => (
-                  <div className="digest-row" key={r.id}>
-                    <span className="digest-row-title">{r.title}</span>
-                    <span className="digest-row-meta">{r.due_at ? formatDay(r.due_at) : "sem data"}</span>
-                  </div>
-                ))
+                <div className="overview-list">
+                  {openReminders.map((r) => (
+                    <div className="overview-row" key={r.id}>
+                      <span className="overview-row-title">{r.title}</span>
+                      <span className="overview-row-meta">{r.due_at ? formatDay(r.due_at) : "sem data"}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
-            <div className="panel">
+            <div className="panel overview-card">
               <div className="panel-head">
-                <h2>Agenda</h2>
+                <div className="overview-card-title">
+                  <span className="overview-icon">
+                    <IconCalendar />
+                  </span>
+                  <h2>Agenda</h2>
+                </div>
                 <Link className="btn-text" href="/agenda">
                   Abrir
                 </Link>
@@ -105,18 +116,25 @@ export default async function HomePage() {
               {upcomingEvents.length === 0 ? (
                 <p className="empty-note">Nada nos próximos 14 dias.</p>
               ) : (
-                upcomingEvents.map((e) => (
-                  <div className="digest-row" key={e.id}>
-                    <span className="digest-row-title">{e.title}</span>
-                    <span className="digest-row-meta">{formatDay(e.starts_at)}</span>
-                  </div>
-                ))
+                <div className="overview-list">
+                  {upcomingEvents.map((e) => (
+                    <div className="overview-row" key={e.id}>
+                      <span className="overview-row-title">{e.title}</span>
+                      <span className="overview-row-meta">{formatDay(e.starts_at)}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
-            <div className="panel">
+            <div className="panel overview-card">
               <div className="panel-head">
-                <h2>Notas</h2>
+                <div className="overview-card-title">
+                  <span className="overview-icon">
+                    <IconNote />
+                  </span>
+                  <h2>Notas</h2>
+                </div>
                 <Link className="btn-text" href="/notas">
                   Abrir
                 </Link>
@@ -124,12 +142,14 @@ export default async function HomePage() {
               {recentNotes.length === 0 ? (
                 <p className="empty-note">Nenhuma nota ainda.</p>
               ) : (
-                recentNotes.map((n) => (
-                  <div className="digest-row" key={n.id}>
-                    <span className="digest-row-title">{n.title || "Sem título"}</span>
-                    <span className="digest-row-meta">{formatDay(n.updated_at)}</span>
-                  </div>
-                ))
+                <div className="overview-list">
+                  {recentNotes.map((n) => (
+                    <div className="overview-row" key={n.id}>
+                      <span className="overview-row-title">{n.title || "Sem título"}</span>
+                      <span className="overview-row-meta">{formatDay(n.updated_at)}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </section>
