@@ -365,11 +365,21 @@
 }
 
 /* ---------- Hero tiles ---------- */
-.hero-row {
+.kpi-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  margin-bottom: 22px;
+  margin-bottom: 14px;
+}
+@media (max-width: 720px) {
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 460px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .tile {
   background: var(--surface);
@@ -417,16 +427,6 @@
   background: var(--good-wash);
   color: var(--good);
 }
-.tile-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 14px;
-}
-.spark {
-  flex: none;
-  opacity: 0.9;
-}
 
 /* ---------- Two column ---------- */
 .split {
@@ -462,6 +462,126 @@
   color: var(--ink-mute);
   font-size: 13px;
   padding: 10px 0 4px;
+}
+
+/* ---------- Category donut + budgets ---------- */
+.donut-panel {
+  display: flex;
+  flex-direction: column;
+}
+.donut-body {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.donut {
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  flex: none;
+  position: relative;
+}
+.donut::before {
+  content: "";
+  position: absolute;
+  inset: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.donut-center {
+  position: absolute;
+  inset: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+}
+.donut-center-label {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.donut-center-value {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.category-legend {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.legend-row + .legend-row {
+  border-top: 1px solid var(--hairline);
+}
+.legend-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.legend-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.legend-edit-btn {
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+}
+.legend-row:hover .legend-edit-btn {
+  opacity: 1;
+}
+.legend-edit-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.legend-amt {
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+}
+.legend-budget-bar-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  margin-top: 5px;
+  overflow: hidden;
+}
+.legend-budget-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.legend-budget-text {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-top: 4px;
+}
+.legend-budget-over {
+  color: var(--bad);
+}
+.legend-budget-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.legend-budget-editor .txn-edit-input {
+  width: 110px;
+  padding: 5px 8px;
+  font-size: 12.5px;
 }
 
 .cat-row {
@@ -501,53 +621,6 @@
   text-align: right;
   font-size: 13px;
   font-weight: 600;
-}
-
-.week-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  height: 168px;
-  padding-top: 6px;
-}
-.week-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-  justify-content: flex-end;
-}
-.week-bar-wrap {
-  position: relative;
-  width: 100%;
-  height: 132px;
-  display: flex;
-  align-items: flex-end;
-}
-.week-bar {
-  width: 100%;
-  border-radius: 6px 6px 3px 3px;
-  background: color-mix(in oklab, var(--accent) 78%, var(--ink) 6%);
-}
-.week-bar.avg-over {
-  background: var(--accent);
-}
-.week-val {
-  font-size: 11px;
-  color: var(--ink-soft);
-  font-weight: 600;
-}
-.week-lbl {
-  font-size: 11.5px;
-  color: var(--ink-mute);
-}
-.avg-caption {
-  font-size: 11px;
-  color: var(--ink-mute);
-  text-align: right;
-  margin-top: 4px;
 }
 
 /* ---------- Table ---------- */
@@ -860,9 +933,6 @@ tfoot td {
 }
 
 @media (max-width: 980px) {
-  .hero-row {
-    grid-template-columns: 1fr 1fr;
-  }
   .split,
   .bottom-split {
     grid-template-columns: 1fr;
@@ -874,9 +944,6 @@ tfoot td {
   }
   .main {
     padding: 22px 16px 48px;
-  }
-  .hero-row {
-    grid-template-columns: 1fr;
   }
   .cat-row {
     grid-template-columns: 96px 1fr 70px;

@@ -111,3 +111,7 @@ func (s *BillService) Summary(ctx context.Context) (BillSummary, error) {
 	}
 	return BillSummary{PayableOpenCents: payable, ReceivableOpenCents: receivable, OverdueCount: overdue}, nil
 }
+
+func (s *BillService) ReceivedTotal(ctx context.Context, ym domain.YearMonth) (domain.Cents, error) {
+	return s.bills.ReceivedTotalForMonth(ctx, ym)
+}

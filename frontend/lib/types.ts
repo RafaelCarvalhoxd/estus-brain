@@ -14,6 +14,7 @@ export interface Category {
   name: string;
   nature: "essencial" | "variavel" | "investimento";
   color: string;
+  monthly_budget?: Money;
 }
 
 export interface CreditCard {
@@ -45,6 +46,7 @@ export interface CategorySlice {
   name: string;
   color: string;
   total: Money;
+  monthly_budget?: Money;
 }
 
 export interface CategoryComparison {

@@ -28,6 +28,7 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 	})
 
 	mux.HandleFunc("GET /api/categories", h.ListCategories)
+	mux.HandleFunc("PATCH /api/categories/{id}/budget", h.UpdateCategoryBudget)
 	mux.HandleFunc("GET /api/credit-cards", h.ListCreditCards)
 	mux.HandleFunc("GET /api/months/{month}", h.MonthSummary)
 	mux.HandleFunc("POST /api/transactions", h.CreateTransaction)
@@ -38,6 +39,7 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("GET /api/bills", b.List)
 		mux.HandleFunc("POST /api/bills", b.Create)
 		mux.HandleFunc("GET /api/bills/summary", b.Summary)
+		mux.HandleFunc("GET /api/bills/received", b.ReceivedTotal)
 		mux.HandleFunc("POST /api/bills/{id}/paid", b.MarkPaid)
 		mux.HandleFunc("PUT /api/bills/{id}", b.Update)
 		mux.HandleFunc("DELETE /api/bills/{id}", b.Delete)

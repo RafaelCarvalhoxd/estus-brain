@@ -105,6 +105,23 @@ func (r *BillRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// ReceivedTotalForMonth sums receivable bills actually received (paid_at
+// set) within the given month — the closest thing this app has to
+// "entradas", since there's no separate income ledger.
+func (r *BillRepo) ReceivedTotalForMonth(ctx context.Context, ym domain.YearMonth) (domain.Cents, error) {
+	var total int64
+	err := r.db.Pool.QueryRow(ctx, `
+		select coalesce(sum(amount_cents), 0) from bills
+		where direction = 'receber'
+		and paid_at >= $1 and paid_at < $2`,
+		ym.FirstDay(), ym.Add(1).FirstDay(),
+	).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("received total for %v: %w", ym, err)
+	}
+	return domain.Cents(total), nil
+}
+
 func (r *BillRepo) OpenTotals(ctx context.Context) (payableCents, receivableCents domain.Cents, overdueCount int, err error) {
 	rows, err := r.db.Pool.Query(ctx, `
 		select direction, coalesce(sum(amount_cents), 0)

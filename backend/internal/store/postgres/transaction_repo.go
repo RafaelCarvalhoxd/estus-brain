@@ -90,11 +90,12 @@ func (r *TransactionRepo) ListByCompetenceMonth(ctx context.Context, ym domain.Y
 }
 
 type CategoryTotal struct {
-	CategoryID string
-	Name       string
-	Color      string
-	Nature     domain.CategoryNature
-	TotalCents domain.Cents
+	CategoryID         string
+	Name               string
+	Color              string
+	Nature             domain.CategoryNature
+	TotalCents         domain.Cents
+	MonthlyBudgetCents *domain.Cents
 }
 
 // TotalsByCategory sums every transaction competing for the given month,
@@ -102,10 +103,10 @@ type CategoryTotal struct {
 // dashboard can render a stable, fully-ranked list.
 func (r *TransactionRepo) TotalsByCategory(ctx context.Context, ym domain.YearMonth) ([]CategoryTotal, error) {
 	rows, err := r.db.Pool.Query(ctx, `
-		select c.id, c.name, c.color, c.nature, coalesce(sum(t.amount_cents), 0)
+		select c.id, c.name, c.color, c.nature, c.monthly_budget_cents, coalesce(sum(t.amount_cents), 0)
 		from categories c
 		left join transactions t on t.category_id = c.id and t.competence_month = $1
-		group by c.id, c.name, c.color, c.nature
+		group by c.id, c.name, c.color, c.nature, c.monthly_budget_cents
 		order by coalesce(sum(t.amount_cents), 0) desc, c.name`,
 		ym.FirstDay(),
 	)
@@ -118,10 +119,15 @@ func (r *TransactionRepo) TotalsByCategory(ctx context.Context, ym domain.YearMo
 	for rows.Next() {
 		var ct CategoryTotal
 		var total int64
-		if err := rows.Scan(&ct.CategoryID, &ct.Name, &ct.Color, &ct.Nature, &total); err != nil {
+		var budget *int64
+		if err := rows.Scan(&ct.CategoryID, &ct.Name, &ct.Color, &ct.Nature, &budget, &total); err != nil {
 			return nil, fmt.Errorf("scan category total: %w", err)
 		}
 		ct.TotalCents = domain.Cents(total)
+		if budget != nil {
+			b := domain.Cents(*budget)
+			ct.MonthlyBudgetCents = &b
+		}
 		out = append(out, ct)
 	}
 	return out, rows.Err()

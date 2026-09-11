@@ -13,14 +13,24 @@ import (
 // re-implements Brazilian currency formatting).
 
 type categoryDTO struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Nature string `json:"nature"`
-	Color  string `json:"color"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Nature        string    `json:"nature"`
+	Color         string    `json:"color"`
+	MonthlyBudget *moneyDTO `json:"monthly_budget,omitempty"`
 }
 
 func toCategoryDTO(c domain.Category) categoryDTO {
-	return categoryDTO{ID: c.ID, Name: c.Name, Nature: string(c.Nature), Color: c.Color}
+	dto := categoryDTO{ID: c.ID, Name: c.Name, Nature: string(c.Nature), Color: c.Color}
+	if c.MonthlyBudgetCents != nil {
+		m := toMoneyDTO(*c.MonthlyBudgetCents)
+		dto.MonthlyBudget = &m
+	}
+	return dto
+}
+
+type updateCategoryBudgetRequest struct {
+	MonthlyBudgetCents *int64 `json:"monthly_budget_cents"`
 }
 
 type creditCardDTO struct {
@@ -76,10 +86,11 @@ func toTransactionDTO(t postgres.TransactionRow) transactionDTO {
 }
 
 type categorySliceDTO struct {
-	CategoryID string   `json:"category_id"`
-	Name       string   `json:"name"`
-	Color      string   `json:"color"`
-	Total      moneyDTO `json:"total"`
+	CategoryID    string    `json:"category_id"`
+	Name          string    `json:"name"`
+	Color         string    `json:"color"`
+	Total         moneyDTO  `json:"total"`
+	MonthlyBudget *moneyDTO `json:"monthly_budget,omitempty"`
 }
 
 type categoryComparisonDTO struct {
@@ -112,6 +123,10 @@ func toMonthSummaryDTO(s service.MonthSummary) monthSummaryDTO {
 	categories := make([]categorySliceDTO, len(s.Categories))
 	for i, c := range s.Categories {
 		categories[i] = categorySliceDTO{CategoryID: c.CategoryID, Name: c.Name, Color: c.Color, Total: toMoneyDTO(c.TotalCents)}
+		if c.MonthlyBudgetCents != nil {
+			m := toMoneyDTO(*c.MonthlyBudgetCents)
+			categories[i].MonthlyBudget = &m
+		}
 	}
 	comparison := make([]categoryComparisonDTO, len(s.Comparison))
 	for i, c := range s.Comparison {

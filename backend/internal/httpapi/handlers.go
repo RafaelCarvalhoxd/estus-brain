@@ -35,6 +35,31 @@ func (h *Handlers) ListCategories(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// UpdateCategoryBudget handles PATCH /api/categories/{id}/budget. Sending
+// monthly_budget_cents as null clears the budget.
+func (h *Handlers) UpdateCategoryBudget(w http.ResponseWriter, r *http.Request) {
+	var req updateCategoryBudgetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	var budget *domain.Cents
+	if req.MonthlyBudgetCents != nil {
+		if *req.MonthlyBudgetCents <= 0 {
+			writeError(w, fmt.Errorf("%w: monthly_budget_cents must be positive", domain.ErrValidation))
+			return
+		}
+		c := domain.Cents(*req.MonthlyBudgetCents)
+		budget = &c
+	}
+	updated, err := h.categories.UpdateBudget(r.Context(), r.PathValue("id"), budget)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toCategoryDTO(updated))
+}
+
 func (h *Handlers) ListCreditCards(w http.ResponseWriter, r *http.Request) {
 	cards, err := h.cards.List(r.Context())
 	if err != nil {

@@ -102,6 +102,21 @@ func (h *BillHandlers) Summary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toBillSummaryDTO(summary))
 }
 
+// ReceivedTotal handles GET /api/bills/received?month=YYYY-MM.
+func (h *BillHandlers) ReceivedTotal(w http.ResponseWriter, r *http.Request) {
+	ym, err := parseYearMonth(r.URL.Query().Get("month"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: month must be YYYY-MM", domain.ErrValidation))
+		return
+	}
+	total, err := h.bills.ReceivedTotal(r.Context(), ym)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]moneyDTO{"received": toMoneyDTO(total)})
+}
+
 // MarkPaid handles POST /api/bills/{id}/paid.
 func (h *BillHandlers) MarkPaid(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

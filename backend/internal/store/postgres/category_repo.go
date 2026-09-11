@@ -14,9 +14,28 @@ type CategoryRepo struct{ db *DB }
 
 func NewCategoryRepo(db *DB) *CategoryRepo { return &CategoryRepo{db: db} }
 
+func scanCategory(row scanner, c *domain.Category) error {
+	var budget *int64
+	if err := row.Scan(&c.ID, &c.Name, &c.Nature, &c.Color, &budget, &c.CreatedAt); err != nil {
+		return err
+	}
+	if budget != nil {
+		cents := domain.Cents(*budget)
+		c.MonthlyBudgetCents = &cents
+	}
+	return nil
+}
+
+// scanner is the common subset of pgx.Row and pgx.Rows this package needs —
+// letting scanCategory take either without pgx.Rows satisfying pgx.Row's
+// exact interface out of the box.
+type scanner interface {
+	Scan(dest ...any) error
+}
+
 func (r *CategoryRepo) List(ctx context.Context) ([]domain.Category, error) {
 	rows, err := r.db.Pool.Query(ctx, `
-		select id, name, nature, color, created_at
+		select id, name, nature, color, monthly_budget_cents, created_at
 		from categories
 		order by name`)
 	if err != nil {
@@ -27,7 +46,7 @@ func (r *CategoryRepo) List(ctx context.Context) ([]domain.Category, error) {
 	var out []domain.Category
 	for rows.Next() {
 		var c domain.Category
-		if err := rows.Scan(&c.ID, &c.Name, &c.Nature, &c.Color, &c.CreatedAt); err != nil {
+		if err := scanCategory(rows, &c); err != nil {
 			return nil, fmt.Errorf("scan category: %w", err)
 		}
 		out = append(out, c)
@@ -37,14 +56,14 @@ func (r *CategoryRepo) List(ctx context.Context) ([]domain.Category, error) {
 
 func (r *CategoryRepo) Get(ctx context.Context, id string) (domain.Category, error) {
 	var c domain.Category
-	err := r.db.Pool.QueryRow(ctx, `
-		select id, name, nature, color, created_at
+	row := r.db.Pool.QueryRow(ctx, `
+		select id, name, nature, color, monthly_budget_cents, created_at
 		from categories where id = $1`, id,
-	).Scan(&c.ID, &c.Name, &c.Nature, &c.Color, &c.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Category{}, domain.ErrNotFound
-	}
-	if err != nil {
+	)
+	if err := scanCategory(row, &c); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Category{}, domain.ErrNotFound
+		}
 		return domain.Category{}, fmt.Errorf("get category: %w", err)
 	}
 	return c, nil
@@ -59,6 +78,31 @@ func (r *CategoryRepo) Create(ctx context.Context, c domain.Category) (domain.Ca
 	).Scan(&c.ID, &c.CreatedAt)
 	if err != nil {
 		return domain.Category{}, fmt.Errorf("create category: %w", err)
+	}
+	return c, nil
+}
+
+// UpdateBudget sets or clears (budgetCents == nil) a category's monthly
+// spending target. It's the only mutable field on a category today — name/
+// color/nature are set once at creation and not exposed for editing yet.
+func (r *CategoryRepo) UpdateBudget(ctx context.Context, id string, budgetCents *domain.Cents) (domain.Category, error) {
+	var raw *int64
+	if budgetCents != nil {
+		v := int64(*budgetCents)
+		raw = &v
+	}
+	var c domain.Category
+	row := r.db.Pool.QueryRow(ctx, `
+		update categories set monthly_budget_cents = $2
+		where id = $1
+		returning id, name, nature, color, monthly_budget_cents, created_at`,
+		id, raw,
+	)
+	if err := scanCategory(row, &c); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Category{}, domain.ErrNotFound
+		}
+		return domain.Category{}, fmt.Errorf("update category budget %s: %w", id, err)
 	}
 	return c, nil
 }

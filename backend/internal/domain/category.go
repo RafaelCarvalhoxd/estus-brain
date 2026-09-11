@@ -23,9 +23,10 @@ func (n CategoryNature) Valid() bool {
 }
 
 type Category struct {
-	ID        string
-	Name      string
-	Nature    CategoryNature
-	Color     string // hex, used by the frontend chart legend
-	CreatedAt time.Time
+	ID                 string
+	Name               string
+	Nature             CategoryNature
+	Color              string // hex, used by the frontend chart legend
+	MonthlyBudgetCents *Cents // nil = no budget set
+	CreatedAt          time.Time
 }

@@ -17,11 +17,12 @@ func NewDashboardService(t *postgres.TransactionRepo) *DashboardService {
 }
 
 type CategorySlice struct {
-	CategoryID string
-	Name       string
-	Color      string
-	Nature     domain.CategoryNature
-	TotalCents domain.Cents
+	CategoryID         string
+	Name               string
+	Color              string
+	Nature             domain.CategoryNature
+	TotalCents         domain.Cents
+	MonthlyBudgetCents *domain.Cents
 }
 
 type CategoryComparison struct {
@@ -94,7 +95,10 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 	categories := make([]CategorySlice, len(currentByCat))
 	comparison := make([]CategoryComparison, len(currentByCat))
 	for i, c := range currentByCat {
-		categories[i] = CategorySlice{CategoryID: c.CategoryID, Name: c.Name, Color: c.Color, Nature: c.Nature, TotalCents: c.TotalCents}
+		categories[i] = CategorySlice{
+			CategoryID: c.CategoryID, Name: c.Name, Color: c.Color, Nature: c.Nature,
+			TotalCents: c.TotalCents, MonthlyBudgetCents: c.MonthlyBudgetCents,
+		}
 		comparison[i] = CategoryComparison{
 			CategoryID:    c.CategoryID,
 			Name:          c.Name,

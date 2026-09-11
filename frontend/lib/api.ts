@@ -56,3 +56,10 @@ export function updateTransaction(id: string, description: string, categoryId: s
 export function deleteTransaction(id: string): Promise<unknown> {
   return apiFetch(`/api/transactions/${id}`, { method: "DELETE" });
 }
+
+export function updateCategoryBudget(id: string, monthlyBudgetCents: number | null): Promise<Category> {
+  return apiFetch<Category>(`/api/categories/${id}/budget`, {
+    method: "PATCH",
+    body: JSON.stringify({ monthly_budget_cents: monthlyBudgetCents }),
+  });
+}

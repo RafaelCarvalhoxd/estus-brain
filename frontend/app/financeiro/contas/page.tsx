@@ -19,7 +19,7 @@ export default async function BillsPage() {
         <NewBillModal categories={categories} />
       </div>
 
-      <section className="hero-row">
+      <section className="kpi-grid">
         <div className="tile">
           <p className="tile-label">A pagar em aberto</p>
           <p className="tile-figure tab">{summary.payable_open.formatted}</p>

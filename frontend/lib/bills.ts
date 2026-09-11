@@ -62,6 +62,14 @@ export function getBillSummary(): Promise<BillSummary> {
   return billsFetch<BillSummary>("/api/bills/summary", { cache: "no-store" });
 }
 
+// getBillsReceived is the closest thing this app has to "entradas": the
+// total of receivable bills actually marked received within that month.
+export function getBillsReceived(yearMonth: string): Promise<Money> {
+  return billsFetch<{ received: Money }>(`/api/bills/received?month=${yearMonth}`, { cache: "no-store" }).then(
+    (r) => r.received,
+  );
+}
+
 export function createBill(input: CreateBillInput): Promise<Bill> {
   return billsFetch<Bill>("/api/bills", {
     method: "POST",
