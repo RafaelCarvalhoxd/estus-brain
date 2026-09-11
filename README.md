@@ -1,21 +1,31 @@
 # Estus Vault
 
-Seu app pessoal — não só de finanças. Hoje tem seis módulos:
+Seu app pessoal — não só de finanças. Hoje tem cinco módulos e uma home:
 
-- **Visão geral** — dashboard de finanças: lançamentos, categorias, cartão de
-  crédito com parcelamento, e a regra que motivou o projeto — uma compra no
-  crédito só conta como despesa no mês seguinte ao da compra, nunca no mês
-  da compra em si.
-- **Contas** — contas a pagar e a receber, com status derivado (atrasado/
-  pendente/pago) a partir da data de vencimento, separado do extrato de
-  lançamentos.
-- **Senhas** — um cofre de senhas criptografado (AES-256-GCM), que só revela
-  uma senha depois de uma checagem biométrica (Touch ID/Face ID) via WebAuthn.
-- **Notas** — notas soltas, fixáveis.
-- **Lembretes** — lembretes simples com data opcional, agrupados por
-  atrasado/hoje/próximos.
-- **Agenda** — eventos locais, com sincronização opcional (via OAuth) com o
-  Google Calendar.
+- **Visão geral** (`/`) — não é um módulo, é um mosaico: o essencial de cada
+  módulo abaixo (gasto do mês, contas em aberto, próximos lembretes, próximos
+  eventos, notas recentes), cada card levando direto pra tela cheia daquilo.
+- **Financeiro** (`/financeiro`) — um módulo com quatro seções por abas:
+  - *Dashboard* — o pulso do mês: total gasto (com variação vs. mês anterior),
+    gasto por categoria, ritmo semanal.
+  - *Lançamentos* — o extrato completo do mês e o formulário de novo
+    lançamento, com a regra que motivou o projeto: uma compra no crédito só
+    conta como despesa no mês seguinte ao da compra, nunca no mês da compra
+    em si.
+  - *Categorias* — o detalhamento: gasto por categoria e a comparação mês a
+    mês, categoria a categoria.
+  - *Contas* — contas a pagar e a receber, com status derivado (atrasado/
+    pendente/pago) a partir da data de vencimento — separado do extrato de
+    lançamentos porque é sobre o que ainda vai acontecer, não sobre o que já
+    aconteceu.
+- **Senhas** (`/senhas`) — um cofre de senhas criptografado (AES-256-GCM), que
+  só revela uma senha depois de uma checagem biométrica (Touch ID/Face ID)
+  via WebAuthn.
+- **Notas** (`/notas`) — notas soltas, fixáveis.
+- **Lembretes** (`/lembretes`) — lembretes simples com data opcional,
+  agrupados por atrasado/hoje/próximos.
+- **Agenda** (`/agenda`) — eventos locais, com sincronização opcional (via
+  OAuth) com o Google Calendar.
 
 A arquitetura não assume "só finanças": o backend é um serviço isolado com
 sua própria API, cada módulo mora em arquivos próprios (domínio, repositório,
@@ -141,9 +151,9 @@ Para ativar:
    "puxar do Google" sob demanda + "empurrar ao criar localmente";
    não há webhook de mudanças, então uma edição feita direto no Google só
    aparece aqui depois do próximo "Sincronizar agora".
-5. **Página de cartões e categorias** (do módulo financeiro) — a navegação
-   lateral não tem mais esses links avulsos; Cartões viraria parte da Visão
-   Geral ou um módulo próprio, se algum dia importar.
+5. **Gestão de cartões** — hoje um cartão só existe via seed/API; não tem
+   tela para cadastrar um novo cartão, editar dia de fechamento/vencimento,
+   ou ver a fatura por cartão quando houver mais de um.
 
 ## Testes
 

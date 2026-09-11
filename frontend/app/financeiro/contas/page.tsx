@@ -1,10 +1,8 @@
 import { listBills, getBillSummary } from "@/lib/bills";
 import type { Bill } from "@/lib/bills";
 import { listCategories } from "@/lib/api";
-import { Sidebar } from "@/components/Sidebar";
 import { BillForm } from "@/components/BillForm";
 import { markBillPaidAction } from "./actions";
-import "../ui.css";
 import "./bills.css";
 
 function statusPillClass(status: Bill["status"]): string {
@@ -70,54 +68,49 @@ export default async function BillsPage() {
   ]);
 
   return (
-    <div className="shell">
-      <Sidebar />
-      <main className="main">
-        <div className="wrap">
-          <div className="topbar">
-            <h1 className="page-title">Contas a pagar e a receber</h1>
-          </div>
+    <>
+      <div className="topbar">
+        <h1 className="page-title">Contas a pagar e a receber</h1>
+      </div>
 
-          <section className="hero-row">
-            <div className="tile">
-              <p className="tile-label">A pagar em aberto</p>
-              <p className="tile-figure tab">{summary.payable_open.formatted}</p>
-            </div>
-            <div className="tile">
-              <p className="tile-label">A receber em aberto</p>
-              <p className="tile-figure tab">{summary.receivable_open.formatted}</p>
-            </div>
-            <div className="tile">
-              <p className="tile-label">Atrasados</p>
-              <p className="tile-figure tab">{summary.overdue_count}</p>
-              {summary.overdue_count > 0 && (
-                <p className="tile-sub">
-                  <span className="pill bad">precisa de atenção</span>
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section className="bills-columns">
-            <div className="panel">
-              <div className="panel-head">
-                <h2>A pagar</h2>
-                <span>{payable.length} no total</span>
-              </div>
-              <BillList bills={payable} direction="pagar" />
-            </div>
-            <div className="panel">
-              <div className="panel-head">
-                <h2>A receber</h2>
-                <span>{receivable.length} no total</span>
-              </div>
-              <BillList bills={receivable} direction="receber" />
-            </div>
-          </section>
-
-          <BillForm categories={categories} />
+      <section className="hero-row">
+        <div className="tile">
+          <p className="tile-label">A pagar em aberto</p>
+          <p className="tile-figure tab">{summary.payable_open.formatted}</p>
         </div>
-      </main>
-    </div>
+        <div className="tile">
+          <p className="tile-label">A receber em aberto</p>
+          <p className="tile-figure tab">{summary.receivable_open.formatted}</p>
+        </div>
+        <div className="tile">
+          <p className="tile-label">Atrasados</p>
+          <p className="tile-figure tab">{summary.overdue_count}</p>
+          {summary.overdue_count > 0 && (
+            <p className="tile-sub">
+              <span className="pill bad">precisa de atenção</span>
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="bills-columns">
+        <div className="panel">
+          <div className="panel-head">
+            <h2>A pagar</h2>
+            <span>{payable.length} no total</span>
+          </div>
+          <BillList bills={payable} direction="pagar" />
+        </div>
+        <div className="panel">
+          <div className="panel-head">
+            <h2>A receber</h2>
+            <span>{receivable.length} no total</span>
+          </div>
+          <BillList bills={receivable} direction="receber" />
+        </div>
+      </section>
+
+      <BillForm categories={categories} />
+    </>
   );
 }

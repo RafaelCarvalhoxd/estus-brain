@@ -55,5 +55,8 @@ export async function createTransactionAction(
   }
 
   revalidatePath("/");
+  revalidatePath("/financeiro");
+  revalidatePath("/financeiro/lancamentos");
+  revalidatePath("/financeiro/categorias");
   return { status: "success", message: "Lançamento salvo." };
 }

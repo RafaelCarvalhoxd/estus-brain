@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
-import { createTransactionAction, type CreateTransactionState } from "@/app/actions";
+import { createTransactionAction, type CreateTransactionState } from "@/app/financeiro/lancamentos/actions";
 import type { Category, CreditCard, PaymentMethod } from "@/lib/types";
 import { formatYearMonth, shiftYearMonth } from "@/lib/month";
 

@@ -47,11 +47,11 @@ export async function createBillAction(
     return { status: "error", message: err instanceof Error ? err.message : "Falha ao salvar." };
   }
 
-  revalidatePath("/contas");
+  revalidatePath("/financeiro/contas");
   return { status: "success", message: "Conta salva." };
 }
 
 export async function markBillPaidAction(id: string): Promise<void> {
   await markBillPaid(id);
-  revalidatePath("/contas");
+  revalidatePath("/financeiro/contas");
 }

@@ -75,12 +75,12 @@ export function IconChevronRight() {
   );
 }
 
-export function IconReceipt() {
+export function IconWallet() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 2h12v19l-3-2-3 2-3-2-3 2Z" />
-      <line x1="8.5" y1="7" x2="15.5" y2="7" />
-      <line x1="8.5" y1="11" x2="15.5" y2="11" />
+      <rect x="3" y="6" width="18" height="14" rx="2.5" />
+      <path d="M3 10h13a3 3 0 0 1 0 6H3" />
+      <circle cx="16" cy="13" r="1.2" />
     </svg>
   );
 }

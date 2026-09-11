@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createBillAction, type BillFormState } from "@/app/contas/actions";
+import { createBillAction, type BillFormState } from "@/app/financeiro/contas/actions";
 import type { Category } from "@/lib/types";
 import type { BillDirection } from "@/lib/bills";
 

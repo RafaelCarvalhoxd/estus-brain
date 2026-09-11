@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   IconOverview,
-  IconReceipt,
+  IconWallet,
   IconLock,
   IconNote,
   IconBell,
@@ -12,12 +12,12 @@ import {
 } from "./icons";
 
 const NAV = [
-  { href: "/", label: "Visão geral", icon: IconOverview },
-  { href: "/contas", label: "Contas", icon: IconReceipt },
-  { href: "/senhas", label: "Senhas", icon: IconLock },
-  { href: "/notas", label: "Notas", icon: IconNote },
-  { href: "/lembretes", label: "Lembretes", icon: IconBell },
-  { href: "/agenda", label: "Agenda", icon: IconCalendar },
+  { href: "/", label: "Visão geral", icon: IconOverview, exact: true },
+  { href: "/financeiro", label: "Financeiro", icon: IconWallet, exact: false },
+  { href: "/senhas", label: "Senhas", icon: IconLock, exact: true },
+  { href: "/notas", label: "Notas", icon: IconNote, exact: true },
+  { href: "/lembretes", label: "Lembretes", icon: IconBell, exact: true },
+  { href: "/agenda", label: "Agenda", icon: IconCalendar, exact: true },
 ];
 
 export function Sidebar() {
@@ -37,12 +37,15 @@ export function Sidebar() {
       </div>
 
       <nav className="nav">
-        {NAV.map(({ href, label, icon: Icon }) => (
-          <Link key={href} className={pathname === href ? "active" : ""} href={href}>
-            <Icon />
-            {label}
-          </Link>
-        ))}
+        {NAV.map(({ href, label, icon: Icon, exact }) => {
+          const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+          return (
+            <Link key={href} className={active ? "active" : ""} href={href}>
+              <Icon />
+              {label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="rail-foot">
