@@ -6,9 +6,9 @@ import type { Event } from "@/lib/agenda";
 import {
   createEventAction,
   deleteEventAction,
-  initialCreateEventState,
   syncGoogleAction,
   updateEventAction,
+  type CreateEventState,
 } from "@/app/agenda/actions";
 import { IconPencil, IconTrash } from "./icons";
 
@@ -144,8 +144,10 @@ export function EventRow({ event }: { event: Event }) {
   );
 }
 
+const initialEventFormState: CreateEventState = { status: "idle" };
+
 export function NewEventForm({ onSuccess }: { onSuccess?: () => void } = {}) {
-  const [state, formAction, pending] = useActionState(createEventAction, initialCreateEventState);
+  const [state, formAction, pending] = useActionState(createEventAction, initialEventFormState);
 
   useEffect(() => {
     if (state.status === "success") onSuccess?.();

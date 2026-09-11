@@ -6,9 +6,9 @@ import type { Reminder } from "@/lib/reminders";
 import {
   createReminderAction,
   deleteReminderAction,
-  initialCreateReminderState,
   toggleReminderAction,
   updateReminderAction,
+  type CreateReminderState,
 } from "@/app/lembretes/actions";
 import { IconPencil, IconTrash } from "./icons";
 
@@ -148,8 +148,10 @@ export function ReminderSection({ title, reminders, bucket }: { title: string; r
   );
 }
 
+const initialReminderFormState: CreateReminderState = { status: "idle" };
+
 export function NewReminderForm({ onSuccess }: { onSuccess?: () => void } = {}) {
-  const [state, formAction, pending] = useActionState(createReminderAction, initialCreateReminderState);
+  const [state, formAction, pending] = useActionState(createReminderAction, initialReminderFormState);
 
   useEffect(() => {
     if (state.status === "success") onSuccess?.();

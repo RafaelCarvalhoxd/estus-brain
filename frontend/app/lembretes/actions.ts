@@ -8,8 +8,6 @@ export type CreateReminderState = {
   message?: string;
 };
 
-export const initialCreateReminderState: CreateReminderState = { status: "idle" };
-
 function toDueAt(date: string, time: string): { dueAt?: string; error?: string } {
   if (!date) return {};
   const isoTime = time || "00:00";

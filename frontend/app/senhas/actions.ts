@@ -8,9 +8,6 @@ export type VaultFormState = {
   message?: string;
 };
 
-const initialState: VaultFormState = { status: "idle" };
-export { initialState as vaultFormInitialState };
-
 export async function createVaultEntryAction(
   _prevState: VaultFormState,
   formData: FormData,

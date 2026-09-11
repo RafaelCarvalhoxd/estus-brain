@@ -8,8 +8,6 @@ export type CreateEventState = {
   message?: string;
 };
 
-export const initialCreateEventState: CreateEventState = { status: "idle" };
-
 function toRange(date: string, startTime: string, endTime: string): { startsAt?: Date; endsAt?: Date; error?: string } {
   if (!date) return { error: "Selecione a data." };
   if (!startTime || !endTime) return { error: "Informe o horário de início e fim." };

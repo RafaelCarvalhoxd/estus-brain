@@ -4,10 +4,11 @@ import { useActionState, useEffect } from "react";
 import {
   createVaultEntryAction,
   updateVaultEntryAction,
-  vaultFormInitialState,
   type VaultFormState,
 } from "@/app/senhas/actions";
 import type { VaultEntry } from "@/lib/vault";
+
+const initialVaultFormState: VaultFormState = { status: "idle" };
 
 // entry present -> edit mode (password field optional, blank keeps the
 // current one); absent -> create mode (password required).
@@ -19,7 +20,7 @@ export function VaultEntryForm({
   onDone?: () => void;
 }) {
   const action = entry ? updateVaultEntryAction : createVaultEntryAction;
-  const [state, formAction, pending] = useActionState<VaultFormState, FormData>(action, vaultFormInitialState);
+  const [state, formAction, pending] = useActionState<VaultFormState, FormData>(action, initialVaultFormState);
 
   useEffect(() => {
     if (state.status === "success") onDone?.();
