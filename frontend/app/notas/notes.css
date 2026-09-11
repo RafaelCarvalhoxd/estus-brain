@@ -1,0 +1,156 @@
+.notes-board {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.notes-list-panel .panel-head {
+  align-items: center;
+}
+.notes-new-btn {
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+.notes-new-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 640px;
+  overflow-y: auto;
+}
+.notes-list-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 10px;
+  padding: 10px 11px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.notes-list-item:hover {
+  background: var(--surface-2);
+}
+.notes-list-item.active {
+  background: var(--accent-wash);
+}
+.notes-list-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-mute);
+}
+.notes-list-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.notes-list-preview {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notes-list-date {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.notes-editor-panel {
+  min-height: 500px;
+}
+.notes-editor-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.notes-title-input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 19px;
+  font-weight: 650;
+  color: var(--ink);
+  font-family: inherit;
+  padding: 4px 0;
+}
+.notes-title-input:focus {
+  outline: none;
+}
+.notes-pin-toggle {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.notes-pin-toggle.active {
+  background: var(--accent-wash);
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+
+.notes-body-input {
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--page);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.notes-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.notes-editor-actions .btn-block {
+  flex: 1;
+}
+.notes-delete-btn {
+  flex: none;
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: none;
+  color: var(--bad);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.notes-delete-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .notes-board {
+    grid-template-columns: 1fr;
+  }
+}

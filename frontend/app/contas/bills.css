@@ -1,0 +1,66 @@
+.bills-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.bill-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+}
+.bill-row + .bill-row {
+  border-top: 1px solid var(--hairline);
+}
+.bill-main {
+  min-width: 0;
+}
+.bill-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.bill-meta {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+.bill-amt {
+  text-align: right;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.bill-mark-btn {
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.bill-mark-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--ink) 25%, var(--hairline));
+}
+
+@media (max-width: 980px) {
+  .bills-columns {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .bill-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 6px;
+  }
+  .bill-row .bill-mark-btn {
+    grid-column: 1 / -1;
+  }
+}

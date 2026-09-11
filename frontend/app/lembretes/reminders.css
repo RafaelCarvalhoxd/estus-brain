@@ -1,0 +1,85 @@
+.reminders-title {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.reminder-section + .reminder-section {
+  margin-top: 18px;
+}
+.reminder-section-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.reminder-list {
+  display: flex;
+  flex-direction: column;
+}
+.reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+}
+.reminder-row + .reminder-row {
+  border-top: 1px solid var(--hairline);
+}
+.reminder-check {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  accent-color: var(--accent);
+}
+.reminder-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.reminder-title {
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--ink);
+}
+.reminder-title-done {
+  color: var(--ink-mute);
+  text-decoration: line-through;
+}
+.badge-bad {
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.reminder-delete {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.reminder-delete:hover {
+  color: var(--bad);
+  background: var(--bad-wash);
+}
+.reminder-delete svg {
+  width: 15px;
+  height: 15px;
+}
+
+.reminder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
