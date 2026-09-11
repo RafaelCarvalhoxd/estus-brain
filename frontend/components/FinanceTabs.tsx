@@ -14,9 +14,13 @@ export function FinanceTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="tabs">
+    <nav className="module-tabs">
       {TABS.map((tab) => (
-        <Link key={tab.href} href={tab.href} className={pathname === tab.href ? "tab active" : "tab"}>
+        <Link
+          key={tab.href}
+          href={tab.href}
+          className={pathname === tab.href ? "module-tab active" : "module-tab"}
+        >
           {tab.label}
         </Link>
       ))}

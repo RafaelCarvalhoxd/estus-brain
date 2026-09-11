@@ -264,39 +264,34 @@
 }
 
 /* Secondary navigation inside a module (e.g. Financeiro's Dashboard /
-   Lançamentos / Categorias / Contas) — an underline, not a boxed pill row,
-   so a module's internal sections read as calmer than the primary nav. */
-.tabs {
-  display: flex;
-  gap: 22px;
-  border-bottom: 1px solid var(--hairline);
+   Lançamentos / Categorias / Contas) — a filled pill riding inside a
+   track, not an underline, matching the rest of the system's segmented
+   controls (.seg uses the same "active pill on a quiet track" idea). */
+.module-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface-2);
   margin-bottom: 24px;
   overflow-x: auto;
 }
-.tab {
-  position: relative;
-  padding: 0 0 12px;
-  font-size: 13.5px;
+.module-tab {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--ink-mute);
+  color: var(--ink-soft);
   text-decoration: none;
   white-space: nowrap;
 }
-.tab:hover {
-  color: var(--ink-soft);
-}
-.tab.active {
+.module-tab:hover {
   color: var(--ink);
 }
-.tab.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--accent);
+.module-tab.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
 }
 .month-nav {
   display: flex;
@@ -356,8 +351,8 @@
   padding: 9px 15px;
   border-radius: 10px;
   border: none;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--ink);
+  color: var(--page);
   font-weight: 620;
   font-size: 13.5px;
   cursor: pointer;
@@ -791,8 +786,8 @@ tfoot td {
   padding: 11px 0;
   border-radius: 10px;
   border: none;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--ink);
+  color: var(--page);
   font-weight: 650;
   font-size: 13.5px;
   cursor: pointer;
