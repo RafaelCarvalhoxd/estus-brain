@@ -59,7 +59,9 @@ func run() error {
 
 	noteRepo := postgres.NewNoteRepo(db)
 	noteService := service.NewNoteService(noteRepo)
-	noteHandlers := httpapi.NewNoteHandlers(noteService)
+	noteCategoryRepo := postgres.NewNoteCategoryRepo(db)
+	noteCategoryService := service.NewNoteCategoryService(noteCategoryRepo)
+	noteHandlers := httpapi.NewNoteHandlers(noteService, noteCategoryService)
 
 	reminderRepo := postgres.NewReminderRepo(db)
 	reminderService := service.NewReminderService(reminderRepo)

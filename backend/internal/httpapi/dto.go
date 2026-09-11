@@ -33,6 +33,16 @@ type updateCategoryBudgetRequest struct {
 	MonthlyBudgetCents *int64 `json:"monthly_budget_cents"`
 }
 
+type categoryRequest struct {
+	Name   string `json:"name"`
+	Nature string `json:"nature"`
+	Color  string `json:"color"`
+}
+
+func (r categoryRequest) toDomain() domain.Category {
+	return domain.Category{Name: r.Name, Nature: domain.CategoryNature(r.Nature), Color: r.Color}
+}
+
 type creditCardDTO struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`

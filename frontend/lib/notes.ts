@@ -9,20 +9,35 @@ export interface Note {
   title: string;
   body: string;
   pinned: boolean;
+  category_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface NoteCategory {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
 }
 
 export interface CreateNoteInput {
   title: string;
   body: string;
   pinned?: boolean;
+  category_id?: string | null;
 }
 
 export interface UpdateNoteInput {
   title: string;
   body: string;
   pinned?: boolean;
+  category_id?: string | null;
+}
+
+export interface NoteCategoryInput {
+  name: string;
+  color: string;
 }
 
 async function notesFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -64,4 +79,19 @@ export function updateNote(id: string, input: UpdateNoteInput): Promise<Note> {
 
 export function deleteNote(id: string): Promise<void> {
   return notesFetch<void>(`/api/notes/${id}`, { method: "DELETE" });
+}
+
+export function listNoteCategories(): Promise<NoteCategory[]> {
+  return notesFetch<NoteCategory[]>("/api/note-categories", { cache: "no-store" });
+}
+
+export function createNoteCategory(input: NoteCategoryInput): Promise<NoteCategory> {
+  return notesFetch<NoteCategory>("/api/note-categories", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteNoteCategory(id: string): Promise<unknown> {
+  return notesFetch(`/api/note-categories/${id}`, { method: "DELETE" });
 }

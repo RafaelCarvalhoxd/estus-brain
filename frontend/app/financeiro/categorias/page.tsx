@@ -1,8 +1,9 @@
-import { getMonthSummary } from "@/lib/api";
+import { getMonthSummary, listCategories } from "@/lib/api";
 import { currentYearMonth } from "@/lib/month";
 import { TopBar } from "@/components/TopBar";
 import { CategoryBreakdown } from "@/components/CategoryBreakdown";
 import { ComparisonTable } from "@/components/ComparisonTable";
+import { CategoryManager } from "@/components/CategoryManager";
 
 export default async function CategoriasPage({
   searchParams,
@@ -11,7 +12,7 @@ export default async function CategoriasPage({
 }) {
   const params = await searchParams;
   const month = params.month ?? currentYearMonth();
-  const summary = await getMonthSummary(month);
+  const [summary, categories] = await Promise.all([getMonthSummary(month), listCategories()]);
 
   return (
     <>
@@ -21,7 +22,11 @@ export default async function CategoriasPage({
         <CategoryBreakdown categories={summary.categories} />
       </div>
 
-      <ComparisonTable comparison={summary.comparison} month={month} />
+      <div className="section-gap">
+        <ComparisonTable comparison={summary.comparison} month={month} />
+      </div>
+
+      <CategoryManager categories={categories} />
     </>
   );
 }

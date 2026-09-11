@@ -35,6 +35,52 @@ func (h *Handlers) ListCategories(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (h *Handlers) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	var req categoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	cat := req.toDomain()
+	if err := cat.Validate(); err != nil {
+		writeError(w, err)
+		return
+	}
+	created, err := h.categories.Create(r.Context(), cat)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toCategoryDTO(created))
+}
+
+func (h *Handlers) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	var req categoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	cat := req.toDomain()
+	if err := cat.Validate(); err != nil {
+		writeError(w, err)
+		return
+	}
+	updated, err := h.categories.Update(r.Context(), r.PathValue("id"), cat)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toCategoryDTO(updated))
+}
+
+func (h *Handlers) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	if err := h.categories.Delete(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // UpdateCategoryBudget handles PATCH /api/categories/{id}/budget. Sending
 // monthly_budget_cents as null clears the budget.
 func (h *Handlers) UpdateCategoryBudget(w http.ResponseWriter, r *http.Request) {

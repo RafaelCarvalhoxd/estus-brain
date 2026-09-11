@@ -1,11 +1,11 @@
-import { listNotes } from "@/lib/notes";
+import { listNotes, listNoteCategories } from "@/lib/notes";
 import { Sidebar } from "@/components/Sidebar";
 import { NotesBoard } from "@/components/NotesBoard";
 import "../ui.css";
 import "./notes.css";
 
 export default async function NotasPage() {
-  const notes = await listNotes();
+  const [notes, categories] = await Promise.all([listNotes(), listNoteCategories()]);
 
   return (
     <div className="shell">
@@ -16,7 +16,7 @@ export default async function NotasPage() {
             <h1 className="page-title">Notas</h1>
           </div>
 
-          <NotesBoard notes={notes} />
+          <NotesBoard notes={notes} categories={categories} />
         </div>
       </main>
     </div>

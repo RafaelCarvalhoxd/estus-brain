@@ -58,7 +58,7 @@ func TestNoteRepo(t *testing.T) {
 		t.Fatalf("expected title Ideia, got %q", got.Title)
 	}
 
-	updated, err := repo.Update(ctx, created.ID, "Ideia revisada", "novo corpo", true)
+	updated, err := repo.Update(ctx, created.ID, "Ideia revisada", "novo corpo", true, nil)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}

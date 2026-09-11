@@ -19,6 +19,14 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
+// Postgres error codes repos check for by hand, so a constraint violation
+// becomes a clear domain error instead of a raw SQL error string reaching
+// the HTTP layer.
+const (
+	pgUniqueViolation     = "23505"
+	pgForeignKeyViolation = "23503"
+)
+
 func Connect(ctx context.Context, url string) (*DB, error) {
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {

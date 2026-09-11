@@ -10,11 +10,12 @@ import (
 )
 
 type NoteHandlers struct {
-	notes *service.NoteService
+	notes      *service.NoteService
+	categories *service.NoteCategoryService
 }
 
-func NewNoteHandlers(notes *service.NoteService) *NoteHandlers {
-	return &NoteHandlers{notes: notes}
+func NewNoteHandlers(notes *service.NoteService, categories *service.NoteCategoryService) *NoteHandlers {
+	return &NoteHandlers{notes: notes, categories: categories}
 }
 
 func (h *NoteHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +46,7 @@ func (h *NoteHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
 		return
 	}
-	n, err := h.notes.Create(r.Context(), req.Title, req.Body, req.Pinned)
+	n, err := h.notes.Create(r.Context(), req.Title, req.Body, req.Pinned, req.CategoryID)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -59,7 +60,7 @@ func (h *NoteHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
 		return
 	}
-	n, err := h.notes.Update(r.Context(), r.PathValue("id"), req.Title, req.Body, req.Pinned)
+	n, err := h.notes.Update(r.Context(), r.PathValue("id"), req.Title, req.Body, req.Pinned, req.CategoryID)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -73,4 +74,53 @@ func (h *NoteHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNoContent, nil)
+}
+
+func (h *NoteHandlers) ListCategories(w http.ResponseWriter, r *http.Request) {
+	cats, err := h.categories.List(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := make([]noteCategoryDTO, len(cats))
+	for i, c := range cats {
+		out[i] = toNoteCategoryDTO(c)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *NoteHandlers) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	var req noteCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	c, err := h.categories.Create(r.Context(), req.Name, req.Color)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toNoteCategoryDTO(c))
+}
+
+func (h *NoteHandlers) UpdateCategory(w http.ResponseWriter, r *http.Request) {
+	var req noteCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	c, err := h.categories.Update(r.Context(), r.PathValue("id"), req.Name, req.Color)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toNoteCategoryDTO(c))
+}
+
+func (h *NoteHandlers) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	if err := h.categories.Delete(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

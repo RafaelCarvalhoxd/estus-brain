@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
@@ -77,9 +78,56 @@ func (r *CategoryRepo) Create(ctx context.Context, c domain.Category) (domain.Ca
 		c.Name, c.Nature, c.Color,
 	).Scan(&c.ID, &c.CreatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			return domain.Category{}, fmt.Errorf("%w: a category named %q already exists", domain.ErrConflict, c.Name)
+		}
 		return domain.Category{}, fmt.Errorf("create category: %w", err)
 	}
 	return c, nil
+}
+
+// Update changes name, nature and color — the fields set once at creation
+// in every other module, but editable here because miscategorizing or
+// renaming a category is a mistake worth being able to fix without
+// recreating it (and losing its id, which transactions and bills point to).
+func (r *CategoryRepo) Update(ctx context.Context, id string, c domain.Category) (domain.Category, error) {
+	row := r.db.Pool.QueryRow(ctx, `
+		update categories set name = $2, nature = $3, color = $4
+		where id = $1
+		returning id, name, nature, color, monthly_budget_cents, created_at`,
+		id, c.Name, c.Nature, c.Color,
+	)
+	var out domain.Category
+	if err := scanCategory(row, &out); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Category{}, domain.ErrNotFound
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+			return domain.Category{}, fmt.Errorf("%w: a category named %q already exists", domain.ErrConflict, c.Name)
+		}
+		return domain.Category{}, fmt.Errorf("update category %s: %w", id, err)
+	}
+	return out, nil
+}
+
+// Delete refuses (with a clear error, not a raw FK violation) to remove a
+// category still referenced by a transaction or bill — losing that link
+// would silently corrupt the ledger it's attached to.
+func (r *CategoryRepo) Delete(ctx context.Context, id string) error {
+	tag, err := r.db.Pool.Exec(ctx, `delete from categories where id = $1`, id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation {
+			return fmt.Errorf("%w: category is used by existing transactions or bills", domain.ErrConflict)
+		}
+		return fmt.Errorf("delete category %s: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 // UpdateBudget sets or clears (budgetCents == nil) a category's monthly

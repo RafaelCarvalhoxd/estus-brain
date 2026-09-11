@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // CategoryNature classifies why money left the account, independent of what
 // it was spent on — this is the "natureza da operação" the budget cares
@@ -29,4 +33,17 @@ type Category struct {
 	Color              string // hex, used by the frontend chart legend
 	MonthlyBudgetCents *Cents // nil = no budget set
 	CreatedAt          time.Time
+}
+
+func (c Category) Validate() error {
+	if strings.TrimSpace(c.Name) == "" {
+		return fmt.Errorf("%w: name is required", ErrValidation)
+	}
+	if !c.Nature.Valid() {
+		return fmt.Errorf("%w: invalid nature %q", ErrValidation, c.Nature)
+	}
+	if strings.TrimSpace(c.Color) == "" {
+		return fmt.Errorf("%w: color is required", ErrValidation)
+	}
+	return nil
 }

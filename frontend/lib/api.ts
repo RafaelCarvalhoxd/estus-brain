@@ -63,3 +63,27 @@ export function updateCategoryBudget(id: string, monthlyBudgetCents: number | nu
     body: JSON.stringify({ monthly_budget_cents: monthlyBudgetCents }),
   });
 }
+
+export interface CategoryInput {
+  name: string;
+  nature: Category["nature"];
+  color: string;
+}
+
+export function createCategory(input: CategoryInput): Promise<Category> {
+  return apiFetch<Category>("/api/categories", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCategory(id: string, input: CategoryInput): Promise<Category> {
+  return apiFetch<Category>(`/api/categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCategory(id: string): Promise<unknown> {
+  return apiFetch(`/api/categories/${id}`, { method: "DELETE" });
+}

@@ -515,6 +515,41 @@
   display: flex;
   flex-direction: column;
 }
+
+.category-manager-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  flex-wrap: wrap;
+}
+.category-manager-row + .category-manager-row {
+  border-top: 1px solid var(--hairline);
+}
+.category-manager-row-editing {
+  display: block;
+  padding: 12px 0;
+}
+.category-manager-name {
+  font-size: 13px;
+  font-weight: 550;
+  flex: 1;
+  min-width: 0;
+}
+.category-manager-nature {
+  font-size: 12px;
+  color: var(--ink-mute);
+  flex: none;
+}
+.category-manager-error {
+  flex-basis: 100%;
+}
+.color-input {
+  padding: 3px !important;
+  height: 34px;
+  cursor: pointer;
+}
+
 .legend-row {
   display: flex;
   align-items: center;

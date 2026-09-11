@@ -28,6 +28,9 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 	})
 
 	mux.HandleFunc("GET /api/categories", h.ListCategories)
+	mux.HandleFunc("POST /api/categories", h.CreateCategory)
+	mux.HandleFunc("PUT /api/categories/{id}", h.UpdateCategory)
+	mux.HandleFunc("DELETE /api/categories/{id}", h.DeleteCategory)
 	mux.HandleFunc("PATCH /api/categories/{id}/budget", h.UpdateCategoryBudget)
 	mux.HandleFunc("GET /api/credit-cards", h.ListCreditCards)
 	mux.HandleFunc("GET /api/months/{month}", h.MonthSummary)
@@ -63,6 +66,10 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("GET /api/notes/{id}", n.Get)
 		mux.HandleFunc("PUT /api/notes/{id}", n.Update)
 		mux.HandleFunc("DELETE /api/notes/{id}", n.Delete)
+		mux.HandleFunc("GET /api/note-categories", n.ListCategories)
+		mux.HandleFunc("POST /api/note-categories", n.CreateCategory)
+		mux.HandleFunc("PUT /api/note-categories/{id}", n.UpdateCategory)
+		mux.HandleFunc("DELETE /api/note-categories/{id}", n.DeleteCategory)
 	}
 
 	if rm := m.Reminders; rm != nil {
