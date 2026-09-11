@@ -132,22 +132,6 @@
 .notes-editor-actions .btn-block {
   flex: 1;
 }
-.notes-delete-btn {
-  flex: none;
-  padding: 11px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--hairline);
-  background: none;
-  color: var(--bad);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  font-family: inherit;
-}
-.notes-delete-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 
 @media (max-width: 720px) {
   .notes-board {

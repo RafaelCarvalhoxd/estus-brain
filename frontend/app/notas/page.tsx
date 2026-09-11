@@ -1,7 +1,7 @@
 import { listNotes } from "@/lib/notes";
 import { Sidebar } from "@/components/Sidebar";
 import { NotesBoard } from "@/components/NotesBoard";
-import "../dashboard.css";
+import "../ui.css";
 import "./notes.css";
 
 export default async function NotasPage() {
@@ -13,9 +13,7 @@ export default async function NotasPage() {
       <main className="main">
         <div className="wrap">
           <div className="topbar">
-            <div className="month-nav">
-              <h1>Notas</h1>
-            </div>
+            <h1 className="page-title">Notas</h1>
           </div>
 
           <NotesBoard notes={notes} />

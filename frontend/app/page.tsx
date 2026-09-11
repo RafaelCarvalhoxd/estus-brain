@@ -8,7 +8,7 @@ import { WeeklyChart } from "@/components/WeeklyChart";
 import { ComparisonTable } from "@/components/ComparisonTable";
 import { TransactionsList } from "@/components/TransactionsList";
 import { NewTransactionForm } from "@/components/NewTransactionForm";
-import "./dashboard.css";
+import "./ui.css";
 
 export default async function OverviewPage({
   searchParams,

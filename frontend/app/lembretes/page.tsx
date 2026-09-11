@@ -1,7 +1,7 @@
 import { listReminders, type Reminder } from "@/lib/reminders";
 import { Sidebar } from "@/components/Sidebar";
 import { ReminderSection, NewReminderForm } from "@/components/ReminderList";
-import "../dashboard.css";
+import "../ui.css";
 import "./reminders.css";
 
 function bucketOf(r: Reminder, now: Date): "atrasado" | "hoje" | "proximo" | "concluido" {
@@ -29,7 +29,7 @@ export default async function LembretesPage() {
       <main className="main">
         <div className="wrap">
           <div className="topbar">
-            <h1 className="reminders-title">Lembretes</h1>
+            <h1 className="page-title">Lembretes</h1>
           </div>
 
           <section className="bottom-split">

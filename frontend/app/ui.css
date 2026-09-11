@@ -130,11 +130,13 @@
   color: var(--ink);
   border-color: color-mix(in oklab, var(--ink) 25%, var(--hairline));
 }
-.month-nav h1 {
+.page-title {
   font-size: 21px;
   font-weight: 650;
   letter-spacing: -0.01em;
   margin: 0;
+}
+.month-nav h1 {
   text-transform: capitalize;
 }
 .btn-primary {
@@ -576,6 +578,60 @@ tfoot td {
 .btn-block:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* A secondary action on a row — "marcar como pago", "excluir", "editar" —
+   never a primary CTA, so it never competes with .btn-primary for
+   attention. Every module reaches for one of these two instead of
+   inventing its own. */
+.btn-outline {
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: 9px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn-outline:hover {
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--ink) 25%, var(--hairline));
+}
+.btn-outline:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.btn-outline.bad {
+  color: var(--bad);
+}
+.btn-outline.bad:hover {
+  border-color: color-mix(in oklab, var(--bad) 35%, var(--hairline));
+}
+
+.btn-text {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+}
+.btn-text:hover {
+  text-decoration: underline;
+}
+.btn-text:disabled {
+  color: var(--ink-mute);
+  opacity: 1;
+  cursor: default;
+  text-decoration: none;
+}
+.btn-text.bad {
+  color: var(--bad);
 }
 .form-error {
   color: var(--bad);

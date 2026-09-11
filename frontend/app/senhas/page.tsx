@@ -3,7 +3,7 @@ import { VaultList } from "@/components/VaultList";
 import { VaultEntryForm } from "@/components/VaultEntryForm";
 import { VaultSetup } from "@/components/VaultSetup";
 import { getVaultWebAuthnStatus, listVaultEntries } from "@/lib/vault";
-import "../dashboard.css";
+import "../ui.css";
 import "./vault.css";
 
 export default async function SenhasPage() {
@@ -15,7 +15,7 @@ export default async function SenhasPage() {
       <main className="main">
         <div className="wrap">
           <div className="topbar">
-            <h1 className="vault-title">Senhas</h1>
+            <h1 className="page-title">Senhas</h1>
           </div>
 
           {!webauthnStatus.registered && <VaultSetup />}

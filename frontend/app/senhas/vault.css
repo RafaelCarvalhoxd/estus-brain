@@ -1,9 +1,3 @@
-.vault-title {
-  font-size: 21px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  margin: 0;
-}
 
 .vault-setup {
   margin-bottom: 20px;
@@ -75,28 +69,6 @@
   gap: 10px;
   white-space: nowrap;
 }
-.vault-link-btn {
-  border: none;
-  background: none;
-  color: var(--accent);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
-}
-.vault-link-btn:hover {
-  text-decoration: underline;
-}
-.vault-link-btn:disabled {
-  color: var(--ink-mute);
-  cursor: default;
-  text-decoration: none;
-}
-.vault-link-btn-danger {
-  color: var(--bad);
-}
-
 .vault-row-error {
   grid-column: 1 / -1;
   margin: 4px 0 0;

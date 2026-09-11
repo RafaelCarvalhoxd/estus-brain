@@ -9,7 +9,7 @@ export function TopBar({ month }: { month: string }) {
         <Link href={`/?month=${shiftYearMonth(month, -1)}`} aria-label="Mês anterior">
           <IconChevronLeft />
         </Link>
-        <h1>{formatYearMonth(month)}</h1>
+        <h1 className="page-title">{formatYearMonth(month)}</h1>
         <Link href={`/?month=${shiftYearMonth(month, 1)}`} aria-label="Próximo mês">
           <IconChevronRight />
         </Link>

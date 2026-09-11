@@ -33,22 +33,6 @@
   font-size: 13.5px;
   font-weight: 650;
 }
-.bill-mark-btn {
-  border: 1px solid var(--hairline);
-  background: var(--surface);
-  color: var(--ink-soft);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-}
-.bill-mark-btn:hover {
-  color: var(--ink);
-  border-color: color-mix(in oklab, var(--ink) 25%, var(--hairline));
-}
 
 @media (max-width: 980px) {
   .bills-columns {
@@ -60,7 +44,7 @@
     grid-template-columns: 1fr auto;
     row-gap: 6px;
   }
-  .bill-row .bill-mark-btn {
+  .bill-row .btn-outline {
     grid-column: 1 / -1;
   }
 }

@@ -180,7 +180,7 @@ function NoteEditor({
           {isPending ? "Salvando..." : "Salvar"}
         </button>
         {note && (
-          <button type="button" className="notes-delete-btn" onClick={onDelete} disabled={deleting}>
+          <button type="button" className="btn-outline bad" onClick={onDelete} disabled={deleting}>
             Excluir
           </button>
         )}

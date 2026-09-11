@@ -99,7 +99,7 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
             {editingId === entry.id ? (
               <div className="vault-row-edit">
                 <VaultEntryForm entry={entry} onDone={() => setEditingId(null)} />
-                <button className="vault-link-btn" type="button" onClick={() => setEditingId(null)}>
+                <button className="btn-text" type="button" onClick={() => setEditingId(null)}>
                   Cancelar
                 </button>
               </div>
@@ -123,12 +123,12 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
 
                 <div className="vault-row-actions">
                   {state ? (
-                    <button className="vault-link-btn" type="button" onClick={() => copiar(state.password)}>
+                    <button className="btn-text" type="button" onClick={() => copiar(state.password)}>
                       Copiar
                     </button>
                   ) : canReveal ? (
                     <button
-                      className="vault-link-btn"
+                      className="btn-text"
                       type="button"
                       onClick={() => revelar(entry.id)}
                       disabled={revealing === entry.id}
@@ -138,11 +138,11 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
                   ) : (
                     <span className="vault-row-meta">configure o Touch ID para revelar</span>
                   )}
-                  <button className="vault-link-btn" type="button" onClick={() => setEditingId(entry.id)}>
+                  <button className="btn-text" type="button" onClick={() => setEditingId(entry.id)}>
                     Editar
                   </button>
                   <form action={deleteVaultEntryAction.bind(null, entry.id)}>
-                    <button className="vault-link-btn vault-link-btn-danger" type="submit">
+                    <button className="btn-text bad" type="submit">
                       Excluir
                     </button>
                   </form>

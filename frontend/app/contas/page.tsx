@@ -4,7 +4,7 @@ import { listCategories } from "@/lib/api";
 import { Sidebar } from "@/components/Sidebar";
 import { BillForm } from "@/components/BillForm";
 import { markBillPaidAction } from "./actions";
-import "../dashboard.css";
+import "../ui.css";
 import "./bills.css";
 
 function statusPillClass(status: Bill["status"]): string {
@@ -50,7 +50,7 @@ function BillList({ bills, direction }: { bills: Bill[]; direction: "pagar" | "r
           <span className="bill-amt tab">{bill.amount.formatted}</span>
           {!bill.paid_at && (
             <form action={markBillPaidAction.bind(null, bill.id)}>
-              <button className="bill-mark-btn" type="submit">
+              <button className="btn-outline" type="submit">
                 {direction === "pagar" ? "Marcar como pago" : "Marcar como recebido"}
               </button>
             </form>
@@ -75,9 +75,7 @@ export default async function BillsPage() {
       <main className="main">
         <div className="wrap">
           <div className="topbar">
-            <h1 style={{ fontSize: 21, fontWeight: 650, letterSpacing: "-0.01em", margin: 0 }}>
-              Contas a pagar e a receber
-            </h1>
+            <h1 className="page-title">Contas a pagar e a receber</h1>
           </div>
 
           <section className="hero-row">

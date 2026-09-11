@@ -1,7 +1,7 @@
 import { googleStatus, listEvents, type Event } from "@/lib/agenda";
 import { Sidebar } from "@/components/Sidebar";
 import { EventRow, NewEventForm, GoogleSyncButton } from "@/components/EventForm";
-import "../dashboard.css";
+import "../ui.css";
 import "./agenda.css";
 
 function dayKey(iso: string): string {
@@ -44,7 +44,7 @@ export default async function AgendaPage() {
       <main className="main">
         <div className="wrap">
           <div className="topbar">
-            <h1 className="agenda-title">Agenda</h1>
+            <h1 className="page-title">Agenda</h1>
             <div className="agenda-google-status">
               {google.connected ? (
                 <span className="badge">Google Agenda conectada</span>
