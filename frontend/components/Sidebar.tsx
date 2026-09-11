@@ -10,6 +10,7 @@ import {
   IconBell,
   IconCalendar,
 } from "./icons";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { href: "/", label: "Visão geral", icon: IconOverview, exact: true },
@@ -48,13 +49,16 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="rail-foot">
-        <IconLock />
-        <span>
-          <b>Acesso por certificado</b>
-          <br />
-          conexão validada via mTLS
-        </span>
+      <div className="rail-bottom">
+        <ThemeToggle />
+        <div className="rail-foot">
+          <IconLock />
+          <span>
+            <b>Acesso por certificado</b>
+            <br />
+            conexão validada via mTLS
+          </span>
+        </div>
       </div>
     </aside>
   );

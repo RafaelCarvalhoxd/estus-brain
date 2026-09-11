@@ -52,3 +52,10 @@ export function setReminderDone(id: string, done: boolean): Promise<Reminder> {
 export function deleteReminder(id: string): Promise<void> {
   return apiFetch<void>(`/api/reminders/${id}`, { method: "DELETE" });
 }
+
+export function updateReminder(id: string, input: CreateReminderInput): Promise<Reminder> {
+  return apiFetch<Reminder>(`/api/reminders/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}

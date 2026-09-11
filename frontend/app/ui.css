@@ -67,8 +67,44 @@
 .nav a:not(.active):hover {
   color: var(--ink);
 }
-.rail-foot {
+.rail-bottom {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.theme-toggle {
+  display: flex;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+.theme-toggle button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.theme-toggle button svg {
+  width: 15px;
+  height: 15px;
+}
+.theme-toggle button:hover {
+  color: var(--ink-soft);
+}
+.theme-toggle button.active {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.rail-foot {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -103,6 +139,83 @@
 
 .section-gap {
   margin-bottom: 14px;
+}
+
+/* ---------- List screens: filters + row actions ---------- */
+.list-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.list-filters select,
+.list-filters .filter-search input {
+  padding: 7px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.filter-search {
+  position: relative;
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
+}
+.filter-search svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--ink-mute);
+  pointer-events: none;
+}
+.filter-search input {
+  width: 100%;
+  padding-left: 30px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.icon-btn.bad:hover {
+  color: var(--bad);
+}
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.icon-btn:disabled:hover {
+  background: none;
+  color: var(--ink-mute);
 }
 
 /* ---------- Home digest ---------- */
@@ -212,8 +325,29 @@
   letter-spacing: -0.01em;
   margin: 0;
 }
-.month-nav h1 {
-  text-transform: capitalize;
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 100;
+}
+.modal-shell {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
 }
 .btn-primary {
   display: inline-flex;
@@ -510,6 +644,18 @@ tfoot td {
 .txn-value {
   font-size: 13.5px;
   font-weight: 650;
+}
+.txn-editing {
+  align-items: center;
+}
+.txn-edit-input {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: inherit;
 }
 .badge {
   display: inline-block;

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createReminder, deleteReminder, setReminderDone } from "@/lib/reminders";
+import { createReminder, deleteReminder, setReminderDone, updateReminder } from "@/lib/reminders";
 
 export type CreateReminderState = {
   status: "idle" | "error" | "success";
@@ -9,6 +9,14 @@ export type CreateReminderState = {
 };
 
 export const initialCreateReminderState: CreateReminderState = { status: "idle" };
+
+function toDueAt(date: string, time: string): { dueAt?: string; error?: string } {
+  if (!date) return {};
+  const isoTime = time || "00:00";
+  const local = new Date(`${date}T${isoTime}:00`);
+  if (Number.isNaN(local.getTime())) return { error: "Data ou horário inválido." };
+  return { dueAt: local.toISOString() };
+}
 
 export async function createReminderAction(
   _prevState: CreateReminderState,
@@ -20,15 +28,8 @@ export async function createReminderAction(
 
   if (!title) return { status: "error", message: "Título é obrigatório." };
 
-  let dueAt: string | undefined;
-  if (date) {
-    const isoTime = time || "00:00";
-    const local = new Date(`${date}T${isoTime}:00`);
-    if (Number.isNaN(local.getTime())) {
-      return { status: "error", message: "Data ou horário inválido." };
-    }
-    dueAt = local.toISOString();
-  }
+  const { dueAt, error } = toDueAt(date, time);
+  if (error) return { status: "error", message: error };
 
   try {
     await createReminder({ title, due_at: dueAt });
@@ -48,4 +49,19 @@ export async function toggleReminderAction(id: string, done: boolean): Promise<v
 export async function deleteReminderAction(id: string): Promise<void> {
   await deleteReminder(id);
   revalidatePath("/lembretes");
+}
+
+export async function updateReminderAction(
+  id: string,
+  title: string,
+  date: string,
+  time: string,
+): Promise<{ error?: string }> {
+  if (!title.trim()) return { error: "Título é obrigatório." };
+  const { dueAt, error } = toDueAt(date, time);
+  if (error) return { error };
+
+  await updateReminder(id, { title: title.trim(), due_at: dueAt });
+  revalidatePath("/lembretes");
+  return {};
 }

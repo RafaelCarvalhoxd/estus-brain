@@ -2,8 +2,7 @@ import { getMonthSummary, listCategories, listCreditCards } from "@/lib/api";
 import { currentYearMonth } from "@/lib/month";
 import { TopBar } from "@/components/TopBar";
 import { TransactionsList } from "@/components/TransactionsList";
-import { NewTransactionForm } from "@/components/NewTransactionForm";
-import { IconPlus } from "@/components/icons";
+import { NewTransactionModal } from "@/components/NewTransactionModal";
 
 export default async function LancamentosPage({
   searchParams,
@@ -24,18 +23,10 @@ export default async function LancamentosPage({
       <TopBar
         month={month}
         basePath="/financeiro/lancamentos"
-        action={
-          <a className="btn-primary" href="#novo-lancamento">
-            <IconPlus />
-            Novo lançamento
-          </a>
-        }
+        action={<NewTransactionModal categories={categories} cards={cards} />}
       />
 
-      <section className="bottom-split">
-        <TransactionsList transactions={summary.transactions} month={month} />
-        <NewTransactionForm categories={categories} cards={cards} />
-      </section>
+      <TransactionsList transactions={summary.transactions} categories={categories} month={month} />
     </>
   );
 }

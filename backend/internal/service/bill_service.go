@@ -75,6 +75,35 @@ func (s *BillService) MarkPaid(ctx context.Context, id string, paidAt time.Time)
 	return bill, nil
 }
 
+func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (domain.Bill, error) {
+	bill := domain.Bill{
+		ID:          id,
+		Description: in.Description,
+		AmountCents: in.AmountCents,
+		DueDate:     in.DueDate,
+		Direction:   in.Direction,
+		CategoryID:  in.CategoryID,
+		Recurring:   in.Recurring,
+	}
+	if err := bill.Validate(); err != nil {
+		return domain.Bill{}, err
+	}
+	if in.CategoryID != nil {
+		if _, err := s.categories.Get(ctx, *in.CategoryID); err != nil {
+			return domain.Bill{}, fmt.Errorf("category %s: %w", *in.CategoryID, err)
+		}
+	}
+	updated, err := s.bills.Update(ctx, bill)
+	if err != nil {
+		return domain.Bill{}, err
+	}
+	return updated, nil
+}
+
+func (s *BillService) Delete(ctx context.Context, id string) error {
+	return s.bills.Delete(ctx, id)
+}
+
 func (s *BillService) Summary(ctx context.Context) (BillSummary, error) {
 	payable, receivable, overdue, err := s.bills.OpenTotals(ctx)
 	if err != nil {

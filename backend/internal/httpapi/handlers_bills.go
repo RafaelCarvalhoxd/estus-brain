@@ -65,6 +65,34 @@ func (h *BillHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toBillDTO(bill, time.Now()))
 }
 
+func (h *BillHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	var req createBillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	input, err := req.toInput()
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: due_date must be YYYY-MM-DD", domain.ErrValidation))
+		return
+	}
+
+	bill, err := h.bills.Update(r.Context(), r.PathValue("id"), input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
+}
+
+func (h *BillHandlers) Delete(w http.ResponseWriter, r *http.Request) {
+	if err := h.bills.Delete(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (h *BillHandlers) Summary(w http.ResponseWriter, r *http.Request) {
 	summary, err := h.bills.Summary(r.Context())
 	if err != nil {

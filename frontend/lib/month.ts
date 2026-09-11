@@ -16,7 +16,8 @@ export function shiftYearMonth(yearMonth: string, delta: number): string {
 
 export function formatYearMonth(yearMonth: string): string {
   const [year, month] = yearMonth.split("-").map(Number);
-  return `${MONTH_NAMES[month - 1]} de ${year}`;
+  const name = MONTH_NAMES[month - 1];
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} de ${year}`;
 }
 
 export function formatYearMonthShort(yearMonth: string): string {

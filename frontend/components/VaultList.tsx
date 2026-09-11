@@ -5,6 +5,7 @@ import { deleteVaultEntryAction } from "@/app/senhas/actions";
 import { VaultEntryForm } from "@/components/VaultEntryForm";
 import type { VaultEntry } from "@/lib/vault";
 import { assertionCredentialToJSON, requestOptionsFromServer } from "@/lib/webauthn-encoding";
+import { IconSearch } from "./icons";
 
 const REVEAL_SECONDS = 10;
 
@@ -15,6 +16,7 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
   const [revealing, setRevealing] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   useEffect(() => {
@@ -90,9 +92,21 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
     return <p className="empty-note">Nenhuma senha cadastrada ainda.</p>;
   }
 
+  const q = query.trim().toLowerCase();
+  const visibleEntries = q
+    ? entries.filter((e) => e.title.toLowerCase().includes(q) || e.username.toLowerCase().includes(q))
+    : entries;
+
   return (
     <div className="vault-list">
-      {entries.map((entry) => {
+      <div className="list-filters">
+        <div className="filter-search">
+          <IconSearch />
+          <input type="text" placeholder="Buscar senhas" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+      </div>
+      {visibleEntries.length === 0 && <p className="empty-note">Nenhuma senha bate com essa busca.</p>}
+      {visibleEntries.map((entry) => {
         const state = revealed[entry.id];
         return (
           <div className="vault-row" key={entry.id}>

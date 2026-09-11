@@ -1,6 +1,7 @@
 import { googleStatus, listEvents, type Event } from "@/lib/agenda";
 import { Sidebar } from "@/components/Sidebar";
-import { EventRow, NewEventForm, GoogleSyncButton } from "@/components/EventForm";
+import { EventRow, GoogleSyncButton } from "@/components/EventForm";
+import { NewEventModal } from "@/components/NewEventModal";
 import "../ui.css";
 import "./agenda.css";
 
@@ -53,33 +54,30 @@ export default async function AgendaPage() {
                   Conectar Google Agenda
                 </a>
               )}
+              <NewEventModal />
             </div>
           </div>
 
-          <section className="bottom-split">
-            <div className="panel">
-              <div className="panel-head">
-                <h2>Próximos eventos</h2>
-              </div>
-              <GoogleSyncButton />
-              {days.length === 0 ? (
-                <p className="empty-note">Nenhum evento nos próximos 30 dias.</p>
-              ) : (
-                days.map((day) => (
-                  <div className="agenda-day" key={day.key}>
-                    <h3 className="agenda-day-heading">{day.heading}</h3>
-                    <div className="event-list">
-                      {day.events.map((e) => (
-                        <EventRow key={e.id} event={e} />
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
+          <div className="panel">
+            <div className="panel-head">
+              <h2>Próximos eventos</h2>
             </div>
-
-            <NewEventForm />
-          </section>
+            <GoogleSyncButton />
+            {days.length === 0 ? (
+              <p className="empty-note">Nenhum evento nos próximos 30 dias.</p>
+            ) : (
+              days.map((day) => (
+                <div className="agenda-day" key={day.key}>
+                  <h3 className="agenda-day-heading">{day.heading}</h3>
+                  <div className="event-list">
+                    {day.events.map((e) => (
+                      <EventRow key={e.id} event={e} />
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </main>
     </div>

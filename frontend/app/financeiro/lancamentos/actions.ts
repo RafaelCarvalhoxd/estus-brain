@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createTransaction } from "@/lib/api";
+import { createTransaction, updateTransaction, deleteTransaction } from "@/lib/api";
 import type { PaymentMethod } from "@/lib/types";
 
 export type CreateTransactionState = {
@@ -59,4 +59,21 @@ export async function createTransactionAction(
   revalidatePath("/financeiro/lancamentos");
   revalidatePath("/financeiro/categorias");
   return { status: "success", message: "Lançamento salvo." };
+}
+
+function revalidateFinance() {
+  revalidatePath("/");
+  revalidatePath("/financeiro");
+  revalidatePath("/financeiro/lancamentos");
+  revalidatePath("/financeiro/categorias");
+}
+
+export async function updateTransactionAction(id: string, description: string, categoryId: string): Promise<void> {
+  await updateTransaction(id, description, categoryId);
+  revalidateFinance();
+}
+
+export async function deleteTransactionAction(id: string): Promise<void> {
+  await deleteTransaction(id);
+  revalidateFinance();
 }

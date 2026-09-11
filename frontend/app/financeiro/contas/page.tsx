@@ -1,63 +1,8 @@
 import { listBills, getBillSummary } from "@/lib/bills";
-import type { Bill } from "@/lib/bills";
 import { listCategories } from "@/lib/api";
-import { BillForm } from "@/components/BillForm";
-import { markBillPaidAction } from "./actions";
+import { BillsBoard } from "@/components/BillsBoard";
+import { NewBillModal } from "@/components/NewBillModal";
 import "./bills.css";
-
-function statusPillClass(status: Bill["status"]): string {
-  if (status === "atrasado") return "pill bad";
-  if (status === "pago" || status === "recebido") return "pill good";
-  return "pill";
-}
-
-function statusLabel(status: Bill["status"]): string {
-  switch (status) {
-    case "atrasado":
-      return "Atrasado";
-    case "pago":
-      return "Pago";
-    case "recebido":
-      return "Recebido";
-    default:
-      return "Pendente";
-  }
-}
-
-function formatDueDate(dueDate: string): string {
-  const [year, month, day] = dueDate.split("-");
-  return `${day}/${month}/${year}`;
-}
-
-function BillList({ bills, direction }: { bills: Bill[]; direction: "pagar" | "receber" }) {
-  if (bills.length === 0) {
-    return <p className="empty-note">Nenhuma conta {direction === "pagar" ? "a pagar" : "a receber"}.</p>;
-  }
-  return (
-    <div>
-      {bills.map((bill) => (
-        <div className="bill-row" key={bill.id}>
-          <div className="bill-main">
-            <div className="bill-title">{bill.description}</div>
-            <div className="bill-meta">
-              Vence em {formatDueDate(bill.due_date)}
-              {bill.recurring ? " · recorrente" : ""}
-            </div>
-          </div>
-          <span className={statusPillClass(bill.status)}>{statusLabel(bill.status)}</span>
-          <span className="bill-amt tab">{bill.amount.formatted}</span>
-          {!bill.paid_at && (
-            <form action={markBillPaidAction.bind(null, bill.id)}>
-              <button className="btn-outline" type="submit">
-                {direction === "pagar" ? "Marcar como pago" : "Marcar como recebido"}
-              </button>
-            </form>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default async function BillsPage() {
   const [payable, receivable, summary, categories] = await Promise.all([
@@ -71,6 +16,7 @@ export default async function BillsPage() {
     <>
       <div className="topbar">
         <h1 className="page-title">Contas a pagar e a receber</h1>
+        <NewBillModal categories={categories} />
       </div>
 
       <section className="hero-row">
@@ -93,24 +39,7 @@ export default async function BillsPage() {
         </div>
       </section>
 
-      <section className="bills-columns">
-        <div className="panel">
-          <div className="panel-head">
-            <h2>A pagar</h2>
-            <span>{payable.length} no total</span>
-          </div>
-          <BillList bills={payable} direction="pagar" />
-        </div>
-        <div className="panel">
-          <div className="panel-head">
-            <h2>A receber</h2>
-            <span>{receivable.length} no total</span>
-          </div>
-          <BillList bills={receivable} direction="receber" />
-        </div>
-      </section>
-
-      <BillForm categories={categories} />
+      <BillsBoard payable={payable} receivable={receivable} categories={categories} />
     </>
   );
 }

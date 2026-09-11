@@ -1,18 +1,16 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Event } from "@/lib/agenda";
-import { createEventAction, deleteEventAction, initialCreateEventState, syncGoogleAction } from "@/app/agenda/actions";
-
-function IconTrash() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 7h16" />
-      <path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" />
-      <path d="M6 7l1 13.5A1.5 1.5 0 0 0 8.5 22h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
-    </svg>
-  );
-}
+import {
+  createEventAction,
+  deleteEventAction,
+  initialCreateEventState,
+  syncGoogleAction,
+  updateEventAction,
+} from "@/app/agenda/actions";
+import { IconPencil, IconTrash } from "./icons";
 
 function IconSync() {
   return (
@@ -31,8 +29,92 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
   return `${startLabel} – ${endLabel}`;
 }
 
+function toDateInputValue(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function toTimeInputValue(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function EditEventRow({ event, onDone }: { event: Event; onDone: () => void }) {
+  const router = useRouter();
+  const [title, setTitle] = useState(event.title);
+  const [location, setLocation] = useState(event.location);
+  const [date, setDate] = useState(toDateInputValue(event.starts_at));
+  const [startTime, setStartTime] = useState(toTimeInputValue(event.starts_at));
+  const [endTime, setEndTime] = useState(toTimeInputValue(event.ends_at));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const result = await updateEventAction(event.id, title, location, date, startTime, endTime);
+    setSaving(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+    onDone();
+  }
+
+  return (
+    <div className="event-row event-row-editing">
+      <div className="event-edit-grid">
+        <input className="txn-edit-input" value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
+        <input
+          className="txn-edit-input"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Local"
+          disabled={saving}
+        />
+        <input
+          className="txn-edit-input"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          disabled={saving}
+        />
+        <input
+          className="txn-edit-input"
+          type="time"
+          value={startTime}
+          onChange={(e) => setStartTime(e.target.value)}
+          disabled={saving}
+        />
+        <input
+          className="txn-edit-input"
+          type="time"
+          value={endTime}
+          onChange={(e) => setEndTime(e.target.value)}
+          disabled={saving}
+        />
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      <div className="row-actions">
+        <button className="btn-text" type="button" onClick={onDone} disabled={saving}>
+          Cancelar
+        </button>
+        <button className="btn-text" type="button" onClick={save} disabled={saving || !title.trim()}>
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function EventRow({ event }: { event: Event }) {
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return <EditEventRow event={event} onDone={() => setEditing(false)} />;
+  }
 
   return (
     <div className="event-row">
@@ -44,21 +126,31 @@ export function EventRow({ event }: { event: Event }) {
         </div>
         {event.google_event_id && <span className="badge">Google</span>}
       </div>
-      <button
-        type="button"
-        className="event-delete"
-        aria-label="Excluir evento"
-        disabled={isPending}
-        onClick={() => startTransition(() => deleteEventAction(event.id))}
-      >
-        <IconTrash />
-      </button>
+      <div className="row-actions">
+        <button className="icon-btn" type="button" aria-label="Editar evento" onClick={() => setEditing(true)}>
+          <IconPencil />
+        </button>
+        <button
+          type="button"
+          className="icon-btn bad"
+          aria-label="Excluir evento"
+          disabled={isPending}
+          onClick={() => startTransition(() => deleteEventAction(event.id))}
+        >
+          <IconTrash />
+        </button>
+      </div>
     </div>
   );
 }
 
-export function NewEventForm() {
+export function NewEventForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [state, formAction, pending] = useActionState(createEventAction, initialCreateEventState);
+
+  useEffect(() => {
+    if (state.status === "success") onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status]);
 
   return (
     <div className="panel">

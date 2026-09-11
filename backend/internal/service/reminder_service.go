@@ -42,6 +42,14 @@ func (s *ReminderService) SetDone(ctx context.Context, id string, done bool) (do
 	return s.reminders.SetDone(ctx, id, done)
 }
 
+func (s *ReminderService) Update(ctx context.Context, id string, in NewReminderInput) (domain.Reminder, error) {
+	rem := domain.Reminder{Title: in.Title, DueAt: in.DueAt}
+	if err := rem.Validate(); err != nil {
+		return domain.Reminder{}, err
+	}
+	return s.reminders.Update(ctx, id, in.Title, in.DueAt)
+}
+
 func (s *ReminderService) Delete(ctx context.Context, id string) error {
 	return s.reminders.Delete(ctx, id)
 }

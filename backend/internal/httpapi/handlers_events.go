@@ -81,6 +81,29 @@ func (h *EventHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toEventDTO(event))
 }
 
+// Update handles PUT /api/events/{id}. Editing a locally-created event never
+// re-pushes to Google — the initial best-effort push already linked it (or
+// didn't); this keeps the update path simple and local-first.
+func (h *EventHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	var req createEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	input, err := req.toInput()
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: starts_at/ends_at must be RFC3339", domain.ErrValidation))
+		return
+	}
+
+	event, err := h.events.Update(r.Context(), r.PathValue("id"), input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toEventDTO(event))
+}
+
 // Delete handles DELETE /api/events/{id}.
 func (h *EventHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

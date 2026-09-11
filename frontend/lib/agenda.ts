@@ -58,6 +58,13 @@ export function createEvent(input: CreateEventInput): Promise<Event> {
   });
 }
 
+export function updateEvent(id: string, input: CreateEventInput): Promise<Event> {
+  return agendaFetch<Event>(`/api/events/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 export function deleteEvent(id: string): Promise<void> {
   return agendaFetch<void>(`/api/events/${id}`, { method: "DELETE" });
 }

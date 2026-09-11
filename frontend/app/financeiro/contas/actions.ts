@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createBill, markBillPaid } from "@/lib/bills";
+import { createBill, markBillPaid, updateBill, deleteBill } from "@/lib/bills";
 import type { BillDirection } from "@/lib/bills";
 
 export type BillFormState = {
@@ -53,5 +53,41 @@ export async function createBillAction(
 
 export async function markBillPaidAction(id: string): Promise<void> {
   await markBillPaid(id);
+  revalidatePath("/financeiro/contas");
+}
+
+export type UpdateBillFields = {
+  description: string;
+  amount: string;
+  due_date: string;
+  direction: BillDirection;
+  category_id?: string;
+  recurring: boolean;
+};
+
+export async function updateBillAction(id: string, fields: UpdateBillFields): Promise<{ error?: string }> {
+  const amountCents = parseAmountToCents(fields.amount);
+  if (!fields.description.trim()) return { error: "Descrição é obrigatória." };
+  if (amountCents === null) return { error: "Valor inválido." };
+  if (!fields.due_date) return { error: "Selecione o vencimento." };
+
+  try {
+    await updateBill(id, {
+      description: fields.description.trim(),
+      amount_cents: amountCents,
+      due_date: fields.due_date,
+      direction: fields.direction,
+      category_id: fields.category_id,
+      recurring: fields.recurring,
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Falha ao salvar." };
+  }
+  revalidatePath("/financeiro/contas");
+  return {};
+}
+
+export async function deleteBillAction(id: string): Promise<void> {
+  await deleteBill(id);
   revalidatePath("/financeiro/contas");
 }

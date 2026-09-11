@@ -1,16 +1,21 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { createBillAction, type BillFormState } from "@/app/financeiro/contas/actions";
 import type { Category } from "@/lib/types";
 import type { BillDirection } from "@/lib/bills";
 
 const initialState: BillFormState = { status: "idle" };
 
-export function BillForm({ categories }: { categories: Category[] }) {
+export function BillForm({ categories, onSuccess }: { categories: Category[]; onSuccess?: () => void }) {
   const [state, formAction, pending] = useActionState(createBillAction, initialState);
   const [direction, setDirection] = useState<BillDirection>("pagar");
   const [recurring, setRecurring] = useState(false);
+
+  useEffect(() => {
+    if (state.status === "success") onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status]);
 
   return (
     <div className="panel" id="nova-conta">

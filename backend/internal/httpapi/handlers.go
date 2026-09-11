@@ -91,6 +91,32 @@ func (h *Handlers) CreateTransaction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type updateTransactionRequest struct {
+	Description string `json:"description"`
+	CategoryID  string `json:"category_id"`
+}
+
+func (h *Handlers) UpdateTransaction(w http.ResponseWriter, r *http.Request) {
+	var req updateTransactionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	if err := h.transactions.Update(r.Context(), r.PathValue("id"), req.Description, req.CategoryID); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handlers) DeleteTransaction(w http.ResponseWriter, r *http.Request) {
+	if err := h.transactions.Delete(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func parseYearMonth(s string) (domain.YearMonth, error) {
 	t, err := time.Parse("2006-01", s)
 	if err != nil {

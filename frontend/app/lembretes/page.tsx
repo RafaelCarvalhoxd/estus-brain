@@ -1,6 +1,7 @@
 import { listReminders, type Reminder } from "@/lib/reminders";
 import { Sidebar } from "@/components/Sidebar";
-import { ReminderSection, NewReminderForm } from "@/components/ReminderList";
+import { ReminderSection } from "@/components/ReminderList";
+import { NewReminderModal } from "@/components/NewReminderModal";
 import "../ui.css";
 import "./reminders.css";
 
@@ -30,27 +31,24 @@ export default async function LembretesPage() {
         <div className="wrap">
           <div className="topbar">
             <h1 className="page-title">Lembretes</h1>
+            <NewReminderModal />
           </div>
 
-          <section className="bottom-split">
-            <div className="panel">
-              <div className="panel-head">
-                <h2>Seus lembretes</h2>
-              </div>
-              {reminders.length === 0 ? (
-                <p className="empty-note">Nenhum lembrete por aqui ainda.</p>
-              ) : (
-                <>
-                  <ReminderSection title="Atrasados" reminders={groups.atrasado} bucket="atrasado" />
-                  <ReminderSection title="Hoje" reminders={groups.hoje} bucket="hoje" />
-                  <ReminderSection title="Próximos" reminders={groups.proximo} bucket="proximo" />
-                  <ReminderSection title="Concluídos" reminders={groups.concluido} bucket="concluido" />
-                </>
-              )}
+          <div className="panel">
+            <div className="panel-head">
+              <h2>Seus lembretes</h2>
             </div>
-
-            <NewReminderForm />
-          </section>
+            {reminders.length === 0 ? (
+              <p className="empty-note">Nenhum lembrete por aqui ainda.</p>
+            ) : (
+              <>
+                <ReminderSection title="Atrasados" reminders={groups.atrasado} bucket="atrasado" />
+                <ReminderSection title="Hoje" reminders={groups.hoje} bucket="hoje" />
+                <ReminderSection title="Próximos" reminders={groups.proximo} bucket="proximo" />
+                <ReminderSection title="Concluídos" reminders={groups.concluido} bucket="concluido" />
+              </>
+            )}
+          </div>
         </div>
       </main>
     </div>

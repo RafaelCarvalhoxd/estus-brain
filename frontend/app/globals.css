@@ -27,24 +27,31 @@
   --cat-7: #4a3aa7;
 }
 
+/* Premium black — true #000 page, surfaces lifted just enough off it to
+   read as separate slabs without a visible shadow (shadows barely exist
+   against a black ground; the hairline border carries the separation
+   instead). The OS "dark" media query and the explicit toggle both land
+   here; :not([data-theme="light"]) lets an explicit light choice win over
+   a dark OS setting, and the [data-theme="dark"] block below wins the
+   other way for the toggle itself. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #101218;
-    --surface: #191c24;
-    --surface-2: #21252f;
-    --hairline: rgba(255, 255, 255, 0.08);
-    --ink: #eef0f4;
-    --ink-soft: #9ca2b4;
-    --ink-mute: #6a6f80;
+    --page: #000000;
+    --surface: #0d0d0f;
+    --surface-2: #18181b;
+    --hairline: rgba(255, 255, 255, 0.09);
+    --ink: #f2f1ed;
+    --ink-soft: #9b9b9f;
+    --ink-mute: #6b6b70;
     --accent: #d8b571;
-    --accent-ink: #1b140a;
-    --accent-wash: rgba(216, 181, 113, 0.14);
+    --accent-ink: #16130a;
+    --accent-wash: rgba(216, 181, 113, 0.16);
     --good: #34c759;
     --good-wash: rgba(52, 199, 89, 0.12);
     --bad: #ff6b5e;
-    --bad-wash: rgba(255, 107, 94, 0.12);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 32px -18px rgba(0, 0, 0, 0.6);
+    --bad-wash: rgba(255, 107, 94, 0.14);
+    --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 1px 2px rgba(0, 0, 0, 0.4);
 
     --cat-1: #3987e5;
     --cat-2: #d95926;
@@ -54,6 +61,33 @@
     --cat-6: #2fb84f;
     --cat-7: #9085e9;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #000000;
+  --surface: #0d0d0f;
+  --surface-2: #18181b;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --ink: #f2f1ed;
+  --ink-soft: #9b9b9f;
+  --ink-mute: #6b6b70;
+  --accent: #d8b571;
+  --accent-ink: #16130a;
+  --accent-wash: rgba(216, 181, 113, 0.16);
+  --good: #34c759;
+  --good-wash: rgba(52, 199, 89, 0.12);
+  --bad: #ff6b5e;
+  --bad-wash: rgba(255, 107, 94, 0.14);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
+  --cat-4: #c98500;
+  --cat-5: #d55181;
+  --cat-6: #2fb84f;
+  --cat-7: #9085e9;
 }
 
 * {

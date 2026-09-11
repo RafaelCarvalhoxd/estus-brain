@@ -106,3 +106,17 @@ func (s *TransactionService) Create(ctx context.Context, in NewTransactionInput)
 	}
 	return txns, nil
 }
+
+func (s *TransactionService) Update(ctx context.Context, id, description, categoryID string) error {
+	if description == "" {
+		return fmt.Errorf("%w: description is required", domain.ErrValidation)
+	}
+	if _, err := s.categories.Get(ctx, categoryID); err != nil {
+		return fmt.Errorf("category %s: %w", categoryID, err)
+	}
+	return s.transactions.UpdateDescriptionAndCategory(ctx, id, description, categoryID)
+}
+
+func (s *TransactionService) Delete(ctx context.Context, id string) error {
+	return s.transactions.Delete(ctx, id)
+}

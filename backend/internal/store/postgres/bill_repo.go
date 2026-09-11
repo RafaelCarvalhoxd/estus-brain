@@ -76,6 +76,35 @@ func (r *BillRepo) MarkPaid(ctx context.Context, id string, paidAt time.Time) (d
 	return b, nil
 }
 
+func (r *BillRepo) Update(ctx context.Context, b domain.Bill) (domain.Bill, error) {
+	err := r.db.Pool.QueryRow(ctx, `
+		update bills set
+			description = $2, amount_cents = $3, due_date = $4,
+			direction = $5, category_id = $6, recurring = $7
+		where id = $1
+		returning id, description, amount_cents, due_date, direction, category_id, paid_at, recurring, created_at`,
+		b.ID, b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID, b.Recurring,
+	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt, &b.Recurring, &b.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("update bill %s: %w", b.ID, err)
+	}
+	return b, nil
+}
+
+func (r *BillRepo) Delete(ctx context.Context, id string) error {
+	tag, err := r.db.Pool.Exec(ctx, `delete from bills where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete bill %s: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (r *BillRepo) OpenTotals(ctx context.Context) (payableCents, receivableCents domain.Cents, overdueCount int, err error) {
 	rows, err := r.db.Pool.Query(ctx, `
 		select direction, coalesce(sum(amount_cents), 0)

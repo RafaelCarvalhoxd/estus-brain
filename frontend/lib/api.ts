@@ -45,3 +45,14 @@ export function createTransaction(input: CreateTransactionInput): Promise<unknow
     body: JSON.stringify(input),
   });
 }
+
+export function updateTransaction(id: string, description: string, categoryId: string): Promise<unknown> {
+  return apiFetch(`/api/transactions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ description, category_id: categoryId }),
+  });
+}
+
+export function deleteTransaction(id: string): Promise<unknown> {
+  return apiFetch(`/api/transactions/${id}`, { method: "DELETE" });
+}

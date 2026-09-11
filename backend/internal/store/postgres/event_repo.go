@@ -2,8 +2,11 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
@@ -46,6 +49,22 @@ func (r *EventRepo) ListRange(ctx context.Context, from, to time.Time) ([]domain
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+func (r *EventRepo) Update(ctx context.Context, e domain.Event) (domain.Event, error) {
+	err := r.db.Pool.QueryRow(ctx, `
+		update events set title = $2, location = $3, notes = $4, starts_at = $5, ends_at = $6
+		where id = $1
+		returning google_event_id, created_at`,
+		e.ID, e.Title, e.Location, e.Notes, e.StartsAt, e.EndsAt,
+	).Scan(&e.GoogleEventID, &e.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Event{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Event{}, fmt.Errorf("update event %s: %w", e.ID, err)
+	}
+	return e, nil
 }
 
 func (r *EventRepo) Delete(ctx context.Context, id string) error {

@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState, useTransition } from "react";
 import type { Note } from "@/lib/notes";
 import { createNoteAction, deleteNoteAction, updateNoteAction, type NoteFormState } from "@/app/notas/actions";
+import { IconSearch } from "./icons";
 
 function IconPin({ filled }: { filled: boolean }) {
   return (
@@ -46,6 +47,13 @@ export function NotesBoard({ notes }: { notes: Note[] }) {
   const [selectedId, setSelectedId] = useState<string | null>(notes[0]?.id ?? null);
   const [creatingNew, setCreatingNew] = useState(notes.length === 0);
   const [isPending, startTransition] = useTransition();
+  const [query, setQuery] = useState("");
+
+  const visibleNotes = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter((n) => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q));
+  }, [notes, query]);
 
   const selected = useMemo(
     () => (creatingNew ? null : notes.find((n) => n.id === selectedId) ?? null),
@@ -81,11 +89,27 @@ export function NotesBoard({ notes }: { notes: Note[] }) {
           </button>
         </div>
 
+        {notes.length > 0 && (
+          <div className="list-filters">
+            <div className="filter-search">
+              <IconSearch />
+              <input
+                type="text"
+                placeholder="Buscar notas"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
         {notes.length === 0 ? (
           <p className="empty-note">Nenhuma nota ainda. Crie a primeira.</p>
+        ) : visibleNotes.length === 0 ? (
+          <p className="empty-note">Nenhuma nota bate com essa busca.</p>
         ) : (
           <ul className="notes-list">
-            {notes.map((note) => (
+            {visibleNotes.map((note) => (
               <li key={note.id}>
                 <button
                   type="button"

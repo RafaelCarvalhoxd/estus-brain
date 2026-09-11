@@ -3,11 +3,9 @@
   margin-top: 18px;
 }
 .reminder-section-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
   color: var(--ink-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin: 0 0 8px;
 }
 
@@ -50,26 +48,21 @@
   background: var(--bad-wash);
   color: var(--bad);
 }
-.reminder-delete {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--ink-mute);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+.reminder-row-editing {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
 }
-.reminder-delete:hover {
-  color: var(--bad);
-  background: var(--bad-wash);
+.reminder-edit-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  gap: 10px;
+  width: 100%;
 }
-.reminder-delete svg {
-  width: 15px;
-  height: 15px;
+@media (max-width: 560px) {
+  .reminder-edit-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .reminder-form {

@@ -64,6 +64,27 @@ func (h *ReminderHandlers) SetDone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toReminderDTO(rem))
 }
 
+// Update handles PUT /api/reminders/{id} — title and due date only; use
+// PATCH to toggle done.
+func (h *ReminderHandlers) Update(w http.ResponseWriter, r *http.Request) {
+	var req createReminderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	input, err := req.toInput()
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: due_at must be RFC3339", domain.ErrValidation))
+		return
+	}
+	rem, err := h.reminders.Update(r.Context(), r.PathValue("id"), input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toReminderDTO(rem))
+}
+
 func (h *ReminderHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.reminders.Delete(r.Context(), r.PathValue("id")); err != nil {
 		writeError(w, err)

@@ -8,7 +8,7 @@
 
 .bill-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   align-items: center;
   gap: 12px;
   padding: 11px 0;
@@ -34,6 +34,25 @@
   font-weight: 650;
 }
 
+.bill-row-editing {
+  display: block;
+  padding: 12px 0;
+}
+.bill-edit-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.bill-edit-recurring {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
 @media (max-width: 980px) {
   .bills-columns {
     grid-template-columns: 1fr;
@@ -46,5 +65,8 @@
   }
   .bill-row .btn-outline {
     grid-column: 1 / -1;
+  }
+  .bill-edit-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }

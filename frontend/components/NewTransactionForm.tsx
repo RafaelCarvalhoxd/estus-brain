@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { createTransactionAction, type CreateTransactionState } from "@/app/financeiro/lancamentos/actions";
 import type { Category, CreditCard, PaymentMethod } from "@/lib/types";
 import { formatYearMonth, shiftYearMonth } from "@/lib/month";
@@ -10,11 +10,18 @@ const initialState: CreateTransactionState = { status: "idle" };
 export function NewTransactionForm({
   categories,
   cards,
+  onSuccess,
 }: {
   categories: Category[];
   cards: CreditCard[];
+  onSuccess?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(createTransactionAction, initialState);
+
+  useEffect(() => {
+    if (state.status === "success") onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status]);
   const [method, setMethod] = useState<PaymentMethod>("debito");
   const [installments, setInstallments] = useState(1);
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));

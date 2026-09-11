@@ -72,3 +72,14 @@ export function createBill(input: CreateBillInput): Promise<Bill> {
 export function markBillPaid(id: string): Promise<Bill> {
   return billsFetch<Bill>(`/api/bills/${id}/paid`, { method: "POST" });
 }
+
+export function updateBill(id: string, input: CreateBillInput): Promise<Bill> {
+  return billsFetch<Bill>(`/api/bills/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteBill(id: string): Promise<void> {
+  return billsFetch<void>(`/api/bills/${id}`, { method: "DELETE" });
+}

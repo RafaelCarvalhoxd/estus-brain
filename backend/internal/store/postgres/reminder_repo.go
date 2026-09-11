@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -61,6 +62,23 @@ func (r *ReminderRepo) SetDone(ctx context.Context, id string, done bool) (domai
 	}
 	if err != nil {
 		return domain.Reminder{}, fmt.Errorf("set reminder done: %w", err)
+	}
+	return rem, nil
+}
+
+func (r *ReminderRepo) Update(ctx context.Context, id, title string, dueAt *time.Time) (domain.Reminder, error) {
+	var rem domain.Reminder
+	err := r.db.Pool.QueryRow(ctx, `
+		update reminders set title = $2, due_at = $3
+		where id = $1
+		returning id, title, due_at, done, created_at`,
+		id, title, dueAt,
+	).Scan(&rem.ID, &rem.Title, &rem.DueAt, &rem.Done, &rem.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Reminder{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Reminder{}, fmt.Errorf("update reminder %s: %w", id, err)
 	}
 	return rem, nil
 }

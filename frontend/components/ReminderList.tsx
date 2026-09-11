@@ -1,23 +1,16 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Reminder } from "@/lib/reminders";
 import {
   createReminderAction,
   deleteReminderAction,
   initialCreateReminderState,
   toggleReminderAction,
+  updateReminderAction,
 } from "@/app/lembretes/actions";
-
-function IconTrash() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 7h16" />
-      <path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7" />
-      <path d="M6 7l1 13.5A1.5 1.5 0 0 0 8.5 22h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
-    </svg>
-  );
-}
+import { IconPencil, IconTrash } from "./icons";
 
 function formatDueAt(dueAt?: string): string | null {
   if (!dueAt) return null;
@@ -29,9 +22,85 @@ function formatDueAt(dueAt?: string): string | null {
   return `${datePart} às ${timePart}`;
 }
 
+function toDateInputValue(dueAt?: string): string {
+  if (!dueAt) return "";
+  const d = new Date(dueAt);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function toTimeInputValue(dueAt?: string): string {
+  if (!dueAt) return "";
+  const d = new Date(dueAt);
+  if (d.getHours() === 0 && d.getMinutes() === 0) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function EditReminderRow({ reminder, onDone }: { reminder: Reminder; onDone: () => void }) {
+  const router = useRouter();
+  const [title, setTitle] = useState(reminder.title);
+  const [date, setDate] = useState(toDateInputValue(reminder.due_at));
+  const [time, setTime] = useState(toTimeInputValue(reminder.due_at));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const result = await updateReminderAction(reminder.id, title, date, time);
+    setSaving(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+    onDone();
+  }
+
+  return (
+    <div className="reminder-row reminder-row-editing">
+      <div className="reminder-edit-grid">
+        <input
+          className="txn-edit-input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={saving}
+        />
+        <input
+          className="txn-edit-input"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          disabled={saving}
+        />
+        <input
+          className="txn-edit-input"
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          disabled={saving}
+        />
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      <div className="row-actions">
+        <button className="btn-text" type="button" onClick={onDone} disabled={saving}>
+          Cancelar
+        </button>
+        <button className="btn-text" type="button" onClick={save} disabled={saving || !title.trim()}>
+          {saving ? "Salvando…" : "Salvar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReminderRow({ reminder, bucket }: { reminder: Reminder; bucket: string }) {
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
   const due = formatDueAt(reminder.due_at);
+
+  if (editing) {
+    return <EditReminderRow reminder={reminder} onDone={() => setEditing(false)} />;
+  }
 
   return (
     <div className="reminder-row">
@@ -47,15 +116,20 @@ function ReminderRow({ reminder, bucket }: { reminder: Reminder; bucket: string 
         <span className={`reminder-title ${reminder.done ? "reminder-title-done" : ""}`}>{reminder.title}</span>
         {due && <span className={`badge ${bucket === "atrasado" ? "badge-bad" : ""}`}>{due}</span>}
       </div>
-      <button
-        type="button"
-        className="reminder-delete"
-        aria-label="Excluir lembrete"
-        disabled={isPending}
-        onClick={() => startTransition(() => deleteReminderAction(reminder.id))}
-      >
-        <IconTrash />
-      </button>
+      <div className="row-actions">
+        <button className="icon-btn" type="button" aria-label="Editar lembrete" onClick={() => setEditing(true)}>
+          <IconPencil />
+        </button>
+        <button
+          type="button"
+          className="icon-btn bad"
+          aria-label="Excluir lembrete"
+          disabled={isPending}
+          onClick={() => startTransition(() => deleteReminderAction(reminder.id))}
+        >
+          <IconTrash />
+        </button>
+      </div>
     </div>
   );
 }
@@ -74,8 +148,13 @@ export function ReminderSection({ title, reminders, bucket }: { title: string; r
   );
 }
 
-export function NewReminderForm() {
+export function NewReminderForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [state, formAction, pending] = useActionState(createReminderAction, initialCreateReminderState);
+
+  useEffect(() => {
+    if (state.status === "success") onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status]);
 
   return (
     <div className="panel">

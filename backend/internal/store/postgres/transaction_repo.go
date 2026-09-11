@@ -183,3 +183,35 @@ func (r *TransactionRepo) OpenInvoiceTotalAll(ctx context.Context, viewedMonth d
 	}
 	return domain.Cents(total), nil
 }
+
+// UpdateDescriptionAndCategory changes only the two fields that never
+// affect competence-month or installment math — everything else (amount,
+// date, payment method, installments) is immutable after creation, because
+// changing it would mean re-deriving which months and how many rows the
+// purchase spans, and doing that safely on an existing installment group is
+// a bigger feature than "edit a transaction". Delete and recreate covers
+// that case for now.
+func (r *TransactionRepo) UpdateDescriptionAndCategory(ctx context.Context, id, description, categoryID string) error {
+	tag, err := r.db.Pool.Exec(ctx, `
+		update transactions set description = $2, category_id = $3 where id = $1`,
+		id, description, categoryID,
+	)
+	if err != nil {
+		return fmt.Errorf("update transaction %s: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *TransactionRepo) Delete(ctx context.Context, id string) error {
+	tag, err := r.db.Pool.Exec(ctx, `delete from transactions where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete transaction %s: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}

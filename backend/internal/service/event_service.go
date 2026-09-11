@@ -88,6 +88,21 @@ func (s *EventService) ListRange(ctx context.Context, from, to time.Time) ([]dom
 	return events, nil
 }
 
+func (s *EventService) Update(ctx context.Context, id string, in NewEventInput) (domain.Event, error) {
+	e := domain.Event{
+		ID:       id,
+		Title:    in.Title,
+		Location: in.Location,
+		Notes:    in.Notes,
+		StartsAt: in.StartsAt,
+		EndsAt:   in.EndsAt,
+	}
+	if err := e.Validate(); err != nil {
+		return domain.Event{}, err
+	}
+	return s.events.Update(ctx, e)
+}
+
 func (s *EventService) Delete(ctx context.Context, id string) error {
 	return s.events.Delete(ctx, id)
 }

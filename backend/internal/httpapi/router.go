@@ -31,12 +31,16 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 	mux.HandleFunc("GET /api/credit-cards", h.ListCreditCards)
 	mux.HandleFunc("GET /api/months/{month}", h.MonthSummary)
 	mux.HandleFunc("POST /api/transactions", h.CreateTransaction)
+	mux.HandleFunc("PATCH /api/transactions/{id}", h.UpdateTransaction)
+	mux.HandleFunc("DELETE /api/transactions/{id}", h.DeleteTransaction)
 
 	if b := m.Bills; b != nil {
 		mux.HandleFunc("GET /api/bills", b.List)
 		mux.HandleFunc("POST /api/bills", b.Create)
 		mux.HandleFunc("GET /api/bills/summary", b.Summary)
 		mux.HandleFunc("POST /api/bills/{id}/paid", b.MarkPaid)
+		mux.HandleFunc("PUT /api/bills/{id}", b.Update)
+		mux.HandleFunc("DELETE /api/bills/{id}", b.Delete)
 	}
 
 	if v := m.Vault; v != nil {
@@ -63,12 +67,14 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("GET /api/reminders", rm.List)
 		mux.HandleFunc("POST /api/reminders", rm.Create)
 		mux.HandleFunc("PATCH /api/reminders/{id}", rm.SetDone)
+		mux.HandleFunc("PUT /api/reminders/{id}", rm.Update)
 		mux.HandleFunc("DELETE /api/reminders/{id}", rm.Delete)
 	}
 
 	if e := m.Events; e != nil {
 		mux.HandleFunc("GET /api/events", e.ListRange)
 		mux.HandleFunc("POST /api/events", e.Create)
+		mux.HandleFunc("PUT /api/events/{id}", e.Update)
 		mux.HandleFunc("DELETE /api/events/{id}", e.Delete)
 		mux.HandleFunc("GET /api/google/status", e.GoogleStatus)
 		mux.HandleFunc("GET /api/google/oauth/start", e.GoogleAuthStart)
