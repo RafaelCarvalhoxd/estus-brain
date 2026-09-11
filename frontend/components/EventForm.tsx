@@ -146,7 +146,10 @@ export function EventRow({ event }: { event: Event }) {
 
 const initialEventFormState: CreateEventState = { status: "idle" };
 
-export function NewEventForm({ onSuccess }: { onSuccess?: () => void } = {}) {
+export function NewEventForm({
+  onSuccess,
+  defaultDate,
+}: { onSuccess?: () => void; defaultDate?: string } = {}) {
   const [state, formAction, pending] = useActionState(createEventAction, initialEventFormState);
 
   useEffect(() => {
@@ -170,7 +173,7 @@ export function NewEventForm({ onSuccess }: { onSuccess?: () => void } = {}) {
         </div>
         <div className="field">
           <label htmlFor="e-date">Data</label>
-          <input id="e-date" name="date" type="date" required />
+          <input id="e-date" name="date" type="date" defaultValue={defaultDate} required />
         </div>
         <div className="row2">
           <div className="field">
