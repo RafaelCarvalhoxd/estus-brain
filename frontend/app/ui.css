@@ -641,6 +641,30 @@
 .category-manager-error {
   flex-basis: 100%;
 }
+.credit-card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  flex-wrap: wrap;
+}
+.credit-card-row + .credit-card-row {
+  border-top: 1px solid var(--hairline);
+}
+.credit-card-name {
+  font-size: 13px;
+  font-weight: 550;
+  flex: 1;
+  min-width: 0;
+}
+.credit-card-cycle {
+  font-size: 12px;
+  color: var(--ink-mute);
+  flex: none;
+}
+.credit-card-error {
+  flex-basis: 100%;
+}
 .color-input {
   padding: 3px !important;
   height: 34px;

@@ -7,6 +7,7 @@ const TABS = [
   { href: "/financeiro", label: "Dashboard" },
   { href: "/financeiro/lancamentos", label: "Lançamentos" },
   { href: "/financeiro/categorias", label: "Categorias" },
+  { href: "/financeiro/cartoes", label: "Cartões" },
   { href: "/financeiro/contas", label: "Contas" },
 ];
 

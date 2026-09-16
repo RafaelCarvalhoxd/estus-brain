@@ -87,3 +87,27 @@ export function updateCategory(id: string, input: CategoryInput): Promise<Catego
 export function deleteCategory(id: string): Promise<unknown> {
   return apiFetch(`/api/categories/${id}`, { method: "DELETE" });
 }
+
+export interface CreditCardInput {
+  name: string;
+  closing_day: number;
+  due_day: number;
+}
+
+export function createCreditCard(input: CreditCardInput): Promise<CreditCard> {
+  return apiFetch<CreditCard>("/api/credit-cards", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateCreditCard(id: string, input: CreditCardInput): Promise<CreditCard> {
+  return apiFetch<CreditCard>(`/api/credit-cards/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCreditCard(id: string): Promise<unknown> {
+  return apiFetch(`/api/credit-cards/${id}`, { method: "DELETE" });
+}
