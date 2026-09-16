@@ -1,6 +1,6 @@
 import { googleStatus, listEvents, type Event } from "@/lib/agenda";
 import { buildMonthGrid, currentYearMonth } from "@/lib/month";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleTopBar } from "@/components/ModuleTopBar";
 import { TopBar } from "@/components/TopBar";
 import { GoogleSyncButton } from "@/components/EventForm";
 import { NewEventModal } from "@/components/NewEventModal";
@@ -42,7 +42,7 @@ export default async function AgendaPage({
 
   return (
     <div className="shell">
-      <Sidebar />
+      <ModuleTopBar module="agenda" />
       <main className="main">
         <div className="wrap">
           <TopBar

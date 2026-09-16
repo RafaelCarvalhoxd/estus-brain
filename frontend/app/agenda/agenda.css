@@ -92,9 +92,10 @@
   justify-content: center;
 }
 .cal-daynum-today {
-  background: var(--ink);
-  color: var(--page);
+  background: var(--raised);
+  color: var(--ink);
   border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
 }
 
 .cal-add-btn {
@@ -131,23 +132,32 @@
   min-width: 0;
 }
 
+/* Tinted pill with a colored hairline, title left and time right — the
+   event chips from the reference, in the Agenda module's blue. */
 .cal-event-pill {
   display: flex;
   align-items: baseline;
-  gap: 5px;
-  border: none;
-  background: var(--accent-wash);
-  color: var(--ink);
+  gap: 6px;
+  border: 1px solid color-mix(in oklab, var(--m-agenda) 58%, transparent);
+  background: color-mix(in oklab, var(--m-agenda) 20%, transparent);
+  color: color-mix(in oklab, var(--m-agenda) 30%, var(--ink));
   border-radius: 6px;
-  padding: 3px 6px;
-  font-size: 11px;
+  padding: 3px 7px;
+  font-size: 11.5px;
+  font-weight: 650;
   text-align: left;
   cursor: pointer;
   min-width: 0;
+  transition: background-color 0.15s ease;
+}
+.cal-event-pill:hover {
+  background: color-mix(in oklab, var(--m-agenda) 32%, transparent);
 }
 .cal-event-time {
-  font-weight: 650;
-  color: var(--ink-soft);
+  order: 2;
+  margin-left: auto;
+  font-weight: 550;
+  color: color-mix(in oklab, var(--m-agenda) 55%, var(--ink-soft));
   flex: none;
 }
 .cal-event-title {

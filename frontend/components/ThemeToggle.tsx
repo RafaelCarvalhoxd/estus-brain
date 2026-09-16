@@ -1,30 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { IconMonitor, IconSun, IconMoon } from "./icons";
+import { IconSun, IconMoon } from "./icons";
 
-type ThemePref = "system" | "light" | "dark";
+type ThemePref = "dark" | "light";
 
-const OPTIONS: { value: ThemePref; label: string; icon: typeof IconMonitor }[] = [
-  { value: "system", label: "Sistema", icon: IconMonitor },
-  { value: "light", label: "Claro", icon: IconSun },
+const OPTIONS: { value: ThemePref; label: string; icon: typeof IconMoon }[] = [
   { value: "dark", label: "Escuro", icon: IconMoon },
+  { value: "light", label: "Claro", icon: IconSun },
 ];
 
 // Kept outside the component: it mutates the document, not component
-// state, and the lint rule that governs component/hook bodies (aimed at
-// catching accidental mutation of render output) doesn't apply to plain
-// imperative DOM calls like this one.
+// state. Dark is the unmarked default, so choosing it clears the
+// attribute and the stored choice rather than writing "dark".
 function applyTheme(next: ThemePref) {
   const root = document.documentElement;
+  if (next === "dark") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", "light");
   try {
-    if (next === "system") {
-      localStorage.removeItem("estus-theme");
-      root.removeAttribute("data-theme");
-    } else {
-      localStorage.setItem("estus-theme", next);
-      root.setAttribute("data-theme", next);
-    }
+    if (next === "dark") localStorage.removeItem("estus-theme");
+    else localStorage.setItem("estus-theme", "light");
   } catch {
     // localStorage blocked (private mode, etc.) — the attribute change
     // above still applies the theme for this tab, it just won't survive
@@ -33,16 +28,13 @@ function applyTheme(next: ThemePref) {
 }
 
 export function ThemeToggle() {
-  const [pref, setPref] = useState<ThemePref>("system");
+  const [pref, setPref] = useState<ThemePref>("dark");
 
   useEffect(() => {
-    // localStorage doesn't exist during server render, so the initial
-    // state has to be the server-safe default ("system") and reconciled
-    // here after mount — there's no state to "synchronize with an
-    // external system" ahead of this read, it IS the read.
-    const stored = localStorage.getItem("estus-theme");
+    // The attribute set by the layout's pre-paint script is the source of
+    // truth; the server can't know it, so reconcile after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (stored === "light" || stored === "dark") setPref(stored);
+    if (document.documentElement.dataset.theme === "light") setPref("light");
   }, []);
 
   function choose(next: ThemePref) {
@@ -58,6 +50,7 @@ export function ThemeToggle() {
           type="button"
           className={pref === value ? "active" : ""}
           aria-label={label}
+          title={label}
           aria-pressed={pref === value}
           onClick={() => choose(value)}
         >

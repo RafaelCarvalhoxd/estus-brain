@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleTopBar } from "@/components/ModuleTopBar";
 import { VaultList } from "@/components/VaultList";
 import { VaultSetup } from "@/components/VaultSetup";
 import { NewVaultEntryModal } from "@/components/NewVaultEntryModal";
@@ -11,7 +11,7 @@ export default async function SenhasPage() {
 
   return (
     <div className="shell">
-      <Sidebar />
+      <ModuleTopBar module="senhas" />
       <main className="main">
         <div className="wrap">
           <div className="topbar">

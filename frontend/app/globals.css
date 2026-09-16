@@ -1,93 +1,116 @@
 @import "tailwindcss";
 
+/* Graphite, not black — the reference is a stack of charcoal slabs
+   (page → rail/panel → raised control) separated by hairlines, with color
+   reserved for the things that mean something: each module owns one hue
+   from the event-pill palette (green money, blue time, purple memory,
+   orange nudges, pink secrets) and that hue follows it everywhere — its
+   lobe on the home brain, its active nav icon, its chips.
+
+   Dark is the default; light is an explicit opt-in via the toggle, so the
+   bare :root carries the dark palette and [data-theme="light"] swaps it. */
 :root {
-  color-scheme: light;
-  --page: #f8f8f9;
-  --surface: #ffffff;
-  --surface-2: #f1f1f3;
-  --hairline: rgba(10, 10, 12, 0.09);
-  --ink: #0a0a0c;
-  --ink-soft: #5c5f66;
-  --ink-mute: #8b8e94;
-  --accent: #6c7178;
-  --accent-ink: #ffffff;
-  --accent-wash: rgba(108, 113, 120, 0.12);
-  --good: #0ca30c;
-  --good-wash: rgba(12, 163, 12, 0.1);
-  --bad: #d03b3b;
-  --bad-wash: rgba(208, 59, 59, 0.1);
-  --shadow: 0 1px 2px rgba(10, 10, 12, 0.04), 0 10px 24px -14px rgba(10, 10, 12, 0.16);
-
-  --cat-1: #2a78d6;
-  --cat-2: #eb6834;
-  --cat-3: #1baf7a;
-  --cat-4: #c98d00;
-  --cat-5: #e2588e;
-  --cat-6: #008300;
-  --cat-7: #4a3aa7;
-}
-
-/* Premium black — true #000 page, surfaces lifted just enough off it to
-   read as separate slabs without a visible shadow (shadows barely exist
-   against a black ground; the hairline border carries the separation
-   instead). The OS "dark" media query and the explicit toggle both land
-   here; :not([data-theme="light"]) lets an explicit light choice win over
-   a dark OS setting, and the [data-theme="dark"] block below wins the
-   other way for the toggle itself. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --page: #000000;
-    --surface: #0d0d0f;
-    --surface-2: #18181b;
-    --hairline: rgba(255, 255, 255, 0.09);
-    --ink: #f2f1ed;
-    --ink-soft: #9b9b9f;
-    --ink-mute: #6b6b70;
-    --accent: #a9afb7;
-    --accent-ink: #101114;
-    --accent-wash: rgba(169, 175, 183, 0.16);
-    --good: #34c759;
-    --good-wash: rgba(52, 199, 89, 0.12);
-    --bad: #ff6b5e;
-    --bad-wash: rgba(255, 107, 94, 0.14);
-    --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 1px 2px rgba(0, 0, 0, 0.4);
-
-    --cat-1: #3987e5;
-    --cat-2: #d95926;
-    --cat-3: #199e70;
-    --cat-4: #c98500;
-    --cat-5: #d55181;
-    --cat-6: #2fb84f;
-    --cat-7: #9085e9;
-  }
-}
-
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #000000;
-  --surface: #0d0d0f;
-  --surface-2: #18181b;
-  --hairline: rgba(255, 255, 255, 0.09);
-  --ink: #f2f1ed;
-  --ink-soft: #9b9b9f;
-  --ink-mute: #6b6b70;
-  --accent: #a9afb7;
-  --accent-ink: #101114;
-  --accent-wash: rgba(169, 175, 183, 0.16);
-  --good: #34c759;
-  --good-wash: rgba(52, 199, 89, 0.12);
-  --bad: #ff6b5e;
-  --bad-wash: rgba(255, 107, 94, 0.14);
-  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --page: #121214;
+  --rail: #18181b;
+  --surface: #1a1a1d;
+  --surface-2: #232327;
+  --page-solid: #121214;
+  --surface-solid: #1a1a1d;
+  --surface-2-solid: #232327;
+  --raised: #2c2c31;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+  --ink: #f4f4f5;
+  --ink-soft: #a0a0a8;
+  --ink-mute: #6e6e76;
+  --accent: #c4c4cb;
+  --accent-ink: #121214;
+  --accent-wash: rgba(196, 196, 203, 0.12);
+  /* The brain's own light: electric blue glow, warm synapses. Only the
+     brain uses these; module colors reach it where you point. */
+  --brain-glow: #4d8dff;
+  --brain-spark: #ffb454;
+  --good: #47cd89;
+  --good-wash: rgba(71, 205, 137, 0.12);
+  --bad: #f97066;
+  --bad-wash: rgba(249, 112, 102, 0.13);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --mist: rgba(210, 214, 222, 0.07);
 
-  --cat-1: #3987e5;
-  --cat-2: #d95926;
-  --cat-3: #199e70;
-  --cat-4: #c98500;
-  --cat-5: #d55181;
-  --cat-6: #2fb84f;
-  --cat-7: #9085e9;
+  /* The brain's flesh, not a module color: a deep blue the glow shines
+     through. Module color only tints the lobe you point at. */
+  --tissue: #2f5fd0;
+
+  /* Jewel tones: saturated enough to glow against neutral tissue, deep
+     enough never to look like neon. */
+  --m-financeiro: #10a37f;
+  --m-senhas: #d94f70;
+  --m-notas: #8b5cf6;
+  --m-lembretes: #e0972f;
+  --m-agenda: #3b7fe0;
+  --m-documentos: #0f9aa8;
+  --m-treino: #e8553d;
+  --m-dieta: #7cc242;
+  --m-quadros: #d062c8;
+  --m-habitos: #e2c23a;
+
+  --cat-1: #53b1fd;
+  --cat-2: #f38744;
+  --cat-3: #3ccb7f;
+  --cat-4: #fdb022;
+  --cat-5: #f670c7;
+  --cat-6: #47cd89;
+  --cat-7: #9b8afb;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f5f5f6;
+  --rail: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f2f2f4;
+  --page-solid: #f5f5f6;
+  --surface-solid: #ffffff;
+  --surface-2-solid: #f2f2f4;
+  --raised: #e9e9ec;
+  --hairline: rgba(16, 18, 24, 0.09);
+  --hairline-strong: rgba(16, 18, 24, 0.16);
+  --ink: #181d27;
+  --ink-soft: #535862;
+  --ink-mute: #858a93;
+  --accent: #535862;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(83, 88, 98, 0.1);
+  --good: #079455;
+  --good-wash: rgba(7, 148, 85, 0.1);
+  --bad: #d92d20;
+  --bad-wash: rgba(217, 45, 32, 0.09);
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --mist: rgba(120, 128, 142, 0.1);
+
+  --tissue: #7c9ee6;
+  --brain-glow: #2f6fe0;
+  --brain-spark: #d9822b;
+
+  --m-financeiro: #0e8c6c;
+  --m-senhas: #c03f5e;
+  --m-notas: #7248d6;
+  --m-lembretes: #bf7d1d;
+  --m-agenda: #2f68bd;
+  --m-documentos: #0d7f8c;
+  --m-treino: #c8432c;
+  --m-dieta: #5a9a2a;
+  --m-quadros: #a33d9c;
+  --m-habitos: #a88a0e;
+
+  --cat-1: #1570ef;
+  --cat-2: #e04f16;
+  --cat-3: #099250;
+  --cat-4: #dc6803;
+  --cat-5: #dd2590;
+  --cat-6: #079455;
+  --cat-7: #6938ef;
 }
 
 * {
@@ -98,10 +121,17 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
-  font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans), -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
   line-height: 1.45;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 .tab {

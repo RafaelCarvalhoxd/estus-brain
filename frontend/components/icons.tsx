@@ -1,13 +1,18 @@
 // Minimal stroke icon set for the sidebar nav. Kept as one file since
 // they're small, purely decorative-but-meaningful (each names a real
 // section), and never reused outside the rail.
-export function IconOverview() {
+
+// The home "núcleo": a side-view brain with a circuit trace through it —
+// the same picture the home page animates, reduced to a glyph.
+export function IconBrain() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="8" height="8" rx="1.5" />
-      <rect x="13" y="3" width="8" height="5" rx="1.5" />
-      <rect x="13" y="11" width="8" height="10" rx="1.5" />
-      <rect x="3" y="14" width="8" height="7" rx="1.5" />
+      <path d="M4.2 13.6C2.9 11 4 7.6 6.6 6.4 7.7 4.2 10.4 3.2 12.8 3.8c2.6-.6 5.3.8 6.2 3.2 2 .9 2.8 3.4 1.9 5.4.4 2-.9 3.9-2.9 4.2-1.2 1.2-3.1 1.4-4.5.6-1.6.8-3.6.5-4.8-.8-2.1.1-4-1.1-4.5-2.8Z" />
+      <path d="M13.2 17.2 13 20.5" />
+      <path d="M8.2 10.2h3l1.6-2.4h2.4" />
+      <path d="M11.2 10.2l1.4 2.6h3.2" />
+      <circle cx="15.8" cy="7.8" r="0.6" fill="currentColor" />
+      <circle cx="16.4" cy="12.8" r="0.6" fill="currentColor" />
     </svg>
   );
 }
@@ -182,11 +187,115 @@ export function IconClose() {
   );
 }
 
+export function IconDumbbell() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9.5v5M20.5 9.5v5M6.5 12h11" />
+    </svg>
+  );
+}
+
+export function IconUtensils() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 3v5a2 2 0 0 0 4 0V3M7 10v11" />
+      <path d="M18 3c-2 1.3-3 3.4-3 6.2V13h3v8" />
+    </svg>
+  );
+}
+
+export function IconUser() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8.5" r="4" />
+      <path d="M4.5 20.5c1.2-3.8 4-5.8 7.5-5.8s6.3 2 7.5 5.8" />
+    </svg>
+  );
+}
+
+export function IconFolder() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2c.5 0 1 .24 1.3.64L11.2 8h8.3A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5Z" />
+    </svg>
+  );
+}
+
+export function IconFile() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h8l4 4v14H6Z" />
+      <path d="M14 3v4h4" />
+    </svg>
+  );
+}
+
+export function IconUpload() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 16V4" />
+      <path d="m7.5 8.5 4.5-4.5 4.5 4.5" />
+      <path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16" />
+    </svg>
+  );
+}
+
+export function IconDownload() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 4v12" />
+      <path d="m7.5 11.5 4.5 4.5 4.5-4.5" />
+      <path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16" />
+    </svg>
+  );
+}
+
+export function IconGear() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export function IconSearch() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="10.5" cy="10.5" r="6.5" />
       <line x1="15.3" y1="15.3" x2="20.5" y2="20.5" />
+    </svg>
+  );
+}
+
+// Quadros: a tiny flow — two blocks joined by a connector.
+export function IconFlow() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="7" height="6" rx="1.6" />
+      <rect x="14" y="14" width="7" height="6" rx="1.6" />
+      <path d="M6.5 10v3.5a2 2 0 0 0 2 2H14" />
+    </svg>
+  );
+}
+
+// Hábitos: a check inside a loop — something done, again and again.
+export function IconHabit() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v4h-4" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
+
+// Conversa: a speech bubble with a spark — talking to the brain.
+export function IconChat() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 12.5a7.5 7.5 0 0 1-10.9 6.7L4 20.5l1.4-4.6A7.5 7.5 0 1 1 20 12.5Z" />
+      <path d="M12.5 9v3.5M10.75 10.75h3.5" />
     </svg>
   );
 }

@@ -1,5 +1,5 @@
 import { listReminders, type Reminder } from "@/lib/reminders";
-import { Sidebar } from "@/components/Sidebar";
+import { ModuleTopBar } from "@/components/ModuleTopBar";
 import { ReminderSection } from "@/components/ReminderList";
 import { NewReminderModal } from "@/components/NewReminderModal";
 import "../ui.css";
@@ -26,7 +26,7 @@ export default async function LembretesPage() {
 
   return (
     <div className="shell">
-      <Sidebar />
+      <ModuleTopBar module="lembretes" />
       <main className="main">
         <div className="wrap">
           <div className="topbar">

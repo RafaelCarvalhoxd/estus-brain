@@ -7,10 +7,13 @@ export function Modal({
   open,
   onClose,
   children,
+  wide = false,
 }: {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** For editors with rows of fields side by side. */
+  wide?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -25,7 +28,7 @@ export function Modal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-shell" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-shell${wide ? " is-wide" : ""}`} onClick={(e) => e.stopPropagation()}>
         <button className="icon-btn modal-close" type="button" aria-label="Fechar" onClick={onClose}>
           <IconClose />
         </button>

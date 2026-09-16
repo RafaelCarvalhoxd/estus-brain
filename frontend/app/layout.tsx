@@ -1,25 +1,31 @@
 import type { Metadata } from "next";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Estus Vault",
-  description: "Controle financeiro pessoal do Estus Vault.",
+  title: "Estus Brain",
+  description: "Seu cérebro pessoal: finanças, agenda, treino, dieta, notas, lembretes, documentos e senhas.",
 };
 
-// Applies the saved theme choice before the first paint — without this,
-// a viewer who picked "Escuro" would see a flash of the light theme (or
-// vice-versa) every time a page loads, because the CSS custom properties
-// only respond to the data-theme attribute this sets.
+// Applies the saved theme choice before the first paint. Dark is the
+// default (the bare :root palette), so only an explicit "light" needs the
+// attribute — without this a viewer who picked "Claro" would see a flash
+// of the dark theme every time a page loads.
 const themeScript = `
   try {
-    var t = localStorage.getItem("estus-theme");
-    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    if (localStorage.getItem("estus-theme") === "light") document.documentElement.dataset.theme = "light";
   } catch (e) {}
 `;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" className={manrope.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
