@@ -1,0 +1,248 @@
+/* ---------- Quadros: the list ---------- */
+.board-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.board-new input {
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  width: 240px;
+}
+
+.board-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 20px;
+  text-align: center;
+}
+.board-empty p {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+.board-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklab, var(--m-quadros) 45%, var(--hairline));
+  color: var(--m-quadros);
+}
+.board-empty-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.board-open {
+  display: block;
+}
+.board-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 10;
+  padding: 16px;
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--surface-2) 60%, transparent);
+  transition: background-color 0.15s ease;
+}
+.board-open:hover .board-thumb {
+  background: color-mix(in oklab, var(--m-quadros) 7%, var(--surface-2));
+}
+.board-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+/* Previews are drawn light; the editor's own dark mode inverts the same way. */
+:root:not([data-theme="light"]) .board-thumb img {
+  filter: invert(0.93) hue-rotate(180deg);
+}
+.board-thumb-empty {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.board-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+}
+.board-meta {
+  flex: 1;
+  min-width: 0;
+}
+.board-name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-edited {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* ---------- Quadros: one board ----------
+   The editor fills everything under the bar, framed like a glass panel so
+   the brain still glows around its edges. */
+.board-shell {
+  height: 100dvh;
+  overflow: hidden;
+}
+.board-main.main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 10px 14px 14px;
+}
+.board-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--hairline-strong);
+  box-shadow: 0 30px 60px -40px rgba(0, 0, 0, 0.7);
+}
+.board-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ink-mute);
+  font-size: 13px;
+  background: var(--surface);
+}
+.board-stage .excalidraw {
+  --ui-font: var(--font-sans), system-ui, sans-serif;
+}
+
+.modbar-module {
+  text-decoration: none;
+}
+.modbar-module:hover {
+  color: var(--ink);
+}
+.board-title,
+.board-title-input {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 0;
+  max-width: 36ch;
+}
+.board-title {
+  padding: 4px 8px;
+  margin-left: -8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-title:hover {
+  border-color: var(--hairline);
+}
+.board-title-input {
+  padding: 4px 8px;
+  margin-left: -8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+/* Save state, in the editor's top-right corner. */
+.board-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--island-bg-color, transparent);
+  box-shadow: var(--shadow-island, none);
+  color: var(--color-on-surface, inherit);
+  font: 500 12.5px var(--ui-font, system-ui);
+  white-space: nowrap;
+  cursor: default;
+}
+.board-status:not(:disabled) {
+  cursor: pointer;
+}
+.board-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3fae6a;
+}
+.board-status.is-dirty .board-status-dot {
+  background: #d9a23a;
+}
+.board-status.is-saving .board-status-dot {
+  background: #d9a23a;
+  animation: board-pulse 0.9s ease-in-out infinite alternate;
+}
+.board-status.is-error {
+  color: #e05a5a;
+}
+.board-status.is-error .board-status-dot {
+  background: #e05a5a;
+}
+@keyframes board-pulse {
+  to {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-status.is-saving .board-status-dot {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .board-new input {
+    flex: 1;
+    width: auto;
+  }
+  .board-main.main {
+    padding: 6px;
+  }
+  .board-title,
+  .board-title-input {
+    max-width: 16ch;
+  }
+}
