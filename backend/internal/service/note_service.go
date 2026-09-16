@@ -23,20 +23,18 @@ func (s *NoteService) Get(ctx context.Context, id string) (domain.Note, error) {
 	return s.notes.Get(ctx, id)
 }
 
-func (s *NoteService) Create(ctx context.Context, title, body string, pinned bool, categoryID *string) (domain.Note, error) {
-	n := domain.Note{Title: title, Body: body, Pinned: pinned, CategoryID: categoryID}
+func (s *NoteService) Create(ctx context.Context, n domain.Note) (domain.Note, error) {
 	if err := n.Validate(); err != nil {
 		return domain.Note{}, err
 	}
 	return s.notes.Create(ctx, n)
 }
 
-func (s *NoteService) Update(ctx context.Context, id, title, body string, pinned bool, categoryID *string) (domain.Note, error) {
-	n := domain.Note{Title: title, Body: body, Pinned: pinned, CategoryID: categoryID}
+func (s *NoteService) Update(ctx context.Context, id string, n domain.Note) (domain.Note, error) {
 	if err := n.Validate(); err != nil {
 		return domain.Note{}, err
 	}
-	return s.notes.Update(ctx, id, title, body, pinned, categoryID)
+	return s.notes.Update(ctx, id, n)
 }
 
 func (s *NoteService) Delete(ctx context.Context, id string) error {

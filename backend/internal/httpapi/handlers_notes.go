@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -40,13 +41,28 @@ func (h *NoteHandlers) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toNoteDTO(n))
 }
 
-func (h *NoteHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	var req createNoteRequest
+// decodeNote caps the body a little above the largest note allowed, so an
+// oversized one gets a clear validation error rather than a cut connection.
+func decodeNote(w http.ResponseWriter, r *http.Request) (domain.Note, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, domain.MaxNoteContentBytes+(2<<20))
+	var req noteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			return domain.Note{}, fmt.Errorf("%w: note is larger than %d MB", domain.ErrValidation, domain.MaxNoteContentBytes>>20)
+		}
+		return domain.Note{}, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation)
+	}
+	return req.toDomain(), nil
+}
+
+func (h *NoteHandlers) Create(w http.ResponseWriter, r *http.Request) {
+	in, err := decodeNote(w, r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
-	n, err := h.notes.Create(r.Context(), req.Title, req.Body, req.Pinned, req.CategoryID)
+	n, err := h.notes.Create(r.Context(), in)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -55,12 +71,12 @@ func (h *NoteHandlers) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *NoteHandlers) Update(w http.ResponseWriter, r *http.Request) {
-	var req updateNoteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+	in, err := decodeNote(w, r)
+	if err != nil {
+		writeError(w, err)
 		return
 	}
-	n, err := h.notes.Update(r.Context(), r.PathValue("id"), req.Title, req.Body, req.Pinned, req.CategoryID)
+	n, err := h.notes.Update(r.Context(), r.PathValue("id"), in)
 	if err != nil {
 		writeError(w, err)
 		return

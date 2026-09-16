@@ -1,23 +1,18 @@
-import { listNotes, listNoteCategories } from "@/lib/notes";
-import { Sidebar } from "@/components/Sidebar";
-import { NotesBoard } from "@/components/NotesBoard";
+import { getNote, listNoteCategories, listNotes } from "@/lib/notes";
+import { ModuleTopBar } from "@/components/ModuleTopBar";
+import { NotesApp } from "@/components/notes/NotesApp";
 import "../ui.css";
 import "./notes.css";
 
-export default async function NotasPage() {
-  const [notes, categories] = await Promise.all([listNotes(), listNoteCategories()]);
+export default async function NotasPage({ searchParams }: { searchParams: Promise<{ n?: string; c?: string }> }) {
+  const { n, c } = await searchParams;
+  const [notes, categories, openNote] = await Promise.all([listNotes(), listNoteCategories(), n ? getNote(n) : null]);
 
   return (
-    <div className="shell">
-      <Sidebar />
-      <main className="main">
-        <div className="wrap">
-          <div className="topbar">
-            <h1 className="page-title">Notas</h1>
-          </div>
-
-          <NotesBoard notes={notes} categories={categories} />
-        </div>
+    <div className="shell notes-shell">
+      <ModuleTopBar module="notas" />
+      <main className="main notes-main">
+        <NotesApp notes={notes} categories={categories} openNote={openNote} filter={c ?? null} />
       </main>
     </div>
   );

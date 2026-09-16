@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
@@ -58,12 +59,20 @@ func TestNoteRepo(t *testing.T) {
 		t.Fatalf("expected title Ideia, got %q", got.Title)
 	}
 
-	updated, err := repo.Update(ctx, created.ID, "Ideia revisada", "novo corpo", true, nil)
+	doc := []byte(`{"type": "doc", "content": [{"type": "paragraph"}]}`)
+	updated, err := repo.Update(ctx, created.ID, domain.Note{Title: "Ideia revisada", Body: "novo corpo", Content: doc, Pinned: true})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	if !updated.Pinned || updated.Title != "Ideia revisada" {
 		t.Fatalf("update did not apply: %+v", updated)
+	}
+	if len(updated.Content) == 0 {
+		t.Fatal("expected content to be stored")
+	}
+	withDoc, err := repo.Get(ctx, created.ID)
+	if err != nil || !strings.Contains(string(withDoc.Content), `"paragraph"`) {
+		t.Fatalf("expected content back from get, got %q (%v)", withDoc.Content, err)
 	}
 	if !updated.UpdatedAt.After(created.UpdatedAt) && updated.UpdatedAt != created.UpdatedAt {
 		t.Fatalf("expected updated_at to advance")

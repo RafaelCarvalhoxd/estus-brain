@@ -1,28 +1,52 @@
 package domain
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 )
 
-// Note is a freeform personal note. A note with neither title nor body says
-// nothing, so at least one must be filled in. CategoryID nil means "Geral"
-// — a virtual bucket the frontend groups uncategorized notes under, not a
-// real category row that has to exist.
+// A note can hold pasted images, so its document may be large — within reason.
+const (
+	MaxNoteContentBytes = 10 << 20
+	MaxNoteTitleChars   = 300
+)
+
+// Note is a personal note written in the editor. Content is the editor's own
+// JSON document, kept opaque; Body is its plain-text copy, used for search and
+// previews. Notes written before the editor existed have Body only.
+// CategoryID nil means "Geral" — a virtual bucket the frontend groups
+// uncategorized notes under, not a real category row that has to exist.
 type Note struct {
 	ID         string
 	Title      string
 	Body       string
+	Content    json.RawMessage
 	Pinned     bool
 	CategoryID *string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
 
+// Validate allows an empty note: one is emptied mid-edit all the time, and
+// the editor only creates a note once something has been written.
 func (n Note) Validate() error {
-	if strings.TrimSpace(n.Title) == "" && strings.TrimSpace(n.Body) == "" {
-		return fmt.Errorf("%w: title or body is required", ErrValidation)
+	if len([]rune(strings.TrimSpace(n.Title))) > MaxNoteTitleChars {
+		return fmt.Errorf("%w: title is too long", ErrValidation)
+	}
+	if len(n.Content) > MaxNoteContentBytes {
+		return fmt.Errorf("%w: note is larger than %d MB", ErrValidation, MaxNoteContentBytes>>20)
+	}
+	if len(n.Content) > 0 {
+		trimmed := bytes.TrimSpace(n.Content)
+		if bytes.Equal(trimmed, []byte("null")) {
+			return nil
+		}
+		if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+			return fmt.Errorf("%w: content must be a JSON object", ErrValidation)
+		}
 	}
 	return nil
 }

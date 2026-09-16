@@ -1,19 +1,22 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
 
 type noteDTO struct {
-	ID         string  `json:"id"`
-	Title      string  `json:"title"`
-	Body       string  `json:"body"`
-	Pinned     bool    `json:"pinned"`
-	CategoryID *string `json:"category_id,omitempty"`
-	CreatedAt  string  `json:"created_at"`
-	UpdatedAt  string  `json:"updated_at"`
+	ID         string          `json:"id"`
+	Title      string          `json:"title"`
+	Body       string          `json:"body"`
+	Content    json.RawMessage `json:"content,omitempty"`
+	Pinned     bool            `json:"pinned"`
+	CategoryID *string         `json:"category_id,omitempty"`
+	CreatedAt  string          `json:"created_at"`
+	UpdatedAt  string          `json:"updated_at"`
 }
 
 func toNoteDTO(n domain.Note) noteDTO {
@@ -21,6 +24,7 @@ func toNoteDTO(n domain.Note) noteDTO {
 		ID:         n.ID,
 		Title:      n.Title,
 		Body:       n.Body,
+		Content:    n.Content,
 		Pinned:     n.Pinned,
 		CategoryID: n.CategoryID,
 		CreatedAt:  n.CreatedAt.Format(time.RFC3339),
@@ -28,18 +32,24 @@ func toNoteDTO(n domain.Note) noteDTO {
 	}
 }
 
-type createNoteRequest struct {
-	Title      string  `json:"title"`
-	Body       string  `json:"body"`
-	Pinned     bool    `json:"pinned,omitempty"`
-	CategoryID *string `json:"category_id,omitempty"`
+// noteRequest serves both create and update: an update always sends the
+// whole note, as the editor holds all of it.
+type noteRequest struct {
+	Title      string          `json:"title"`
+	Body       string          `json:"body"`
+	Content    json.RawMessage `json:"content,omitempty"`
+	Pinned     bool            `json:"pinned,omitempty"`
+	CategoryID *string         `json:"category_id,omitempty"`
 }
 
-type updateNoteRequest struct {
-	Title      string  `json:"title"`
-	Body       string  `json:"body"`
-	Pinned     bool    `json:"pinned,omitempty"`
-	CategoryID *string `json:"category_id,omitempty"`
+func (r noteRequest) toDomain() domain.Note {
+	return domain.Note{
+		Title:      strings.TrimSpace(r.Title),
+		Body:       r.Body,
+		Content:    r.Content,
+		Pinned:     r.Pinned,
+		CategoryID: r.CategoryID,
+	}
 }
 
 type noteCategoryDTO struct {
