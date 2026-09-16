@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
@@ -225,4 +226,18 @@ func (r *TransactionRepo) Delete(ctx context.Context, id string) error {
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+// SpentOn is what was bought on a calendar day, whatever month it counts
+// against — an installment purchase counts in full on the day it was made.
+func (r *TransactionRepo) SpentOn(ctx context.Context, day time.Time) (domain.Cents, error) {
+	var total int64
+	err := r.db.Pool.QueryRow(ctx,
+		`select coalesce(sum(amount_cents), 0) from transactions where purchase_date = $1::date`,
+		day.Format(domain.DayLayout),
+	).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("spent on %s: %w", day.Format(domain.DayLayout), err)
+	}
+	return domain.Cents(total), nil
 }

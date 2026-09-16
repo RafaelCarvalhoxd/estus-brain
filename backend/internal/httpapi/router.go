@@ -13,6 +13,15 @@ type Modules struct {
 	Notes     *NoteHandlers
 	Reminders *ReminderHandlers
 	Events    *EventHandlers
+	Documents *DocumentHandlers
+	Training  *TrainingHandlers
+	Diet      *DietHandlers
+	Boards    *BoardHandlers
+	Habits    *HabitHandlers
+	Assistant *AssistantHandlers
+	Telegram  *TelegramHandlers
+	// MCP serves the Model Context Protocol; it checks its own token.
+	MCP http.Handler
 }
 
 // NewRouter wires the API surface. It is intentionally reachable only from
@@ -81,6 +90,76 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("PATCH /api/reminders/{id}", rm.SetDone)
 		mux.HandleFunc("PUT /api/reminders/{id}", rm.Update)
 		mux.HandleFunc("DELETE /api/reminders/{id}", rm.Delete)
+	}
+
+	if d := m.Documents; d != nil {
+		mux.HandleFunc("GET /api/document-folders", d.ListFolders)
+		mux.HandleFunc("POST /api/document-folders", d.CreateFolder)
+		mux.HandleFunc("PUT /api/document-folders/{id}", d.RenameFolder)
+		mux.HandleFunc("DELETE /api/document-folders/{id}", d.DeleteFolder)
+		mux.HandleFunc("GET /api/documents", d.List)
+		mux.HandleFunc("POST /api/documents", d.Upload)
+		mux.HandleFunc("GET /api/documents/count", d.Count)
+		mux.HandleFunc("GET /api/documents/{id}/content", d.Content)
+		mux.HandleFunc("PUT /api/documents/{id}", d.Move)
+		mux.HandleFunc("DELETE /api/documents/{id}", d.Delete)
+	}
+
+	if t := m.Training; t != nil {
+		mux.HandleFunc("GET /api/workouts", t.List)
+		mux.HandleFunc("POST /api/workouts", t.Create)
+		mux.HandleFunc("PUT /api/workouts/{id}", t.Update)
+		mux.HandleFunc("DELETE /api/workouts/{id}", t.Delete)
+	}
+
+	if dt := m.Diet; dt != nil {
+		mux.HandleFunc("GET /api/meals", dt.List)
+		mux.HandleFunc("POST /api/meals", dt.Create)
+		mux.HandleFunc("PUT /api/meals/{id}", dt.Update)
+		mux.HandleFunc("DELETE /api/meals/{id}", dt.Delete)
+		mux.HandleFunc("GET /api/diet/targets", dt.Targets)
+		mux.HandleFunc("PUT /api/diet/targets", dt.SetTargets)
+	}
+
+	if a := m.Assistant; a != nil {
+		mux.HandleFunc("GET /api/assistant/tools", a.ListTools)
+		mux.HandleFunc("POST /api/assistant/tools/{name}", a.CallTool)
+		mux.HandleFunc("GET /api/assistant/settings", a.Settings)
+		mux.HandleFunc("PUT /api/assistant/settings", a.UpdateSettings)
+		mux.HandleFunc("GET /api/assistant/conversations", a.Conversations)
+		mux.HandleFunc("GET /api/assistant/conversations/{id}", a.Conversation)
+		mux.HandleFunc("DELETE /api/assistant/conversations/{id}", a.DeleteConversation)
+		mux.HandleFunc("POST /api/assistant/record", a.Record)
+		mux.HandleFunc("POST /api/assistant/chat", a.Send)
+		mux.HandleFunc("POST /api/assistant/voice/transcribe", a.Transcribe)
+		mux.HandleFunc("POST /api/assistant/voice/speak", a.Speak)
+	}
+	if tg := m.Telegram; tg != nil {
+		mux.HandleFunc("GET /api/assistant/telegram/settings", tg.Settings)
+		mux.HandleFunc("PUT /api/assistant/telegram/settings", tg.UpdateSettings)
+		mux.HandleFunc("POST /api/assistant/telegram/pair", tg.Pair)
+		mux.HandleFunc("DELETE /api/assistant/telegram/pair", tg.Unpair)
+		mux.HandleFunc("POST /api/assistant/telegram/test", tg.Test)
+	}
+	if m.MCP != nil {
+		mux.Handle("/mcp", m.MCP)
+	}
+
+	if hb := m.Habits; hb != nil {
+		mux.HandleFunc("GET /api/habits", hb.List)
+		mux.HandleFunc("POST /api/habits", hb.Create)
+		mux.HandleFunc("PUT /api/habits/{id}", hb.Update)
+		mux.HandleFunc("DELETE /api/habits/{id}", hb.Delete)
+		mux.HandleFunc("PUT /api/habits/{id}/log", hb.SetLog)
+	}
+
+	if bd := m.Boards; bd != nil {
+		mux.HandleFunc("GET /api/boards", bd.List)
+		mux.HandleFunc("POST /api/boards", bd.Create)
+		mux.HandleFunc("GET /api/boards/{id}", bd.Get)
+		mux.HandleFunc("PATCH /api/boards/{id}", bd.Rename)
+		mux.HandleFunc("PUT /api/boards/{id}/scene", bd.SaveScene)
+		mux.HandleFunc("DELETE /api/boards/{id}", bd.Delete)
 	}
 
 	if e := m.Events; e != nil {

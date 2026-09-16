@@ -1,3 +1,9 @@
 backend/.env
 backend/bin/
 *.log
+
+# Documentos enviados pelo módulo Documentos: ficam no projeto, nunca no git.
+backend/data/
+
+# Lixo do Finder
+.DS_Store

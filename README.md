@@ -1,10 +1,19 @@
-# Estus Vault
+# Estus Brain
 
-Seu app pessoal — não só de finanças. Hoje tem cinco módulos e uma home:
+Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor só seu:
 
-- **Visão geral** (`/`) — não é um módulo, é um mosaico: o essencial de cada
-  módulo abaixo (gasto do mês, contas em aberto, próximos lembretes, próximos
-  eventos, notas recentes), cada card levando direto pra tela cheia daquilo.
+- **Núcleo** (`/`) — não é um módulo, é a única porta de entrada (não há
+  barra lateral): um cérebro 3D em WebGL (three.js, `components/brain/`)
+  com os módulos em volta. Cada módulo mora numa região — frontal esquerdo
+  = Financeiro, frontal direito = Hábitos, faixa motora = Treino, ínsula
+  (paladar) = Dieta, parietal direito = Agenda, parietal esquerdo = Quadros,
+  temporal = Notas, occipital = Lembretes, cerebelo = Senhas, núcleo/tronco
+  = Documentos. Passar o mouse num logo acende a região e mostra uma linha de
+  status ao vivo; clicar (ou teclar 1–9 e 0) dá zoom nela e
+  abre o módulo. Dá pra girar o cérebro arrastando e
+  aproximar com a roda; o painel de ajustes no topo guarda densidade das
+  dobras, brilho, velocidade, tamanho e relevo no navegador. Respeita
+  `prefers-reduced-motion` (vira uma imagem parada).
 - **Financeiro** (`/financeiro`) — um módulo com cinco seções por abas:
   - *Dashboard* — o pulso do mês: total gasto (com variação vs. mês anterior),
     gasto por categoria, ritmo semanal.
@@ -24,11 +33,94 @@ Seu app pessoal — não só de finanças. Hoje tem cinco módulos e uma home:
 - **Senhas** (`/senhas`) — um cofre de senhas criptografado (AES-256-GCM), que
   só revela uma senha depois de uma checagem biométrica (Touch ID/Face ID)
   via WebAuthn.
-- **Notas** (`/notas`) — notas soltas, fixáveis.
+- **Notas** (`/notas`) — um app de escrita: cadernos na lateral, a lista no
+  meio e a nota aberta à direita, com editor
+  [Tiptap](https://tiptap.dev) (MIT). Títulos, listas, checklists, citações,
+  blocos de código com cores, tabelas, links, marca-texto e imagens coladas
+  ou arrastadas (reduzidas no navegador antes de salvar). Digite `/` para
+  inserir blocos; atalhos de markdown (`## `, `- `, `[ ] `) também funcionam.
+  Salva sozinho enquanto você escreve (⌘S força), e uma nota deixada vazia é
+  apagada ao sair. "Nota do dia" abre (ou cria) a nota com a data de hoje no
+  caderno Diário. O documento vai pro Postgres como `jsonb`, junto com uma
+  cópia em texto puro usada na busca e no overview; notas antigas abrem como
+  texto. Limite de 10 MB por nota.
+- **Hábitos** (`/habitos`) — hábitos de marcar ("ler 20 minutos") ou de
+  contar até uma meta ("8 copos de água"), em todos ou alguns dias da semana.
+  A tela mostra o checklist de hoje, a sequência atual e a melhor de cada
+  hábito, os últimos 7 dias (dá pra marcar dias passados) e um mapa do ano.
+  Dias fora da programação não quebram a sequência, e o dia de hoje só conta
+  contra quando acaba. "Hoje" é calculado no fuso de São Paulo pelo Next; o
+  backend não tem fuso.
 - **Lembretes** (`/lembretes`) — lembretes simples com data opcional,
   agrupados por atrasado/hoje/próximos.
 - **Agenda** (`/agenda`) — eventos locais, com sincronização opcional (via
   OAuth) com o Google Calendar.
+- **Treino** (`/treino`) — seus treinos (nome, foco, dias da semana e
+  exercícios com séries, repetições, carga e descanso). A tela abre no treino
+  de hoje, mostra a semana em sete colunas e, em dia de descanso, diz qual é
+  o próximo.
+- **Dieta** (`/dieta`) — refeições com horário, dias da semana e alimentos
+  com kcal, proteína, carboidrato e gordura. A tela mostra os macros do dia
+  contra as metas diárias, a refeição de agora e a próxima, e os totais de
+  cada dia da semana. "Hoje" e "agora" são calculados no fuso de São Paulo.
+- **Documentos** (`/documentos`) — arquivos em pastas e subpastas. Os bytes
+  ficam no disco do servidor, em `DOCUMENTS_DIR` (por padrão
+  `backend/data/documents`, fora do git), e só os metadados vão pro
+  Postgres. O nome enviado é sanitizado e o arquivo é gravado como
+  `<uuid>__<nome>`, então nada escapa da pasta; pasta com conteúdo não pode
+  ser excluída. Download passa por um route handler do Next, como o resto.
+- **Quadros** (`/quadros`) — lousas pra desenhar fluxos, diagramas e
+  rascunhos, com o editor do [Excalidraw](https://github.com/excalidraw/excalidraw)
+  (MIT) embutido. Tudo salva sozinho pouco depois de cada mudança (e ao sair
+  do quadro); a cena vai inteira pro Postgres como `jsonb`, junto com uma
+  miniatura SVG que a lista e o overview mostram. As fontes do editor são
+  copiadas de `node_modules` pra `public/excalidraw-assets` antes do `dev` e
+  do `build` (`scripts/copy-excalidraw-assets.mjs`), então nada é buscado de
+  CDN. O salvamento passa por um route handler do Next (uma cena com imagens
+  passa fácil do limite de corpo das server actions); o limite é 20 MB por
+  quadro.
+
+- **Conversa** (`/chat`, o balão ao lado da engrenagem na home) — um chat
+  com o cérebro. Sem IA nenhuma, ele já funciona com **atalhos prontos** por
+  módulo: "Quanto gastei este mês?", "Contas a pagar do mês que vem",
+  "Lançar um gasto" (com formulário), "Lançar vários gastos", "Criar
+  lembrete", "Treino de hoje"… As respostas vêm em cards, com ações nas
+  linhas (excluir lançamento, marcar conta como paga). Texto livre como
+  "gastei 45 no mercado" abre o formulário já preenchido. Com um **motor de
+  IA** conectado, qualquer pergunta vai para ele, que usa as mesmas
+  ferramentas e mantém a conversa (histórico salvo, dá para trocar de motor
+  no meio). Motores:
+  - *Claude (sua conta)* e *GPT (sua conta ChatGPT)* — rodam o Claude Code e
+    o Codex já logados neste servidor, sem API key, com shell e arquivos
+    desligados: só enxergam o MCP do Estus Brain. Uso pessoal; com
+    `ASSISTANT_MULTI_USER=true` ficam desligados.
+  - *Claude / GPT por API key* — chaves salvas criptografadas com
+    `VAULT_ENCRYPTION_KEY` (ou `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
+  - *Ollama* — modelo local.
+  - *Apple Intelligence* — o modelo on-device do macOS, via a ponte Swift em
+    `apple-bridge/` (`swift build -c release`), iniciada sob demanda. Como o
+    modelo é pequeno, recebe só as ferramentas do módulo selecionado.
+
+### Ferramentas e MCP
+
+Tudo que o assistente faz é uma **ferramenta** em
+`backend/internal/assistant` (33 hoje: gastos, categorias, cartões, contas,
+notas, lembretes, agenda, hábitos, treino, dieta, documentos, quadros e um
+resumo do dia). A mesma lista serve os atalhos do chat
+(`POST /api/assistant/tools/{nome}`), os motores de IA e o **servidor MCP**
+em `/mcp` (streamable HTTP, exige `Authorization: Bearer <token>`). O cofre
+de senhas fica de fora de propósito, e ferramentas que excluem exigem
+`confirm: true`.
+
+Para usar por fora, a tela *Motor de IA e conexões* mostra o token e os
+trechos prontos:
+- **Claude Code / Codex**: apontam direto para `/mcp` com o token.
+- **Claude Desktop** (só fala stdio): `go build -o estus-mcp ./cmd/estus-mcp`
+  em `backend/` gera um relay que repassa para o `/mcp` do app, com suporte
+  ao certificado cliente do mTLS (`ESTUS_CLIENT_CERT` / `ESTUS_CLIENT_KEY`).
+- **Claude.ai / ChatGPT na web**: os conectores chamam da nuvem deles, então
+  precisam de um endereço público só para `/mcp`; por enquanto com o token
+  na URL (`?token=`). Login OAuth para esses conectores ainda não existe.
 
 A arquitetura não assume "só finanças": o backend é um serviço isolado com
 sua própria API, cada módulo mora em arquivos próprios (domínio, repositório,
@@ -100,6 +192,103 @@ Para rodar tudo containerizado: `docker compose up --build` (o
 `docker-compose.yml` ainda não passa as variáveis do vault/agenda para o
 container do backend — adicione-as em `environment:` do serviço `backend`
 quando for usar esses módulos containerizados).
+
+## App do Mac
+
+`scripts/make-app.sh` cria um **Estus Brain.app** em `~/Applications` — ícone
+próprio no Dock, Spotlight e Launchpad. Abrir o app sobe o que estiver
+faltando (Docker, Postgres, backend, frontend) e abre uma janela do Chrome
+em *app mode*, sem barra de endereço nem abas.
+
+```bash
+scripts/make-app.sh          # cria/atualiza o .app
+scripts/make-app.sh --icon   # redesenha o ícone antes (fonte: scripts/icon/)
+```
+
+O `.app` é só um atalho de três linhas: a lógica mora em
+`scripts/estus-brain.sh`, que também roda direto no terminal.
+
+```bash
+scripts/estus-brain.sh            # sobe o que falta e abre a janela
+scripts/estus-brain.sh --rebuild  # força rebuild do frontend
+scripts/estus-brain.sh --stop     # derruba backend e frontend
+```
+
+Detalhes que valem saber:
+
+- **Portas 37887 (app) e 37888 (API)**, não as 3000/8080 do passo a passo
+  acima — são portas que nenhuma outra ferramenta de dev costuma disputar, e
+  ficam abaixo de 49152, onde o macOS começa a sortear portas efêmeras. Se
+  você seguiu o passo a passo antes, ajuste `PORT` em `backend/.env` e
+  `API_URL` em `frontend/.env.local`.
+- O script **força** `WEBAUTHN_RP_ORIGIN` e `FRONTEND_URL` para a porta do
+  app, sobrescrevendo o `.env`: o WebAuthn recusa origem que não bate com a
+  do navegador, e sem isso o módulo Senhas para de abrir.
+- Roda o **build de produção** (`next start`), não o dev server — bem mais
+  leve de memória. O rebuild acontece sozinho quando algo em `app/`,
+  `components/`, `lib/`, `public/`, `next.config.*` ou `package.json` for
+  mais novo que o último build.
+- A janela usa o **perfil padrão do Chrome**, porque é nele que mora a
+  passkey do Touch ID usada no módulo Senhas.
+- Logs em `~/Library/Logs/EstusBrain/`.
+- O `.app` guarda o caminho absoluto do repo: se mover o projeto de pasta,
+  rode `scripts/make-app.sh` de novo.
+
+## Telegram
+
+Converse com o Estus Brain pelo Telegram e receba dele o resumo da manhã, o
+fechamento da noite, lembretes na hora (com botão "Concluído") e aviso antes
+dos compromissos.
+
+1. No Telegram, fale com o [@BotFather](https://t.me/BotFather), mande
+   `/newbot` e copie o token.
+2. Em Conversa → Motor de IA e conexões → Telegram, cole o token e salve. O
+   token fica cifrado com `VAULT_ENCRYPTION_KEY`; sem ela, defina
+   `TELEGRAM_BOT_TOKEN` no `.env` do backend.
+3. Clique em "Gerar código" e mande `/start <código>` para o bot (ou use
+   "Abrir no Telegram"). O código vale 10 minutos e cai depois de 5 tentativas
+   erradas. A partir daí só o seu chat é atendido.
+4. Ajuste os avisos e use "Mandar teste".
+
+No Telegram: `/hoje` e `/noite` mandam os resumos na hora (sem IA), `/nova`
+começa outra conversa e `/ajuda` lista os comandos. O resto vai para o motor
+de IA escolhido, numa conversa "Telegram" que também aparece no chat web.
+
+`/acoes` abre as **ações prontas** em botões — as mesmas ferramentas que a IA
+usa (lançar gasto, contas, lembretes, agenda, hábitos, treino, dieta, notas,
+documentos), então funcionam sem motor de IA nenhum. A primeira tela traz as
+mais usadas e os módulos; uma ação que precisa de detalhes pergunta um de cada
+vez (dá para responder por áudio), opções viram botões, excluir pede
+confirmação, e `/cancelar` sai. Ficando 10 minutos sem resposta, a ação é
+esquecida — e ela também se perde se o backend reiniciar no meio.
+
+O bot busca as mensagens sozinho (long polling): não precisa de domínio nem
+HTTPS e funciona igual no Mac e num servidor. Com a máquina dormindo nada sai;
+ao acordar, o resumo da manhã ainda vai se for antes do meio-dia, o da noite
+até meia-noite, e lembretes com até 12 h de atraso. Não rode o mesmo bot em
+duas máquinas ao mesmo tempo — o Telegram só entrega para uma.
+
+## Voz
+
+Converse com o Estus falando. Tudo é processado no próprio Mac, pela ponte
+`apple-bridge/`: a transcrição usa o reconhecimento de fala on-device da Apple
+(pt-BR) e a resposta é lida com uma voz do sistema. Nenhum áudio sai da máquina
+e funciona com qualquer motor de IA (ou sem nenhum, só com os atalhos).
+
+- **No chat web:** clique no 🎙️ ao lado da caixa de mensagem, fale e clique de
+  novo (ou só pare de falar por 2 segundos; o limite é 2 minutos). A frase vira
+  sua mensagem e a resposta aparece em texto e é lida em voz alta — "■ Parar voz"
+  interrompe. Perguntas digitadas continuam só em texto.
+- **No Telegram:** mande um áudio (até 3 minutos). O bot responde "🎙️ Entendi:
+  …", faz o que foi pedido e responde em texto.
+
+Requisitos: macOS 26+ e a ponte compilada (`cd apple-bridge && swift build -c release`).
+Na primeira transcrição o macOS baixa o modelo de fala pt-BR. A voz padrão é
+`Luciana`; para outra (ex.: uma "Premium", baixada em Ajustes do Sistema >
+Acessibilidade > Conteúdo Falado), defina `ASSISTANT_VOICE` no `.env` do backend
+com o nome exatamente como `say -v '?'` imprime — incluindo o parêntese quando
+houver, como em `Eddy (Portuguese (Brazil))`.
+Num servidor sem macOS a voz fica indisponível e o resto do app funciona normalmente.
 
 ## Configurando o cofre de senhas (Touch ID/Face ID)
 
