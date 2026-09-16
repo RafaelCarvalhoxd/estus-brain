@@ -119,6 +119,52 @@ func (h *Handlers) ListCreditCards(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (h *Handlers) CreateCreditCard(w http.ResponseWriter, r *http.Request) {
+	var req creditCardRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	card := req.toDomain()
+	if err := card.Validate(); err != nil {
+		writeError(w, err)
+		return
+	}
+	created, err := h.cards.Create(r.Context(), card)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toCreditCardDTO(created))
+}
+
+func (h *Handlers) UpdateCreditCard(w http.ResponseWriter, r *http.Request) {
+	var req creditCardRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	card := req.toDomain()
+	if err := card.Validate(); err != nil {
+		writeError(w, err)
+		return
+	}
+	updated, err := h.cards.Update(r.Context(), r.PathValue("id"), card)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toCreditCardDTO(updated))
+}
+
+func (h *Handlers) DeleteCreditCard(w http.ResponseWriter, r *http.Request) {
+	if err := h.cards.Delete(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // MonthSummary handles GET /api/months/{month}, where {month} is YYYY-MM.
 func (h *Handlers) MonthSummary(w http.ResponseWriter, r *http.Request) {
 	ym, err := parseYearMonth(r.PathValue("month"))

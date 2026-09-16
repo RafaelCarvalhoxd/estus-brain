@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
@@ -41,6 +42,16 @@ type categoryRequest struct {
 
 func (r categoryRequest) toDomain() domain.Category {
 	return domain.Category{Name: r.Name, Nature: domain.CategoryNature(r.Nature), Color: r.Color}
+}
+
+type creditCardRequest struct {
+	Name       string `json:"name"`
+	ClosingDay int    `json:"closing_day"`
+	DueDay     int    `json:"due_day"`
+}
+
+func (r creditCardRequest) toDomain() domain.CreditCard {
+	return domain.CreditCard{Name: strings.TrimSpace(r.Name), ClosingDay: r.ClosingDay, DueDay: r.DueDay}
 }
 
 type creditCardDTO struct {
