@@ -5,15 +5,18 @@ Seu app pessoal — não só de finanças. Hoje tem cinco módulos e uma home:
 - **Visão geral** (`/`) — não é um módulo, é um mosaico: o essencial de cada
   módulo abaixo (gasto do mês, contas em aberto, próximos lembretes, próximos
   eventos, notas recentes), cada card levando direto pra tela cheia daquilo.
-- **Financeiro** (`/financeiro`) — um módulo com quatro seções por abas:
+- **Financeiro** (`/financeiro`) — um módulo com cinco seções por abas:
   - *Dashboard* — o pulso do mês: total gasto (com variação vs. mês anterior),
     gasto por categoria, ritmo semanal.
   - *Lançamentos* — o extrato completo do mês e o formulário de novo
-    lançamento, com a regra que motivou o projeto: uma compra no crédito só
-    conta como despesa no mês seguinte ao da compra, nunca no mês da compra
-    em si.
+    lançamento, com a regra que motivou o projeto: uma compra no crédito
+    conta como despesa no mês em que a fatura do cartão vence — calculado a
+    partir do dia de fechamento e do dia de vencimento do cartão — nunca
+    simplesmente no mês da compra.
   - *Categorias* — o detalhamento: gasto por categoria e a comparação mês a
     mês, categoria a categoria.
+  - *Cartões* — cadastro dos cartões de crédito (nome, dia de fechamento e
+    de vencimento), que é o que alimenta a regra de competência acima.
   - *Contas* — contas a pagar e a receber, com status derivado (atrasado/
     pendente/pago) a partir da data de vencimento — separado do extrato de
     lançamentos porque é sobre o que ainda vai acontecer, não sobre o que já

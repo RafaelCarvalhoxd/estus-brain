@@ -25,6 +25,29 @@ export function formatYearMonthShort(yearMonth: string): string {
   return `${MONTH_NAMES[month - 1].slice(0, 3)}/${String(year).slice(2)}`;
 }
 
+// Credit-card billing math, ported by hand from
+// backend/internal/domain/creditcard.go and backend/internal/domain/billing.go
+// — those are the source of truth for the competence rule. If it ever
+// changes there, mirror the change here too, or this hint will start lying
+// again like it did before this file existed.
+export interface CardBillingDays {
+  closing_day: number;
+  due_day: number;
+}
+
+// creditCardCompetenceYearMonth mirrors domain.CompetenceMonth for the
+// credit-card branch: the purchase joins the invoice that closes on or
+// after it (buying ON the closing day still makes that day's invoice), and
+// that invoice's due date names the competence month.
+export function creditCardCompetenceYearMonth(purchaseDate: string, card: CardBillingDays): string {
+  const [year, month, day] = purchaseDate.split("-").map(Number);
+  const closingMonthOffset = day > card.closing_day ? 1 : 0;
+  const closing = new Date(Date.UTC(year, month - 1 + closingMonthOffset, card.closing_day));
+  const dueMonthOffset = card.due_day <= card.closing_day ? 1 : 0;
+  const due = new Date(Date.UTC(closing.getUTCFullYear(), closing.getUTCMonth() + dueMonthOffset, card.due_day));
+  return `${due.getUTCFullYear()}-${String(due.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export interface CalendarDay {
   iso: string;
   dayNumber: number;

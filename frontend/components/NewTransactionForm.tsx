@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { createTransactionAction, type CreateTransactionState } from "@/app/financeiro/lancamentos/actions";
 import type { Category, CreditCard, PaymentMethod } from "@/lib/types";
-import { formatYearMonth, shiftYearMonth } from "@/lib/month";
+import { creditCardCompetenceYearMonth, formatYearMonth } from "@/lib/month";
 
 const initialState: CreateTransactionState = { status: "idle" };
 
@@ -26,14 +26,23 @@ export function NewTransactionForm({
   const [installments, setInstallments] = useState(1);
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [recurring, setRecurring] = useState(false);
+  const [cardId, setCardId] = useState(() => cards[0]?.id ?? "");
 
-  const competenceHint = useMemo(() => {
-    if (!purchaseDate) return null;
+  // The competence month depends on the card's closing/due days (see
+  // creditCardCompetenceYearMonth), not on a fixed offset — so the select
+  // has to be controlled for this hint to react to which card is chosen.
+  const { competenceYearMonth, purchaseYearMonth } = useMemo(() => {
+    if (!purchaseDate) return { competenceYearMonth: null, purchaseYearMonth: null };
     const [y, m] = purchaseDate.split("-").map(Number);
-    const purchaseYearMonth = `${y}-${String(m).padStart(2, "0")}`;
-    const competence = method === "credito" ? shiftYearMonth(purchaseYearMonth, 1) : purchaseYearMonth;
-    return formatYearMonth(competence);
-  }, [purchaseDate, method]);
+    const pym = `${y}-${String(m).padStart(2, "0")}`;
+    if (method !== "credito") return { competenceYearMonth: pym, purchaseYearMonth: pym };
+    const card = cards.find((c) => c.id === cardId);
+    if (!card) return { competenceYearMonth: null, purchaseYearMonth: pym };
+    return { competenceYearMonth: creditCardCompetenceYearMonth(purchaseDate, card), purchaseYearMonth: pym };
+  }, [purchaseDate, method, cardId, cards]);
+
+  const competenceHint = competenceYearMonth ? formatYearMonth(competenceYearMonth) : null;
+  const competenceIsPurchaseMonth = competenceYearMonth === purchaseYearMonth;
 
   return (
     <div className="panel" id="novo-lancamento">
@@ -99,7 +108,13 @@ export function NewTransactionForm({
           <>
             <div className="field">
               <label htmlFor="f-card">Cartão</label>
-              <select id="f-card" name="credit_card_id" required defaultValue={cards[0]?.id ?? ""}>
+              <select
+                id="f-card"
+                name="credit_card_id"
+                required
+                value={cardId}
+                onChange={(e) => setCardId(e.target.value)}
+              >
                 {cards.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -134,7 +149,7 @@ export function NewTransactionForm({
               <>
                 {method === "credito" ? "Essa compra" : "Esse lançamento"} entra no gasto de{" "}
                 <strong>{competenceHint}</strong>
-                {method === "credito" ? ", não no mês da compra." : "."}
+                {method === "credito" && !competenceIsPurchaseMonth ? ", não no mês da compra" : ""}.
               </>
             )}
           </p>

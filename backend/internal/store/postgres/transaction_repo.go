@@ -174,9 +174,14 @@ func (r *TransactionRepo) OpenInstallmentsTotal(ctx context.Context, asOf domain
 	return domain.Cents(total), nil
 }
 
-// OpenInvoiceTotalAll sums every card's next invoice combined — used by the
-// dashboard's "fatura atual" tile, which reports the household total rather
-// than breaking it down per card.
+// OpenInvoiceTotalAll sums every card's next invoice combined. Nothing
+// renders this value today — there is no "fatura atual" tile on the
+// dashboard — so this is currently unused. Under the competence rule in
+// domain.CompetenceMonth (viewedMonth+1 as "the invoice still open"), the
+// result is only coherent for cards whose due_day is before their
+// closing_day; for a card whose due_day falls after closing (the common
+// case, due the month after it closes), viewedMonth+1 is the wrong bucket.
+// Whoever wires up that tile needs to fix this query first.
 func (r *TransactionRepo) OpenInvoiceTotalAll(ctx context.Context, viewedMonth domain.YearMonth) (domain.Cents, error) {
 	var total int64
 	err := r.db.Pool.QueryRow(ctx, `

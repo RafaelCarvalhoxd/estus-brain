@@ -24,6 +24,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text();
     throw new Error(`estus-vault api ${path} -> ${res.status}: ${body}`);
   }
+  // A DELETE that removed the resource replies 204 with an empty body — the
+  // correct response, cemented by a backend test — so res.json() would throw
+  // "Unexpected end of JSON input" on an empty string. Mirrors
+  // frontend/lib/documents.ts, and guards any future 204 on this fetch path.
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
