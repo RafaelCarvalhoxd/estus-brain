@@ -8,7 +8,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/rafael/estus-vault/backend/internal/domain"
 	"github.com/rafael/estus-vault/backend/internal/service"
 	"github.com/rafael/estus-vault/backend/internal/store/postgres"
 )
@@ -76,6 +78,18 @@ func TestCreateAndDeleteCreditCardRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil || created.ID == "" {
 		t.Fatalf("resposta = %s, %v", rec.Body.String(), err)
 	}
+	// Registered immediately, right after we have the ID: this is the real
+	// database, and if the PUT or an assertion below fails with t.Fatalf,
+	// the explicit DELETE later in this test never runs. This cleanup is
+	// what guarantees the row created above never survives the test. The
+	// explicit DELETE below is still what asserts the 204 response; by the
+	// time it runs the card may already be gone if a prior step failed, so
+	// this cleanup tolerates any outcome (a second delete on an already
+	// deleted row is expected to 404, not a bug).
+	t.Cleanup(func() {
+		del := httptest.NewRequest(http.MethodDelete, "/api/credit-cards/"+created.ID, nil)
+		router.ServeHTTP(httptest.NewRecorder(), del)
+	})
 
 	put := httptest.NewRequest(http.MethodPut, "/api/credit-cards/"+created.ID,
 		strings.NewReader(`{"name":"Renomeado","closing_day":5,"due_day":25}`))
@@ -90,5 +104,67 @@ func TestCreateAndDeleteCreditCardRoundTrip(t *testing.T) {
 	router.ServeHTTP(delRec, del)
 	if delRec.Code != http.StatusNoContent {
 		t.Fatalf("DELETE = %d, want 204; body %s", delRec.Code, delRec.Body.String())
+	}
+}
+
+// TestDeleteCreditCardWithTransactionsConflicts proves the one behavior this
+// task exists to add: deleting a card that still has transactions must
+// surface as 409, not a bare 500 from an unhandled foreign key violation.
+// The fixture (card, category, transaction) is built directly through the
+// repositories/services — the same ones the router.go handlers use — rather
+// than raw SQL, so it goes through the same validation as real data. Every
+// row is named obviously as test data and cleaned up in t.Cleanup as soon as
+// it exists, in reverse creation order (t.Cleanup runs LIFO), so a failure
+// partway through still leaves the real database untouched.
+func TestDeleteCreditCardWithTransactionsConflicts(t *testing.T) {
+	router, db := creditCardRouter(t)
+	ctx := context.Background()
+	categories := postgres.NewCategoryRepo(db)
+	cards := postgres.NewCreditCardRepo(db)
+	transactions := postgres.NewTransactionRepo(db)
+	txService := service.NewTransactionService(transactions, categories, cards)
+
+	card, err := cards.Create(ctx, domain.CreditCard{Name: "Cartão de teste (conflito)", ClosingDay: 10, DueDay: 20})
+	if err != nil {
+		t.Fatalf("create card: %v", err)
+	}
+	t.Cleanup(func() { cards.Delete(ctx, card.ID) })
+
+	cat, err := categories.Create(ctx, domain.Category{
+		Name:   "Categoria de teste (conflito)",
+		Nature: domain.NatureDiscretionary,
+		Color:  "#123456",
+	})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	t.Cleanup(func() { categories.Delete(ctx, cat.ID) })
+
+	txns, err := txService.Create(ctx, service.NewTransactionInput{
+		Description:   "Compra de teste (conflito)",
+		AmountCents:   1000,
+		CategoryID:    cat.ID,
+		PaymentMethod: domain.PaymentCredit,
+		PurchaseDate:  time.Now(),
+		CreditCardID:  card.ID,
+		Installments:  1,
+	})
+	if err != nil {
+		t.Fatalf("create transaction: %v", err)
+	}
+	t.Cleanup(func() {
+		for _, txn := range txns {
+			transactions.Delete(ctx, txn.ID)
+		}
+	})
+
+	del := httptest.NewRequest(http.MethodDelete, "/api/credit-cards/"+card.ID, nil)
+	delRec := httptest.NewRecorder()
+	router.ServeHTTP(delRec, del)
+	if delRec.Code != http.StatusConflict {
+		t.Fatalf("DELETE = %d, want 409; body %s", delRec.Code, delRec.Body.String())
+	}
+	if delRec.Body.Len() == 0 {
+		t.Error("resposta do 409 veio vazia, sem explicação")
 	}
 }
