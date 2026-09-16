@@ -1,0 +1,460 @@
+/* ---------- Hábitos ---------- */
+.hb-muted {
+  color: var(--ink-mute);
+  font-size: 12.5px;
+}
+.hb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+}
+.hb-empty p {
+  margin: 0;
+}
+.hb-empty .hb-muted {
+  max-width: 46ch;
+  margin-bottom: 10px;
+}
+
+/* Today */
+.hb-today-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.hb-today-head h2 {
+  margin: 0 0 2px;
+  font-size: 18px;
+}
+.hb-today-head p {
+  margin: 0;
+}
+.hb-today-progress {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: none;
+}
+.hb-today-progress b {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.hb-today-progress small {
+  font-size: 12px;
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+.hb-ring {
+  width: 64px;
+  height: 64px;
+}
+.hb-ring circle {
+  fill: none;
+  stroke-width: 6;
+}
+.hb-ring-track {
+  stroke: var(--mist);
+}
+.hb-ring-fill {
+  stroke: var(--m-habitos);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease;
+}
+
+.hb-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.hb-subhead {
+  margin: 18px 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-mute);
+}
+.hb-rows.is-quiet .hb-row {
+  opacity: 0.7;
+}
+.hb-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+}
+.hb-row + .hb-row {
+  border-top: 1px solid var(--hairline);
+}
+.hb-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklab, var(--hb) 55%, var(--hairline-strong));
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  font: 700 13px var(--font-sans), system-ui, sans-serif;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.12s ease;
+}
+.hb-check svg {
+  width: 18px;
+  height: 18px;
+}
+.hb-check:hover {
+  border-color: var(--hb);
+}
+.hb-check:active {
+  transform: scale(0.92);
+}
+.hb-check-count {
+  color: var(--ink-soft);
+}
+.hb-row.is-done .hb-check {
+  background: var(--hb);
+  border-color: var(--hb);
+  color: #111;
+}
+.hb-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hb-panel {
+  margin-bottom: 14px;
+}
+.hb-row-name {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hb-row.is-done .hb-row-name {
+  color: var(--ink-soft);
+}
+.hb-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hb-bar {
+  flex: 1;
+  max-width: 220px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--mist);
+  overflow: hidden;
+}
+.hb-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--hb);
+  transition: width 0.25s ease;
+}
+.hb-count-label {
+  font-size: 12px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hb-stepper {
+  display: flex;
+  gap: 4px;
+}
+.hb-stepper button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: 600 16px/1 var(--font-sans), system-ui, sans-serif;
+  cursor: pointer;
+}
+.hb-stepper button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.hb-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 64px;
+  justify-content: flex-end;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hb-streak svg {
+  width: 15px;
+  height: 15px;
+}
+.hb-streak.is-on {
+  color: color-mix(in oklab, #f59e0b 80%, var(--ink));
+}
+
+/* Week */
+.hb-week-scroll {
+  overflow-x: auto;
+}
+.hb-week {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+}
+.hb-week th {
+  font-weight: 600;
+  color: var(--ink-mute);
+  font-size: 11.5px;
+  padding: 4px 2px 10px;
+}
+.hb-week thead th span,
+.hb-week thead th b {
+  display: block;
+}
+.hb-week thead th b {
+  font-size: 14px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.hb-week thead th.is-today b {
+  color: var(--m-habitos);
+}
+.hb-week tbody th {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 6px 12px 6px 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hb-week td {
+  text-align: center;
+  padding: 4px 2px;
+}
+.hb-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: #111;
+  cursor: pointer;
+}
+.hb-cell svg {
+  width: 15px;
+  height: 15px;
+}
+.hb-cell:hover {
+  border-color: var(--hb);
+}
+.hb-cell.is-off {
+  background: transparent;
+  border-style: dashed;
+}
+.hb-cell.is-partial {
+  background: color-mix(in oklab, var(--hb) 30%, var(--surface-2));
+}
+.hb-cell.is-done {
+  background: var(--hb);
+  border-color: var(--hb);
+}
+
+/* Year */
+.hb-year-head select {
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  max-width: 200px;
+}
+.hb-year-stats {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 16px;
+}
+.hb-year-stats div {
+  display: flex;
+  flex-direction: column;
+}
+.hb-year-stats b {
+  font-size: 22px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.hb-year-stats span {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.hb-year-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+/* One grid: a label column, then a column per week; the squares stretch
+   to fill the panel and stay square. */
+.hb-year {
+  display: grid;
+  grid-template-columns: 30px repeat(var(--weeks), minmax(0, 1fr));
+  gap: 3px;
+  min-width: 720px;
+}
+.hb-year-month {
+  font-size: 10.5px;
+  line-height: 1;
+  padding-bottom: 4px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: visible;
+}
+.hb-year-day {
+  font-size: 10px;
+  line-height: 1;
+  align-self: center;
+  color: var(--ink-mute);
+}
+.hb-sq {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--hb, var(--m-habitos)) calc(var(--v, 0) * 100%), var(--mist));
+}
+.hb-sq.is-none {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.hb-sq.is-future {
+  background: transparent;
+}
+.hb-legend .hb-sq {
+  width: 12px;
+}
+.hb-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--ink-mute);
+  --hb: var(--m-habitos);
+}
+
+/* Archived */
+.hb-archived {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hb-archived li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.hb-archived li + li {
+  border-top: 1px solid var(--hairline);
+}
+.hb-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--hb);
+}
+.hb-archived-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+/* Editor */
+.hb-colors {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hb-colors button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--hb);
+  box-shadow: inset 0 0 0 2px var(--surface-solid);
+  cursor: pointer;
+}
+.hb-colors button.is-on {
+  border-color: var(--hb);
+}
+.hb-editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hb-editor-actions .btn-outline.bad:hover {
+  color: var(--bad);
+}
+
+@media (max-width: 720px) {
+  .hb-row {
+    gap: 10px;
+  }
+  .hb-row > .icon-btn,
+  .hb-streak-unit,
+  .hb-hint,
+  .hb-count-label {
+    display: none;
+  }
+  .hb-streak {
+    min-width: 0;
+  }
+  .hb-year-stats {
+    gap: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-ring-fill,
+  .hb-bar span,
+  .hb-check {
+    transition: none;
+  }
+}
