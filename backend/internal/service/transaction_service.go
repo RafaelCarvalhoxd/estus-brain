@@ -75,15 +75,18 @@ func (s *TransactionService) Create(ctx context.Context, in NewTransactionInput)
 	if _, err := s.categories.Get(ctx, in.CategoryID); err != nil {
 		return nil, fmt.Errorf("category %s: %w", in.CategoryID, err)
 	}
+	var cardPtr *domain.CreditCard
 	if in.PaymentMethod == domain.PaymentCredit {
-		if _, err := s.cards.Get(ctx, in.CreditCardID); err != nil {
+		card, err := s.cards.Get(ctx, in.CreditCardID)
+		if err != nil {
 			return nil, fmt.Errorf("credit card %s: %w", in.CreditCardID, err)
 		}
+		cardPtr = &card
 	}
 
 	var txns []domain.Transaction
 	if in.PaymentMethod == domain.PaymentCredit {
-		txns = domain.NewInstallmentPurchase(in.Description, in.AmountCents, in.CategoryID, in.CreditCardID, in.PurchaseDate, in.Installments)
+		txns = domain.NewInstallmentPurchase(in.Description, in.AmountCents, in.CategoryID, *cardPtr, in.PurchaseDate, in.Installments)
 		if in.Installments == 1 {
 			txns[0].IsRecurring = in.IsRecurring
 		}
@@ -95,7 +98,7 @@ func (s *TransactionService) Create(ctx context.Context, in NewTransactionInput)
 			CategoryID:       in.CategoryID,
 			PaymentMethod:    in.PaymentMethod,
 			PurchaseDate:     in.PurchaseDate,
-			CompetenceMonth:  domain.CompetenceMonth(in.PurchaseDate, in.PaymentMethod),
+			CompetenceMonth:  domain.CompetenceMonth(in.PurchaseDate, in.PaymentMethod, cardPtr),
 			InstallmentTotal: 1,
 			IsRecurring:      in.IsRecurring,
 		}}

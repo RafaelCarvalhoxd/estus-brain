@@ -6,12 +6,6 @@ import (
 	"time"
 )
 
-// onDay, not day: internal/domain's habit_test.go already defines a day()
-// that parses a string, and two helpers with one name cannot share a package.
-func onDay(y int, m time.Month, d int) time.Time {
-	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-}
-
 func TestClosingDateFor(t *testing.T) {
 	card := CreditCard{ClosingDay: 10, DueDay: 20}
 	cases := []struct {
@@ -19,10 +13,10 @@ func TestClosingDateFor(t *testing.T) {
 		purchase time.Time
 		want     time.Time
 	}{
-		{"antes do fechamento", onDay(2026, time.September, 5), onDay(2026, time.September, 10)},
-		{"no dia do fechamento fecha hoje", onDay(2026, time.September, 10), onDay(2026, time.September, 10)},
-		{"depois do fechamento", onDay(2026, time.September, 15), onDay(2026, time.October, 10)},
-		{"vira o ano", onDay(2026, time.December, 28), onDay(2027, time.January, 10)},
+		{"antes do fechamento", date(2026, time.September, 5), date(2026, time.September, 10)},
+		{"no dia do fechamento fecha hoje", date(2026, time.September, 10), date(2026, time.September, 10)},
+		{"depois do fechamento", date(2026, time.September, 15), date(2026, time.October, 10)},
+		{"vira o ano", date(2026, time.December, 28), date(2027, time.January, 10)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,22 +38,22 @@ func TestDueDateFor(t *testing.T) {
 		{
 			"vencimento depois do fechamento vence no mesmo mês",
 			CreditCard{ClosingDay: 10, DueDay: 20},
-			onDay(2026, time.September, 10), onDay(2026, time.September, 20),
+			date(2026, time.September, 10), date(2026, time.September, 20),
 		},
 		{
 			"vencimento antes do fechamento vence no mês seguinte",
 			CreditCard{ClosingDay: 25, DueDay: 15},
-			onDay(2026, time.September, 25), onDay(2026, time.October, 15),
+			date(2026, time.September, 25), date(2026, time.October, 15),
 		},
 		{
 			"vencimento no mesmo dia do fechamento vence no mês seguinte",
 			CreditCard{ClosingDay: 10, DueDay: 10},
-			onDay(2026, time.September, 10), onDay(2026, time.October, 10),
+			date(2026, time.September, 10), date(2026, time.October, 10),
 		},
 		{
 			"vira o ano",
 			CreditCard{ClosingDay: 25, DueDay: 15},
-			onDay(2026, time.December, 25), onDay(2027, time.January, 15),
+			date(2026, time.December, 25), date(2027, time.January, 15),
 		},
 	}
 	for _, tc := range cases {

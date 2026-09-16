@@ -43,11 +43,11 @@ type Transaction struct {
 // NewInstallmentPurchase builds the N transactions a parceled credit-card
 // purchase expands into. total is the full purchase amount; installments is
 // how many months it's split across (1 means "not parceled").
-func NewInstallmentPurchase(desc string, total Cents, categoryID string, cardID string, purchaseDate time.Time, installments int) []Transaction {
+func NewInstallmentPurchase(desc string, total Cents, categoryID string, card CreditCard, purchaseDate time.Time, installments int) []Transaction {
 	if installments < 1 {
 		installments = 1
 	}
-	firstCompetence := CompetenceMonth(purchaseDate, PaymentCredit)
+	firstCompetence := CompetenceMonth(purchaseDate, PaymentCredit, &card)
 	parts := total.Split(installments)
 
 	var groupID *string
@@ -65,7 +65,7 @@ func NewInstallmentPurchase(desc string, total Cents, categoryID string, cardID 
 			CategoryID:         categoryID,
 			PaymentMethod:      PaymentCredit,
 			PurchaseDate:       purchaseDate,
-			CreditCardID:       &cardID,
+			CreditCardID:       &card.ID,
 			CompetenceMonth:    firstCompetence.Add(i),
 			InstallmentGroupID: groupID,
 			InstallmentNumber:  i + 1,
