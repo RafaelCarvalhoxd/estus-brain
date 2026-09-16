@@ -13,7 +13,17 @@ const NATURE_LABEL: Record<Category["nature"], string> = {
   investimento: "Investimento",
 };
 
-type FormState = { name: string; nature: Category["nature"]; color: string };
+// budget is what was typed, not cents: the action parses it, so "1.200,50"
+// and "" (no budget) both survive the trip unchanged.
+type FormState = { name: string; nature: Category["nature"]; color: string; budget: string };
+
+// budgetOf pre-fills the field with the amount already set, in the plain
+// "1200,50" the field expects — never the formatted "R$ 1.200,50", which
+// would come back as a different number if saved untouched.
+function budgetOf(category: Category): string {
+  const cents = category.monthly_budget?.cents;
+  return cents ? (cents / 100).toFixed(2).replace(".", ",") : "";
+}
 
 function CategoryForm({
   initial,
@@ -82,6 +92,18 @@ function CategoryForm({
           />
         </div>
       </div>
+      <div className="field">
+        <label htmlFor="cat-budget">Orçamento mensal</label>
+        <input
+          id="cat-budget"
+          type="text"
+          inputMode="decimal"
+          placeholder="Deixe em branco para não ter orçamento"
+          value={form.budget}
+          onChange={(e) => setForm({ ...form, budget: e.target.value })}
+          disabled={saving}
+        />
+      </div>
       {error && <p className="form-error">{error}</p>}
       <div className="row-actions" style={{ justifyContent: "flex-end" }}>
         {onCancel && (
@@ -121,10 +143,10 @@ function CategoryRow({ category }: { category: Category }) {
     return (
       <div className="category-manager-row category-manager-row-editing">
         <CategoryForm
-          initial={{ name: category.name, nature: category.nature, color: category.color }}
+          initial={{ name: category.name, nature: category.nature, color: category.color, budget: budgetOf(category) }}
           onSaved={() => setEditing(false)}
           onCancel={() => setEditing(false)}
-          save={(input) => updateCategoryAction(category.id, input)}
+          save={({ budget, ...input }) => updateCategoryAction(category.id, input, budget)}
         />
       </div>
     );
@@ -135,6 +157,9 @@ function CategoryRow({ category }: { category: Category }) {
       <span className="dot" style={{ background: category.color }} />
       <span className="category-manager-name">{category.name}</span>
       <span className="category-manager-nature">{NATURE_LABEL[category.nature]}</span>
+      <span className="category-manager-budget">
+        {category.monthly_budget ? category.monthly_budget.formatted : "sem orçamento"}
+      </span>
       <div className="row-actions">
         <button className="icon-btn" type="button" aria-label="Editar categoria" onClick={() => setEditing(true)}>
           <IconPencil />
@@ -181,9 +206,9 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
             <h2>Nova categoria</h2>
           </div>
           <CategoryForm
-            initial={{ name: "", nature: "variavel", color: nextColor }}
+            initial={{ name: "", nature: "variavel", color: nextColor, budget: "" }}
             onSaved={() => setCreating(false)}
-            save={createCategoryAction}
+            save={({ budget, ...input }) => createCategoryAction(input, budget)}
           />
         </div>
       </Modal>
