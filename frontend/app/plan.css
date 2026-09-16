@@ -1,0 +1,466 @@
+/* Shared by Treino and Dieta: a plan laid out as today, the week, and the
+   blocks it's made of. `--mod` is set on <main> by each page. */
+
+/* ---------- Today ---------- */
+.plan-today {
+  margin-bottom: 14px;
+}
+.plan-today-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.plan-today-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+.plan-today-head span {
+  font-size: 13px;
+  color: color-mix(in oklab, var(--mod) 55%, var(--ink-soft));
+  font-weight: 600;
+}
+.plan-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px;
+}
+.plan-empty p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.plan-muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.plan-block + .plan-block {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+.plan-block-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.plan-block-title b {
+  font-size: 15px;
+  font-weight: 700;
+}
+.plan-block-title span {
+  font-size: 13px;
+  color: color-mix(in oklab, var(--mod) 55%, var(--ink-soft));
+}
+.plan-block-title .btn-text {
+  margin-left: auto;
+}
+.plan-table td:not(:first-child),
+.plan-table th:not(:first-child) {
+  width: 90px;
+}
+.plan-notes {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+/* ---------- Week ---------- */
+.plan-week {
+  margin-bottom: 14px;
+}
+.week-scroll {
+  overflow-x: auto;
+}
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 8px;
+}
+.week-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 132px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+}
+.week-col.is-today {
+  border-color: color-mix(in oklab, var(--mod) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--mod) 14%, transparent);
+}
+.week-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px 2px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink-soft);
+}
+.week-col.is-today .week-col-head {
+  color: var(--ink);
+}
+.week-col-head em {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--mod) 70%, var(--ink));
+}
+.week-chip {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--mod) 35%, transparent);
+  background: color-mix(in oklab, var(--mod) 10%, transparent);
+  color: var(--ink);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.week-chip:hover {
+  background: color-mix(in oklab, var(--mod) 18%, transparent);
+}
+.week-chip b {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.week-chip span {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.week-rest {
+  padding: 0 2px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.week-total {
+  margin-top: auto;
+  padding: 6px 2px 0;
+  border-top: 1px solid var(--hairline);
+  font-variant-numeric: tabular-nums;
+}
+.week-total b {
+  display: block;
+  font-size: 12.5px;
+}
+.week-total span {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+/* ---------- Lists ---------- */
+.plan-list {
+  display: flex;
+  flex-direction: column;
+}
+.plan-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.plan-list-row + .plan-list-row {
+  border-top: 1px solid var(--hairline);
+}
+.plan-list-main {
+  flex: 1;
+  min-width: 0;
+}
+.plan-list-main b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.plan-list-main span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+/* ---------- Editor ---------- */
+.modal-shell.is-wide {
+  max-width: 860px;
+}
+.plan-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.plan-editor .panel-head {
+  margin-bottom: 0;
+}
+.plan-editor textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.day-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.day-toggle {
+  min-width: 46px;
+  padding: 7px 0;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.day-toggle.on {
+  color: var(--ink);
+  background: color-mix(in oklab, var(--mod) 20%, var(--surface));
+  border-color: color-mix(in oklab, var(--mod) 60%, transparent);
+}
+.lines-scroll {
+  overflow-x: auto;
+}
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 620px;
+}
+.line-row {
+  display: grid;
+  gap: 6px;
+  align-items: center;
+}
+.line-row.exercise {
+  grid-template-columns: minmax(0, 2.4fr) 70px 86px 96px 100px 30px;
+}
+.line-row.food {
+  grid-template-columns: minmax(0, 2fr) 100px 72px 72px 72px 72px 30px;
+}
+.line-head span {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink-mute);
+}
+.line-row input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--page);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+}
+.line-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.line-add svg {
+  width: 13px;
+  height: 13px;
+}
+.line-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.line-totals {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.plan-editor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+}
+.plan-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Diet: macros and meals ---------- */
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding-bottom: 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+.macro {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.macro-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+.macro b {
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.macro b small {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.macro-of {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.macro-bar {
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.macro-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--mod);
+}
+.macro-bar i.over {
+  background: var(--bad);
+}
+.meal-none {
+  padding-top: 12px;
+}
+.meal-list {
+  display: flex;
+  flex-direction: column;
+}
+.meal-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 10px;
+  margin: 0 -10px;
+  border-radius: 10px;
+}
+.meal-row + .meal-row {
+  border-top: 1px solid var(--hairline);
+}
+.meal-row.is-now {
+  background: color-mix(in oklab, var(--mod) 8%, transparent);
+}
+.meal-time {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.meal-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meal-name b {
+  font-size: 14px;
+  font-weight: 650;
+}
+.meal-badge {
+  padding: 1px 8px;
+  border-radius: 100px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--mod) 60%, var(--ink));
+  background: color-mix(in oklab, var(--mod) 22%, transparent);
+}
+.meal-badge.is-next {
+  color: var(--ink-soft);
+  background: var(--surface-2);
+}
+.meal-foods {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.meal-macros {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.meal-macros b {
+  font-size: 13.5px;
+}
+.meal-macros span {
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.targets-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+@media (max-width: 860px) {
+  .macro-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .targets-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .meal-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .meal-macros {
+    grid-column: 2;
+    align-items: flex-start;
+    text-align: left;
+  }
+}

@@ -1,0 +1,1132 @@
+/* ---------- Home: just the brain ---------- */
+.home {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--page);
+  padding-inline: 28px;
+}
+
+/* Nothing but the eye in the middle and the gear on the right. */
+.home-top {
+  position: relative;
+  /* above the brain's canvas and the overview, the settings panel above all */
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding-block: 18px;
+}
+.home-top-end {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+}
+
+/* ---------- The eye: closed shows the brain, open shows the overview ---------- */
+.eye-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.3s ease;
+}
+.eye-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--ink) 30%, transparent);
+}
+.eye-btn svg {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  transition:
+    opacity 0.18s ease,
+    transform 0.28s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+/* a blink: one eye squashes shut as the other opens out of it */
+.eye-open {
+  opacity: 0;
+  transform: scaleY(0.1);
+}
+.home[data-view="dash"] .eye-btn {
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--brain-glow) 55%, transparent);
+  box-shadow: 0 0 22px -6px color-mix(in oklab, var(--brain-glow) 70%, transparent);
+}
+.home[data-view="dash"] .eye-closed {
+  opacity: 0;
+  transform: scaleY(0.1);
+}
+.home[data-view="dash"] .eye-open {
+  opacity: 1;
+  transform: none;
+}
+
+.home-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+}
+
+/* ---------- The brain's own knobs ---------- */
+.brain-theme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+.brain-theme .brain-section-title {
+  margin: 0;
+}
+.brain-theme .theme-toggle {
+  width: 96px;
+}
+.brain-controls {
+  position: relative;
+}
+.brain-controls-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+  color: var(--ink-mute);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.brain-controls-btn svg {
+  width: 17px;
+  height: 17px;
+}
+.brain-controls-btn:hover {
+  color: var(--ink);
+}
+.brain-controls-btn.is-open {
+  color: var(--ink);
+  background: var(--raised);
+  border-color: var(--hairline-strong);
+}
+.brain-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  width: 312px;
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+}
+.brain-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.brain-panel-head b {
+  font-size: 14px;
+  font-weight: 700;
+}
+.brain-section-title {
+  margin: 12px 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-mute);
+}
+.brain-panel-head + .brain-section-title {
+  margin-top: 2px;
+}
+.look-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.look-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.look-option:hover {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+.look-option.is-on {
+  color: var(--ink);
+  background: var(--raised);
+  border-color: color-mix(in oklab, var(--ink) 35%, transparent);
+}
+.look-swatch {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--swatch-a), var(--swatch-b));
+  box-shadow: 0 0 8px -1px var(--swatch-a);
+}
+.brain-compare {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  text-decoration: none;
+}
+.brain-compare:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.brain-row {
+  display: grid;
+  grid-template-columns: 82px 1fr 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.brain-row em {
+  font-style: normal;
+  text-align: right;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+.brain-row input[type="range"] {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  border-radius: 2px;
+  background: var(--raised);
+  cursor: pointer;
+}
+.brain-row input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: none;
+  cursor: grab;
+}
+.brain-row-switch {
+  grid-template-columns: 1fr auto;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--hairline);
+}
+.brain-panel-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+.brain-panel-foot span {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-mute);
+}
+
+/* ---------- Hub: the brain and the modules around it ---------- */
+.hub {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(0, 2.4fr) minmax(170px, 1fr);
+  align-items: stretch;
+  min-height: calc(100dvh - 96px);
+  padding-bottom: 20px;
+}
+/* The WebGL brain is the whole screen's background — no canvas edge to see —
+   with a 2D layer over it for the thin connectors. Only the brain box takes
+   pointer input. */
+.hub-gl,
+.hub-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  display: block;
+  pointer-events: none;
+}
+/* Opening the overview drops the logos and their lines out of the bottom
+   of the screen, accelerating like something falling. The brain falls too,
+   but only halfway: it settles low and dim behind the overview's frosted
+   cards, still turning. Closing brings everything back up, easing to a stop.
+   Transitions take the timing of the state they head into. */
+.hub-gl,
+.hub-canvas,
+.hub-col,
+.hub-brain {
+  transition:
+    transform 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 0.18s,
+    opacity 0.45s ease 0.22s,
+    filter 0.5s ease 0.1s;
+}
+.home[data-view="dash"] :is(.hub-canvas, .hub-col, .hub-brain) {
+  transform: translateY(105vh);
+  opacity: 0;
+  transition:
+    transform 0.7s cubic-bezier(0.55, 0, 0.9, 0.45),
+    opacity 0.4s ease 0.3s;
+}
+.home[data-view="dash"] .hub-gl {
+  transform: translateY(16vh);
+  opacity: 0.6;
+  /* a touch out of focus between the cards too, not only behind them */
+  filter: blur(2.5px);
+  /* fade the canvas out toward its edges so, moved, it never shows as a
+     rectangle against the page */
+  -webkit-mask-image: radial-gradient(ellipse 48% 52% at 50% 50%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse 48% 52% at 50% 50%, #000 55%, transparent 100%);
+  transition:
+    transform 0.9s cubic-bezier(0.5, 0, 0.3, 1.15),
+    opacity 0.6s ease 0.2s,
+    filter 0.6s ease 0.3s;
+}
+.home[data-view="dash"] .hub {
+  pointer-events: none;
+}
+.home[data-view="dash"] .hub-col-left {
+  transition-delay: 0.04s;
+}
+.home[data-view="dash"] .hub-col-right {
+  transition-delay: 0.08s;
+}
+
+.hub-col {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(20px, 5.5vh, 60px);
+}
+.hub-col-left {
+  align-items: flex-end;
+}
+.hub-col-right {
+  align-items: flex-start;
+}
+/* the middle nodes on each side sit further out: an arc around the brain
+   (--arc is worked out per node from its place in the column) */
+.hub-col-left .node {
+  translate: calc(var(--arc, 0px) * -1) 0;
+}
+.hub-col-right .node {
+  translate: var(--arc, 0px) 0;
+}
+.hub-brain {
+  position: relative;
+  z-index: 1;
+  cursor: grab;
+  /* the brain takes the drag itself, so a swipe turns it instead of
+     scrolling the page */
+  touch-action: none;
+}
+
+/* ---------- Module nodes: the logo in its color, and its name ---------- */
+.node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: opacity 0.3s ease;
+}
+.hub-col-left .node {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+/* Minimal: just the line icon in the module's color, in a hairline ring.
+   No fill, no gradient — the brain is the only thing that glows. */
+.node-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  color: var(--mod);
+  border: 1px solid color-mix(in oklab, var(--mod) 38%, transparent);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    background-color 0.25s ease;
+}
+.node-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.node-alert {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 0 2px var(--page);
+}
+.node-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.node-label {
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  transition: color 0.25s ease;
+}
+/* the live line only shows when the node is pointed at */
+.node-status {
+  font-size: 12.5px;
+  color: color-mix(in oklab, var(--mod) 45%, var(--ink-soft));
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 0;
+  opacity: 0;
+  transition:
+    opacity 0.25s ease,
+    max-height 0.25s ease;
+}
+.node-status.is-alert {
+  color: var(--bad);
+}
+.node.is-hot .node-icon,
+.node:focus-visible .node-icon {
+  border-color: color-mix(in oklab, var(--mod) 80%, transparent);
+  background: color-mix(in oklab, var(--mod) 10%, transparent);
+  box-shadow: 0 0 22px -6px color-mix(in oklab, var(--mod) 70%, transparent);
+}
+.node.is-hot .node-label,
+.node:focus-visible .node-label {
+  color: var(--ink);
+}
+.node.is-hot .node-status,
+.node:focus-visible .node-status {
+  max-height: 20px;
+  opacity: 1;
+}
+.node:focus-visible {
+  outline: none;
+}
+.hub[data-hover] .node:not(.is-hot) {
+  opacity: 0.45;
+}
+.hub[data-leaving] .node {
+  opacity: 0;
+}
+
+/* Nodes wait for the brain to power on, then arrive as their connectors
+   reach them. */
+.hub:not([data-ready]) .node {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hub[data-boot="full"] .node,
+  .hub[data-boot="quick"] .node {
+    animation: node-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+    animation-delay: calc(var(--boot) * 0.7 + var(--i) * var(--boot) * 0.05);
+  }
+}
+@keyframes node-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+
+/* ---------- Phones and small tablets: brain on top, logos under it ---------- */
+@media (max-width: 900px) {
+  .home {
+    padding-inline: 16px;
+  }
+  .hub {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    min-height: 0;
+  }
+  .hub-brain {
+    order: -1;
+    width: 100%;
+    height: min(92vw, 470px);
+  }
+  .hub-col {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .hub-col .node,
+  .hub-col-left .node,
+  .hub-col-right .node {
+    flex-direction: column;
+    text-align: center;
+    gap: 7px;
+    translate: none;
+    /* five to a row still fits a phone */
+    width: min(80px, 18vw);
+  }
+  .node-label {
+    font-size: 11.5px;
+  }
+  .node-status {
+    display: none;
+  }
+}
+
+/* ---------- The chat: the brain lifts away, the chat rises ----------
+   The mirror image of the overview. The logos and their lines fly off the
+   top; the brain rises only partway and dims behind the chat's glass; the
+   chat comes up from below and settles with a small overshoot. */
+.chat-launch {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(18px, 4vh, 40px);
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 20px 11px 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--brain-glow) 45%, var(--hairline-strong));
+  background: color-mix(in oklab, var(--surface) 62%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  color: var(--ink);
+  font: 600 14px var(--font-sans), system-ui, sans-serif;
+  cursor: pointer;
+  translate: -50% 0;
+  box-shadow: 0 0 28px -10px color-mix(in oklab, var(--brain-glow) 80%, transparent);
+  transition:
+    transform 0.55s cubic-bezier(0.55, 0, 0.9, 0.45),
+    opacity 0.3s ease,
+    border-color 0.2s ease,
+    box-shadow 0.3s ease;
+}
+.chat-launch svg {
+  width: 19px;
+  height: 19px;
+  color: var(--brain-glow);
+}
+.chat-launch:hover {
+  border-color: color-mix(in oklab, var(--brain-glow) 75%, transparent);
+  box-shadow: 0 0 34px -8px color-mix(in oklab, var(--brain-glow) 90%, transparent);
+}
+.home:not([data-view="brain"]) .chat-launch {
+  opacity: 0;
+  pointer-events: none;
+}
+.home[data-view="chat"] .chat-launch {
+  transform: translateY(-60vh);
+}
+.home[data-view="dash"] .chat-launch {
+  transform: translateY(40px);
+}
+
+.home[data-view="chat"] :is(.hub-canvas, .hub-col, .hub-brain) {
+  transform: translateY(-105vh);
+  opacity: 0;
+  transition:
+    transform 0.7s cubic-bezier(0.55, 0, 0.9, 0.45),
+    opacity 0.4s ease 0.3s;
+}
+.home[data-view="chat"] .hub-gl {
+  transform: translateY(-20vh);
+  opacity: 0.5;
+  filter: blur(3px);
+  -webkit-mask-image: radial-gradient(ellipse 48% 52% at 50% 50%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse 48% 52% at 50% 50%, #000 55%, transparent 100%);
+  transition:
+    transform 0.9s cubic-bezier(0.5, 0, 0.3, 1.15),
+    opacity 0.6s ease 0.2s,
+    filter 0.6s ease 0.3s;
+}
+.home[data-view="chat"] .hub {
+  pointer-events: none;
+}
+.home[data-view="chat"] .hub-col-left {
+  transition-delay: 0.04s;
+}
+.home[data-view="chat"] .hub-col-right {
+  transition-delay: 0.08s;
+}
+
+.chatlay {
+  position: fixed;
+  inset: 76px 0 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: 0 14px 14px;
+  /* the glass tokens the module screens use, so the chat's panels frost the
+     brain behind them */
+  --surface: color-mix(in oklab, var(--surface-solid) 50%, transparent);
+  --surface-2: color-mix(in oklab, var(--surface-2-solid) 55%, transparent);
+  --page: color-mix(in oklab, var(--page-solid) 45%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(100vh);
+  transition:
+    transform 0.6s cubic-bezier(0.55, 0, 0.9, 0.45),
+    opacity 0.35s ease 0.2s,
+    visibility 0s linear 0.6s;
+}
+.home[data-view="chat"] .chatlay {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    transform 0.85s cubic-bezier(0.2, 0.9, 0.25, 1.06) 0.14s,
+    opacity 0.3s ease 0.14s,
+    visibility 0s;
+}
+.chatlay .panel {
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(24px) saturate(1.25);
+  backdrop-filter: blur(24px) saturate(1.25);
+  border-color: var(--hairline-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 20px 40px -30px rgba(0, 0, 0, 0.6);
+}
+.chatlay .cx {
+  flex: 1;
+  min-height: 0;
+}
+.chatlay-close {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 5px 12px 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-mute);
+  font: 600 12px var(--font-sans), system-ui, sans-serif;
+  cursor: pointer;
+}
+.chatlay-close svg {
+  width: 15px;
+  height: 15px;
+}
+.chatlay-close:hover {
+  color: var(--ink);
+  border-color: var(--hairline-strong);
+}
+
+/* ---------- The overview ---------- */
+/* Its own scroll area under the header, so the brain view never scrolls. */
+.dash {
+  position: fixed;
+  inset: 82px 0 0;
+  z-index: 30;
+  overflow-y: auto;
+  padding: 6px 28px 48px;
+  /* a faint veil so text stays readable over the glow */
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--page) 55%, transparent), color-mix(in oklab, var(--page) 15%, transparent));
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.25s ease,
+    visibility 0s linear 0.25s;
+}
+.home[data-view="dash"] .dash {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.2s ease 0.15s,
+    visibility 0s;
+}
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Frosted glass: the fallen brain glows through, blurred. */
+.dash-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline-strong);
+  background: color-mix(in oklab, var(--surface) 48%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.25);
+  backdrop-filter: blur(24px) saturate(1.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 20px 40px -28px rgba(0, 0, 0, 0.6);
+  transition:
+    transform 0.3s ease,
+    opacity 0.25s ease;
+}
+/* Cards fall in from above, one after another, and settle with a little
+   bounce. Leaving, they lift away together. */
+.home[data-view="dash"] .dash-card {
+  animation: dash-fall 0.75s cubic-bezier(0.25, 0.9, 0.3, 1) backwards;
+  animation-delay: calc(0.32s + var(--i) * 55ms);
+}
+.home:not([data-view="dash"]) .dash-card {
+  transform: translateY(-28px);
+  opacity: 0;
+}
+@keyframes dash-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-90px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(7px);
+  }
+  80% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.dash-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.dash-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 50%;
+  color: var(--mod);
+  border: 1px solid color-mix(in oklab, var(--mod) 40%, transparent);
+}
+.dash-card-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.dash-card-head h2 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.dash-card-link {
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  text-decoration: none;
+}
+.dash-card-link:hover {
+  color: color-mix(in oklab, var(--mod) 60%, var(--ink));
+}
+.dash-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dash-big {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.dash-big small {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+}
+.dash-big .dash-of {
+  color: var(--ink-mute);
+}
+.dash-big.is-good {
+  color: var(--good);
+}
+.dash-big.is-bad {
+  color: var(--bad);
+}
+.dash-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.dash-muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.dash-alert {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--bad);
+}
+.dash-title {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.dash-title span {
+  margin-left: 8px;
+  font-weight: 500;
+  font-size: 12.5px;
+  color: color-mix(in oklab, var(--mod) 55%, var(--ink-soft));
+}
+.dash-block + .dash-block {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.dash-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.dash-pair div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--surface-2) 55%, transparent);
+}
+.dash-pair span {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+.dash-pair b {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.dash-rows li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+.dash-rows li + li {
+  border-top: 1px solid var(--hairline);
+}
+.dash-rows li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-rows li > span small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+.dash-rows li > b {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.dash-rows li > b.is-good {
+  color: var(--good);
+}
+.dash-rows li.is-late > span,
+.dash-rows li.is-late > b {
+  color: var(--bad);
+}
+
+.dash-macros {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.dash-macro {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash-macro span {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+.dash-macro b {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-macro i {
+  display: block;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--ink) 12%, transparent);
+  overflow: hidden;
+}
+.dash-macro em {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--mod);
+}
+
+.dash-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.dash-notes li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  min-width: 0;
+}
+.dash-notes li + li {
+  border-top: 1px solid var(--hairline);
+}
+.dash-notes b {
+  font-size: 13.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-notes span {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-notes small {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+/* Beside the last card on a three-column grid, a full row on two. */
+.dash-card.is-wide {
+  grid-column: span 2;
+}
+.dash-habits {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.dash-habits li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  min-width: 0;
+}
+.dash-habits li > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-habits li.is-done > span:nth-child(2) {
+  color: var(--ink-mute);
+  text-decoration: line-through;
+}
+.dash-habits b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+.dash-habit-mark {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklab, var(--hb) 60%, var(--hairline-strong));
+}
+.dash-habits li.is-done .dash-habit-mark {
+  background: var(--hb);
+  border-color: var(--hb);
+}
+.dash-boards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.dash-board {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+.dash-board-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--surface-2) 70%, transparent);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+.dash-board:hover .dash-board-thumb {
+  border-color: color-mix(in oklab, var(--mod) 55%, var(--hairline));
+}
+.dash-board-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+/* Previews are drawn light; the editor's own dark mode inverts the same way. */
+:root:not([data-theme="light"]) .dash-board-thumb img {
+  filter: invert(0.93) hue-rotate(180deg);
+}
+.dash-board b {
+  font-size: 13px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-board small {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+
+@media (max-width: 1100px) {
+  .dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .dash {
+    inset: 76px 0 0;
+    padding: 4px 16px 40px;
+  }
+  .chatlay {
+    padding: 0 6px 6px;
+  }
+  /* the logos sit under the brain on a phone; leave room for the button */
+  .hub {
+    padding-bottom: 84px;
+  }
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+  .dash-card.is-wide {
+    grid-column: auto;
+  }
+  .dash-boards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatlay,
+  .home[data-view="chat"] .chatlay,
+  .home:not([data-view="brain"]) .chat-launch {
+    transform: none;
+    transition: opacity 0.2s ease, visibility 0s;
+  }
+  .hub-gl,
+  .hub-canvas,
+  .hub-col,
+  .hub-brain,
+  .home[data-view="dash"] :is(.hub-gl, .hub-canvas, .hub-col, .hub-brain),
+  .home[data-view="chat"] :is(.hub-gl, .hub-canvas, .hub-col, .hub-brain) {
+    transform: none;
+    transition: opacity 0.2s ease;
+  }
+  .home[data-view="dash"] .hub-gl {
+    opacity: 0.4;
+  }
+  .home[data-view="dash"] .dash-card {
+    animation: none;
+  }
+  .home:not([data-view="dash"]) .dash-card {
+    transform: none;
+  }
+}
