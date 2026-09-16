@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
@@ -47,4 +48,52 @@ func (r *CreditCardRepo) Get(ctx context.Context, id string) (domain.CreditCard,
 		return domain.CreditCard{}, fmt.Errorf("get credit card: %w", err)
 	}
 	return c, nil
+}
+
+func (r *CreditCardRepo) Create(ctx context.Context, c domain.CreditCard) (domain.CreditCard, error) {
+	var out domain.CreditCard
+	err := r.db.Pool.QueryRow(ctx, `
+		insert into credit_cards (name, closing_day, due_day)
+		values ($1, $2, $3)
+		returning id, name, closing_day, due_day, created_at`,
+		c.Name, c.ClosingDay, c.DueDay,
+	).Scan(&out.ID, &out.Name, &out.ClosingDay, &out.DueDay, &out.CreatedAt)
+	if err != nil {
+		return domain.CreditCard{}, fmt.Errorf("create credit card: %w", err)
+	}
+	return out, nil
+}
+
+func (r *CreditCardRepo) Update(ctx context.Context, id string, c domain.CreditCard) (domain.CreditCard, error) {
+	var out domain.CreditCard
+	err := r.db.Pool.QueryRow(ctx, `
+		update credit_cards set name = $2, closing_day = $3, due_day = $4
+		where id = $1
+		returning id, name, closing_day, due_day, created_at`,
+		id, c.Name, c.ClosingDay, c.DueDay,
+	).Scan(&out.ID, &out.Name, &out.ClosingDay, &out.DueDay, &out.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.CreditCard{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.CreditCard{}, fmt.Errorf("update credit card %s: %w", id, err)
+	}
+	return out, nil
+}
+
+// Delete refuses a card that still has transactions. The foreign key already
+// stops it; without translating the violation it would surface as a 500.
+func (r *CreditCardRepo) Delete(ctx context.Context, id string) error {
+	tag, err := r.db.Pool.Exec(ctx, `delete from credit_cards where id = $1`, id)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation {
+			return fmt.Errorf("%w: credit card is used by existing transactions", domain.ErrConflict)
+		}
+		return fmt.Errorf("delete credit card %s: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
