@@ -83,3 +83,35 @@ func TestModulesForIgnoresAccentsAndCase(t *testing.T) {
 		}
 	}
 }
+
+// The mirror of the habit bug: a plain expense message must still reach the
+// finance tools. Before subjectWords["financeiro"] had payment words, a
+// message like "paguei 50 no mercado" matched only "contas" (via "paguei")
+// and financeiro was silently excluded — a small model would then hold
+// bills_create but none of the transaction tools for the most common
+// sentence the owner types.
+func TestModulesForKeepsMoneyToolsForEverydaySpending(t *testing.T) {
+	for _, message := range []string{
+		"paguei 50 no mercado",
+		"paguei o uber",
+		"gastei 30 no almoço",
+		"comprei um monitor no crédito",
+		"50 reais de pix pro João",
+	} {
+		if got := modulesFor(message); !slices.Contains(got, "financeiro") {
+			t.Errorf("modulesFor(%q) = %v, want it to include financeiro", message, got)
+		}
+	}
+}
+
+// A word can legitimately belong to two modules: "paguei a conta de luz" is
+// both a bill (contas) and a money movement (financeiro), and the router is
+// meant to hand over both rather than pick a winner.
+func TestModulesForPaguContaContaReachesBothContasAndFinanceiro(t *testing.T) {
+	got := modulesFor("paguei a conta de luz")
+	for _, want := range []string{"contas", "financeiro"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("modulesFor() = %v, want it to include %s", got, want)
+		}
+	}
+}

@@ -182,7 +182,7 @@ func (r *Registry) addBills() {
 
 	r.add(Tool{
 		Name: "bills_delete", Title: "Excluir conta", Module: "contas", Destructive: true,
-		Description: "Exclui uma conta pelo id de bills_list.",
+		Description: "Exclui uma conta pelo id de bills_list. Se for a ocorrência mais recente de uma conta recorrente ativa, também encerra a repetição — os meses anteriores continuam no histórico.",
 		Input:       object(map[string]any{"id": str("Id da conta")}, "id"),
 		run: typed(func(ctx context.Context, in struct {
 			ID string `json:"id"`

@@ -33,7 +33,7 @@ var subjectWords = map[string][]string{
 	"documentos": {"documento", "documentos", "arquivo", "comprovante", "pdf", "onde esta meu"},
 	"quadros":    {"quadro", "quadros", "lousa", "diagrama", "fluxo de"},
 	"contas":     {"conta de", "contas", "boleto", "fatura", "vencimento", "vence", "a pagar", "a receber", "paguei"},
-	"financeiro": {"gasto", "gastos", "gastei", "gastar", "comprei", "compra", "despesa", "cartao", "categoria", "orcamento", "quanto custou", "quanto gastei"},
+	"financeiro": {"gasto", "gastos", "gastei", "gastar", "comprei", "compra", "despesa", "cartao", "categoria", "orcamento", "quanto custou", "quanto gastei", "paguei", "pix", "debito", "credito", "mercado", "dinheiro", "reais", "transferencia", "recebi"},
 }
 
 // fallbackModules is what an unrecognised message gets: the everyday case,
