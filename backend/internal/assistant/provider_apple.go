@@ -47,7 +47,7 @@ func (p *appleProvider) Chat(ctx context.Context, req ChatRequest, emit func(Eve
 		Parameters  Schema `json:"parameters"`
 	}
 	var tools []tool
-	for _, t := range p.chat.toolsFor(req.Module, true) {
+	for _, t := range p.chat.toolsFor(req.Module, req.Message, true) {
 		tools = append(tools, tool{t.Name, t.Description, t.Input})
 	}
 	messages := append([]Message{}, req.History...)

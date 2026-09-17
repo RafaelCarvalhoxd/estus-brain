@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { createTransactionAction, type CreateTransactionState } from "@/app/financeiro/lancamentos/actions";
 import type { Category, CreditCard, PaymentMethod } from "@/lib/types";
 import { creditCardCompetenceYearMonth, formatYearMonth } from "@/lib/month";
+import { dayKeyIn, TZ } from "@/lib/week";
 
 const initialState: CreateTransactionState = { status: "idle" };
 
@@ -24,7 +25,10 @@ export function NewTransactionForm({
   }, [state.status]);
   const [method, setMethod] = useState<PaymentMethod>("debito");
   const [installments, setInstallments] = useState(1);
-  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // dayKeyIn(TZ), não toISOString(): este último devolve o dia em UTC, e o
+  // dono está em UTC-3 — entre 21h e meia-noite ele daria AMANHÃ como hoje,
+  // datando a compra no mês errado sem ninguém notar.
+  const [purchaseDate, setPurchaseDate] = useState(() => dayKeyIn(TZ));
   const [recurring, setRecurring] = useState(false);
   const [cardId, setCardId] = useState(() => cards[0]?.id ?? "");
 

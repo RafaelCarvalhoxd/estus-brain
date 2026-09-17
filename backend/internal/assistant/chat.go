@@ -505,6 +505,13 @@ func (c *Chat) systemPrompt(module string, sentAt time.Time) string {
 	b.WriteString("Para lançar, cadastrar ou editar, faça direto quando as informações estiverem claras; se faltar algo essencial (valor, data), pergunte. ")
 	b.WriteString("Gasto sem categoria dita: escolha a categoria existente que melhor encaixa (liste antes); só quando nenhuma serve, passe um nome novo e curto — a categoria é criada sozinha. Avise na resposta quando criar uma categoria nova. ")
 	b.WriteString("Se não entender o pedido, diga que não entendeu e o que ficou confuso, em vez de chutar. ")
+	// The model is given only some modules' tools when it is small. Asked for
+	// a habit while holding only the finance tools, one booked an expense and
+	// then said the habit had been created — the wrong action AND a false
+	// report. Routing makes that rare; this makes it honest when it happens.
+	b.WriteString("Se não existir ferramenta para o que foi pedido, diga que não consegue fazer isso por aqui e onde a pessoa consegue. ")
+	b.WriteString("Nunca use uma ferramenta de outro assunto como aproximação — lançar um gasto não é criar um hábito. ")
+	b.WriteString("Nunca diga que fez algo sem ter chamado a ferramenta que faz aquilo. ")
 	b.WriteString("Se uma ferramenta devolver erro, explique em palavras simples por que não deu certo e o que a pessoa precisa informar ou corrigir (ex.: categoria que não existe: mostre as que existem). Nunca termine sem responder. ")
 	b.WriteString("Antes de excluir qualquer coisa, confirme com a pessoa. Nunca invente ids: liste antes. Valores em R$ no formato brasileiro. ")
 	b.WriteString("Não fale sobre senhas: o cofre de senhas não está disponível para você.")
@@ -545,15 +552,19 @@ func quote(s string) string {
 
 // toolsFor picks the tools an engine is given: all of them, or for small
 // on-device models only the selected module's plus the day overview.
-func (c *Chat) toolsFor(module string, small bool) []Tool {
+func (c *Chat) toolsFor(module, message string, small bool) []Tool {
 	if !small {
 		return c.tools.Tools()
 	}
+	// A module chosen on screen is a stronger signal than anything in the
+	// text. Without one, the message itself decides — see routing.go, which
+	// exists because "crie um hábito" used to reach a model holding only the
+	// finance tools.
 	mods := []string{"geral"}
 	if module != "" {
 		mods = append(mods, module)
 	} else {
-		mods = append(mods, "financeiro", "contas")
+		mods = modulesFor(message)
 	}
 	return c.tools.Tools(mods...)
 }

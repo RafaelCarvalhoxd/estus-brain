@@ -105,7 +105,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, req ChatRequest, emit func
 	}
 	type block = map[string]any
 	var tools []block
-	for _, t := range p.chat.toolsFor(req.Module, false) {
+	for _, t := range p.chat.toolsFor(req.Module, req.Message, false) {
 		tools = append(tools, block{"name": t.Name, "description": t.Description, "input_schema": t.Input})
 	}
 	messages := []block{}
@@ -168,7 +168,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, req ChatRequest, emit func
 func (c *Chat) openAIChat(ctx context.Context, req ChatRequest, emit func(Event), small bool, call func(body map[string]any) (openAIMessage, error)) (ChatOutcome, error) {
 	type msg = map[string]any
 	var tools []msg
-	for _, t := range c.toolsFor(req.Module, small) {
+	for _, t := range c.toolsFor(req.Module, req.Message, small) {
 		tools = append(tools, msg{"type": "function", "function": msg{"name": t.Name, "description": t.Description, "parameters": t.Input}})
 	}
 	messages := []msg{{"role": "system", "content": req.System}}
