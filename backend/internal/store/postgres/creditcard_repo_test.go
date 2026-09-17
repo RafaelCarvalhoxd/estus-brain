@@ -84,3 +84,45 @@ func TestCreditCardRepoMissingRows(t *testing.T) {
 		t.Errorf("update inexistente = %v, want ErrNotFound", err)
 	}
 }
+
+// Two cards with the same name would make the assistant pick one at random
+// when the owner says "lancei no Nubank" — and a purchase would silently take
+// the wrong card's billing cycle, with no recomputation to undo it later.
+func TestCreditCardRepoRefusesADuplicateName(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+	ctx := context.Background()
+	db, err := Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx, "../../../migrations"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	repo := NewCreditCardRepo(db)
+
+	first, err := repo.Create(ctx, domain.CreditCard{Name: "Cartão duplicado (teste)", ClosingDay: 10, DueDay: 20})
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	// defer, não t.Cleanup: t.Cleanup roda depois do defer db.Close() acima,
+	// com o pool já fechado, e o delete falharia em silêncio no banco real.
+	defer repo.Delete(ctx, first.ID)
+
+	if _, err := repo.Create(ctx, domain.CreditCard{Name: "Cartão duplicado (teste)", ClosingDay: 5, DueDay: 25}); !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("create com nome repetido = %v, want ErrConflict", err)
+	}
+
+	other, err := repo.Create(ctx, domain.CreditCard{Name: "Cartão outro (teste)", ClosingDay: 3, DueDay: 13})
+	if err != nil {
+		t.Fatalf("create other: %v", err)
+	}
+	defer repo.Delete(ctx, other.ID)
+
+	if _, err := repo.Update(ctx, other.ID, domain.CreditCard{Name: "Cartão duplicado (teste)", ClosingDay: 3, DueDay: 13}); !errors.Is(err, domain.ErrConflict) {
+		t.Errorf("update para nome repetido = %v, want ErrConflict", err)
+	}
+}

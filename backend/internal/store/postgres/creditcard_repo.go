@@ -59,6 +59,9 @@ func (r *CreditCardRepo) Create(ctx context.Context, c domain.CreditCard) (domai
 		c.Name, c.ClosingDay, c.DueDay,
 	).Scan(&out.ID, &out.Name, &out.ClosingDay, &out.DueDay, &out.CreatedAt)
 	if err != nil {
+		if isDuplicateName(err) {
+			return domain.CreditCard{}, fmt.Errorf("%w: a credit card named %q already exists", domain.ErrConflict, c.Name)
+		}
 		return domain.CreditCard{}, fmt.Errorf("create credit card: %w", err)
 	}
 	return out, nil
@@ -76,9 +79,19 @@ func (r *CreditCardRepo) Update(ctx context.Context, id string, c domain.CreditC
 		return domain.CreditCard{}, domain.ErrNotFound
 	}
 	if err != nil {
+		if isDuplicateName(err) {
+			return domain.CreditCard{}, fmt.Errorf("%w: a credit card named %q already exists", domain.ErrConflict, c.Name)
+		}
 		return domain.CreditCard{}, fmt.Errorf("update credit card %s: %w", id, err)
 	}
 	return out, nil
+}
+
+// isDuplicateName reports the unique violation on credit_cards.name, which
+// 0018 added so the assistant can resolve a card by the name the owner says.
+func isDuplicateName(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation
 }
 
 // Delete refuses a card that still has transactions. The foreign key already

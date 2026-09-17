@@ -30,9 +30,10 @@ function revalidateCards() {
   revalidatePath("/financeiro/lancamentos");
 }
 
-// isConflict recognizes the 409 apiFetch throws when a card still has
-// transactions attached, so the UI can show a readable Portuguese sentence
-// instead of the raw "estus-vault api ... -> 409: ..." fetch error.
+// isConflict recognizes the 409 apiFetch throws, so the UI can show a readable
+// Portuguese sentence instead of the raw "estus-vault api ... -> 409: ..."
+// fetch error. Each call site knows which conflict its own route can raise:
+// saving conflicts on a duplicate name, deleting on attached transactions.
 function isConflict(err: unknown): boolean {
   return err instanceof Error && /-> 409:/.test(err.message);
 }
@@ -47,6 +48,7 @@ export async function createCreditCardAction(input: CreditCardInput): Promise<{ 
   try {
     await createCreditCard(input);
   } catch (err) {
+    if (isConflict(err)) return { error: "Já existe um cartão com esse nome." };
     return { error: errorMessage(err, "Falha ao salvar.") };
   }
   revalidateCards();
@@ -62,6 +64,7 @@ export async function updateCreditCardAction(
   try {
     await updateCreditCard(id, input);
   } catch (err) {
+    if (isConflict(err)) return { error: "Já existe um cartão com esse nome." };
     return { error: errorMessage(err, "Falha ao salvar.") };
   }
   revalidateCards();
