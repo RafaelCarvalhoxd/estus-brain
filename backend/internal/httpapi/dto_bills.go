@@ -8,27 +8,31 @@ import (
 )
 
 type billDTO struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	Amount      moneyDTO `json:"amount"`
-	DueDate     string   `json:"due_date"`
-	Direction   string   `json:"direction"`
-	CategoryID  *string  `json:"category_id,omitempty"`
-	PaidAt      *string  `json:"paid_at,omitempty"`
-	Recurring   bool     `json:"recurring"`
-	Status      string   `json:"status"`
+	ID              string                `json:"id"`
+	Description     string                `json:"description"`
+	Amount          moneyDTO              `json:"amount"`
+	DueDate         string                `json:"due_date"`
+	Direction       string                `json:"direction"`
+	CategoryID      *string               `json:"category_id,omitempty"`
+	PaidAt          *string               `json:"paid_at,omitempty"`
+	Recurring       bool                  `json:"recurring"`
+	AmountEstimated bool                  `json:"amount_estimated"`
+	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
+	Status          string                `json:"status"`
 }
 
 func toBillDTO(b domain.Bill, now time.Time) billDTO {
 	dto := billDTO{
-		ID:          b.ID,
-		Description: b.Description,
-		Amount:      toMoneyDTO(b.AmountCents),
-		DueDate:     b.DueDate.Format("2006-01-02"),
-		Direction:   string(b.Direction),
-		CategoryID:  b.CategoryID,
-		Recurring:   b.Recurring,
-		Status:      b.Status(now),
+		ID:              b.ID,
+		Description:     b.Description,
+		Amount:          toMoneyDTO(b.AmountCents),
+		DueDate:         b.DueDate.Format("2006-01-02"),
+		Direction:       string(b.Direction),
+		CategoryID:      b.CategoryID,
+		Recurring:       b.Recurring(),
+		AmountEstimated: b.AmountEstimated,
+		PaymentMethod:   b.PaymentMethod,
+		Status:          b.Status(now),
 	}
 	if b.PaidAt != nil {
 		formatted := b.PaidAt.Format("2006-01-02")
@@ -52,12 +56,14 @@ func toBillSummaryDTO(s service.BillSummary) billSummaryDTO {
 }
 
 type createBillRequest struct {
-	Description string  `json:"description"`
-	AmountCents int64   `json:"amount_cents"`
-	DueDate     string  `json:"due_date"` // YYYY-MM-DD
-	Direction   string  `json:"direction"`
-	CategoryID  *string `json:"category_id,omitempty"`
-	Recurring   bool    `json:"recurring,omitempty"`
+	Description     string                `json:"description"`
+	AmountCents     int64                 `json:"amount_cents"`
+	DueDate         string                `json:"due_date"` // YYYY-MM-DD
+	Direction       string                `json:"direction"`
+	CategoryID      *string               `json:"category_id,omitempty"`
+	Recurring       bool                  `json:"recurring,omitempty"`
+	AmountEstimated bool                  `json:"amount_estimated,omitempty"`
+	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
 }
 
 func (r createBillRequest) toInput() (service.NewBillInput, error) {
@@ -66,12 +72,14 @@ func (r createBillRequest) toInput() (service.NewBillInput, error) {
 		return service.NewBillInput{}, err
 	}
 	return service.NewBillInput{
-		Description: r.Description,
-		AmountCents: domain.Cents(r.AmountCents),
-		DueDate:     dueDate,
-		Direction:   domain.BillDirection(r.Direction),
-		CategoryID:  r.CategoryID,
-		Recurring:   r.Recurring,
+		Description:     r.Description,
+		AmountCents:     domain.Cents(r.AmountCents),
+		DueDate:         dueDate,
+		Direction:       domain.BillDirection(r.Direction),
+		CategoryID:      r.CategoryID,
+		Recurring:       r.Recurring,
+		AmountEstimated: r.AmountEstimated,
+		PaymentMethod:   r.PaymentMethod,
 	}, nil
 }
 

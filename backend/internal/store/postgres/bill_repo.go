@@ -17,10 +17,14 @@ func NewBillRepo(db *DB) *BillRepo { return &BillRepo{db: db} }
 
 func (r *BillRepo) Create(ctx context.Context, b domain.Bill) (domain.Bill, error) {
 	err := r.db.Pool.QueryRow(ctx, `
-		insert into bills (id, description, amount_cents, due_date, direction, category_id, paid_at, recurring)
-		values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+		insert into bills (
+			id, description, amount_cents, due_date, direction, category_id, paid_at,
+			series_id, amount_estimated, payment_method, transaction_id
+		)
+		values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		returning id, created_at`,
-		b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID, b.PaidAt, b.Recurring,
+		b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID, b.PaidAt,
+		b.SeriesID, b.AmountEstimated, b.PaymentMethod, b.TransactionID,
 	).Scan(&b.ID, &b.CreatedAt)
 	if err != nil {
 		return domain.Bill{}, fmt.Errorf("create bill: %w", err)
@@ -28,9 +32,29 @@ func (r *BillRepo) Create(ctx context.Context, b domain.Bill) (domain.Bill, erro
 	return b, nil
 }
 
+// Get fetches a single bill by id, so callers that need one occurrence (for
+// example to settle it) don't have to filter a full List.
+func (r *BillRepo) Get(ctx context.Context, id string) (domain.Bill, error) {
+	var b domain.Bill
+	err := r.db.Pool.QueryRow(ctx, `
+		select id, description, amount_cents, due_date, direction, category_id, paid_at,
+			series_id, amount_estimated, payment_method, transaction_id, created_at
+		from bills where id = $1`, id,
+	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
+		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("get bill %s: %w", id, err)
+	}
+	return b, nil
+}
+
 func (r *BillRepo) List(ctx context.Context, direction *domain.BillDirection, onlyOpen bool) ([]domain.Bill, error) {
 	query := `
-		select id, description, amount_cents, due_date, direction, category_id, paid_at, recurring, created_at
+		select id, description, amount_cents, due_date, direction, category_id, paid_at,
+			series_id, amount_estimated, payment_method, transaction_id, created_at
 		from bills
 		where ($1::text is null or direction = $1)
 		and (not $2 or paid_at is null)
@@ -47,11 +71,60 @@ func (r *BillRepo) List(ctx context.Context, direction *domain.BillDirection, on
 		return nil, fmt.Errorf("list bills: %w", err)
 	}
 	defer rows.Close()
+	return scanBills(rows)
+}
 
+// ListByMonth is every bill due in ym, which is how the Contas screen is
+// read now that it has month navigation.
+func (r *BillRepo) ListByMonth(ctx context.Context, ym domain.YearMonth, direction *domain.BillDirection) ([]domain.Bill, error) {
+	start := ym.FirstDay()
+	end := start.AddDate(0, 1, 0)
+
+	var dirArg *string
+	if direction != nil {
+		s := string(*direction)
+		dirArg = &s
+	}
+
+	rows, err := r.db.Pool.Query(ctx, `
+		select id, description, amount_cents, due_date, direction, category_id,
+			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at
+		from bills
+		where due_date >= $1 and due_date < $2
+			and ($3::text is null or direction = $3)
+		order by due_date, description`, start, end, dirArg)
+	if err != nil {
+		return nil, fmt.Errorf("list bills for %v: %w", ym, err)
+	}
+	defer rows.Close()
+	return scanBills(rows)
+}
+
+// LatestPerSeries is the most recent occurrence of every series — the mould
+// each series' next month is copied from.
+func (r *BillRepo) LatestPerSeries(ctx context.Context) ([]domain.Bill, error) {
+	rows, err := r.db.Pool.Query(ctx, `
+		select distinct on (series_id)
+			id, description, amount_cents, due_date, direction, category_id,
+			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at
+		from bills
+		where series_id is not null
+		order by series_id, due_date desc`)
+	if err != nil {
+		return nil, fmt.Errorf("latest bill per series: %w", err)
+	}
+	defer rows.Close()
+	return scanBills(rows)
+}
+
+// scanBills reads every row into a domain.Bill, using the same column order
+// List, ListByMonth and LatestPerSeries all select in.
+func scanBills(rows pgx.Rows) ([]domain.Bill, error) {
 	var out []domain.Bill
 	for rows.Next() {
 		var b domain.Bill
-		if err := rows.Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt, &b.Recurring, &b.CreatedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
+			&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan bill: %w", err)
 		}
 		out = append(out, b)
@@ -64,9 +137,11 @@ func (r *BillRepo) MarkPaid(ctx context.Context, id string, paidAt time.Time) (d
 	err := r.db.Pool.QueryRow(ctx, `
 		update bills set paid_at = $2
 		where id = $1
-		returning id, description, amount_cents, due_date, direction, category_id, paid_at, recurring, created_at`,
+		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
+			series_id, amount_estimated, payment_method, transaction_id, created_at`,
 		id, paidAt,
-	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt, &b.Recurring, &b.CreatedAt)
+	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
+		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -76,15 +151,24 @@ func (r *BillRepo) MarkPaid(ctx context.Context, id string, paidAt time.Time) (d
 	return b, nil
 }
 
+// Update edits the fields that describe the obligation itself. It leaves
+// paid_at and transaction_id untouched — those describe this occurrence's
+// settlement and are only ever changed by MarkPaid (and, later, undoing a
+// payment), never by a plain metadata edit — but still returns and scans
+// them so the caller gets the current, complete row back.
 func (r *BillRepo) Update(ctx context.Context, b domain.Bill) (domain.Bill, error) {
 	err := r.db.Pool.QueryRow(ctx, `
 		update bills set
 			description = $2, amount_cents = $3, due_date = $4,
-			direction = $5, category_id = $6, recurring = $7
+			direction = $5, category_id = $6, series_id = $7,
+			amount_estimated = $8, payment_method = $9
 		where id = $1
-		returning id, description, amount_cents, due_date, direction, category_id, paid_at, recurring, created_at`,
-		b.ID, b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID, b.Recurring,
-	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt, &b.Recurring, &b.CreatedAt)
+		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
+			series_id, amount_estimated, payment_method, transaction_id, created_at`,
+		b.ID, b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID,
+		b.SeriesID, b.AmountEstimated, b.PaymentMethod,
+	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
+		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}

@@ -20,7 +20,7 @@ type billRow struct {
 }
 
 func (r *Registry) billRow(b domain.Bill) billRow {
-	return billRow{b.ID, b.Description, money(b.AmountCents), b.DueDate.Format(dayLayout), string(b.Direction), b.Status(r.today()), b.Recurring}
+	return billRow{b.ID, b.Description, money(b.AmountCents), b.DueDate.Format(dayLayout), string(b.Direction), b.Status(r.today()), b.Recurring()}
 }
 
 func (r *Registry) addBills() {

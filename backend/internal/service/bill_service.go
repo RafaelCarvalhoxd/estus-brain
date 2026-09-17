@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/rafael/estus-vault/backend/internal/domain"
 	"github.com/rafael/estus-vault/backend/internal/store/postgres"
 )
@@ -24,7 +26,16 @@ type NewBillInput struct {
 	DueDate     time.Time
 	Direction   domain.BillDirection
 	CategoryID  *string
-	Recurring   bool
+	// SeriesID is the series this bill already belongs to, if the caller
+	// knows it (used by later occurrence flows). Nil combined with Recurring
+	// true means "start a brand new series".
+	SeriesID *string
+	// Recurring says the caller wants this bill to be (or stay) part of a
+	// monthly series. When true and SeriesID is nil, Create mints a fresh
+	// series id — that generation lives here, not in the repository.
+	Recurring       bool
+	AmountEstimated bool
+	PaymentMethod   *domain.PaymentMethod
 }
 
 // BillSummary is the "em aberto" snapshot the /contas page's stat tiles are
@@ -36,13 +47,20 @@ type BillSummary struct {
 }
 
 func (s *BillService) Create(ctx context.Context, in NewBillInput) (domain.Bill, error) {
+	seriesID := in.SeriesID
+	if in.Recurring && seriesID == nil {
+		id := uuid.NewString()
+		seriesID = &id
+	}
 	bill := domain.Bill{
-		Description: in.Description,
-		AmountCents: in.AmountCents,
-		DueDate:     in.DueDate,
-		Direction:   in.Direction,
-		CategoryID:  in.CategoryID,
-		Recurring:   in.Recurring,
+		Description:     in.Description,
+		AmountCents:     in.AmountCents,
+		DueDate:         in.DueDate,
+		Direction:       in.Direction,
+		CategoryID:      in.CategoryID,
+		SeriesID:        seriesID,
+		AmountEstimated: in.AmountEstimated,
+		PaymentMethod:   in.PaymentMethod,
 	}
 	if err := bill.Validate(); err != nil {
 		return domain.Bill{}, err
@@ -76,14 +94,21 @@ func (s *BillService) MarkPaid(ctx context.Context, id string, paidAt time.Time)
 }
 
 func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (domain.Bill, error) {
+	seriesID := in.SeriesID
+	if in.Recurring && seriesID == nil {
+		newSeries := uuid.NewString()
+		seriesID = &newSeries
+	}
 	bill := domain.Bill{
-		ID:          id,
-		Description: in.Description,
-		AmountCents: in.AmountCents,
-		DueDate:     in.DueDate,
-		Direction:   in.Direction,
-		CategoryID:  in.CategoryID,
-		Recurring:   in.Recurring,
+		ID:              id,
+		Description:     in.Description,
+		AmountCents:     in.AmountCents,
+		DueDate:         in.DueDate,
+		Direction:       in.Direction,
+		CategoryID:      in.CategoryID,
+		SeriesID:        seriesID,
+		AmountEstimated: in.AmountEstimated,
+		PaymentMethod:   in.PaymentMethod,
 	}
 	if err := bill.Validate(); err != nil {
 		return domain.Bill{}, err

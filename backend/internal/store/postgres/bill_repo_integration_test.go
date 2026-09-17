@@ -99,3 +99,96 @@ func TestBillRepo_Integration(t *testing.T) {
 		t.Errorf("MarkPaid on unknown id = %v, want domain.ErrNotFound", err)
 	}
 }
+
+func TestBillRepo_SeriesColumnsAndMonthQueries(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	db, err := Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx, "../../../migrations"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := NewBillRepo(db)
+	categories := NewCategoryRepo(db)
+
+	cat, err := categories.Create(ctx, domain.Category{Name: "Categoria de teste (contas)", Nature: "essencial", Color: "#123456"})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	defer categories.Delete(ctx, cat.ID)
+
+	series, method := "11111111-1111-1111-1111-111111111111", domain.PaymentPix
+	created, err := repo.Create(ctx, domain.Bill{
+		Description: "Aluguel de teste", AmountCents: 200000,
+		DueDate:   time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC),
+		Direction: domain.BillPayable, CategoryID: &cat.ID,
+		SeriesID: &series, AmountEstimated: true, PaymentMethod: &method,
+	})
+	if err != nil {
+		t.Fatalf("create bill: %v", err)
+	}
+	defer repo.Delete(ctx, created.ID)
+
+	if created.SeriesID == nil || *created.SeriesID != series {
+		t.Errorf("series_id = %v, want %s", created.SeriesID, series)
+	}
+	if !created.AmountEstimated {
+		t.Error("amount_estimated não voltou true")
+	}
+	if created.PaymentMethod == nil || *created.PaymentMethod != domain.PaymentPix {
+		t.Errorf("payment_method = %v, want pix", created.PaymentMethod)
+	}
+
+	fetched, err := repo.Get(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get bill: %v", err)
+	}
+	if fetched.SeriesID == nil || *fetched.SeriesID != series {
+		t.Errorf("Get series_id = %v, want %s", fetched.SeriesID, series)
+	}
+
+	if _, err := repo.Get(ctx, "00000000-0000-0000-0000-000000000000"); err != domain.ErrNotFound {
+		t.Errorf("Get on unknown id = %v, want domain.ErrNotFound", err)
+	}
+
+	inMonth, err := repo.ListByMonth(ctx, domain.YearMonth{Year: 2026, Month: 9}, nil)
+	if err != nil {
+		t.Fatalf("list by month: %v", err)
+	}
+	if !containsBill(inMonth, created.ID) {
+		t.Error("a conta não apareceu no mês do vencimento dela")
+	}
+
+	other, err := repo.ListByMonth(ctx, domain.YearMonth{Year: 2026, Month: 10}, nil)
+	if err != nil {
+		t.Fatalf("list by month: %v", err)
+	}
+	if containsBill(other, created.ID) {
+		t.Error("a conta apareceu num mês que não é o do vencimento")
+	}
+
+	latest, err := repo.LatestPerSeries(ctx)
+	if err != nil {
+		t.Fatalf("latest per series: %v", err)
+	}
+	if !containsBill(latest, created.ID) {
+		t.Error("a única ocorrência da série deveria ser a mais recente dela")
+	}
+}
+
+func containsBill(bills []domain.Bill, id string) bool {
+	for _, b := range bills {
+		if b.ID == id {
+			return true
+		}
+	}
+	return false
+}
