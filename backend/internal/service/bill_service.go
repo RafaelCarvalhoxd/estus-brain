@@ -155,15 +155,22 @@ func (s *BillService) ReceivedTotal(ctx context.Context, ym domain.YearMonth) (d
 	return s.bills.ReceivedTotalForMonth(ctx, ym)
 }
 
-// materializeCap is how many months one call may create. Opening a month
-// years away should return what fits instead of writing hundreds of rows;
-// the next opening carries on from where this one stopped.
+// materializeCap is how many months one call may create PER SERIES. It is
+// per series, not shared, because an incomplete month is worse than a
+// larger single write: with the 5-10 fixed expenses a person actually has,
+// a laptop off for months would otherwise starve whichever series
+// LatestPerSeries happens to hand out last, and the owner has no way to
+// tell an incomplete month apart from a complete one. Opening a month years
+// out still bounds the write per series instead of creating unboundedly
+// many rows for any one series.
 const materializeCap = 24
 
 // Materialize creates the missing occurrences of every active series up to
 // and including ym, oldest first, each copied from the one before it, and
-// returns how many it created. It is idempotent: a month a series already
-// has an occurrence in is left alone.
+// returns the total it created across all series. It is idempotent: a month
+// a series already has an occurrence in is left alone. Each series gets its
+// own budget of materializeCap new occurrences — see the cap's doc comment
+// for why the budget is not shared across series.
 //
 // This is a write driven by a read, on purpose: the app runs on a laptop
 // that is off for days at a time, so a scheduler on the first of the month
@@ -173,10 +180,11 @@ func (s *BillService) Materialize(ctx context.Context, ym domain.YearMonth) (int
 	if err != nil {
 		return 0, err
 	}
-	created := 0
+	total := 0
 	for _, last := range latest {
 		current := last
-		for created < materializeCap {
+		createdForSeries := 0
+		for createdForSeries < materializeCap {
 			currentMonth := domain.YearMonthOf(current.DueDate)
 			if !currentMonth.Before(ym) {
 				break
@@ -184,11 +192,12 @@ func (s *BillService) Materialize(ctx context.Context, ym domain.YearMonth) (int
 			next := current.NextOccurrence(current.AmountEstimated)
 			saved, err := s.bills.Create(ctx, next)
 			if err != nil {
-				return created, err
+				return total, err
 			}
-			created++
+			total++
+			createdForSeries++
 			current = saved
 		}
 	}
-	return created, nil
+	return total, nil
 }

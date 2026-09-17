@@ -178,6 +178,45 @@ func TestMaterializeIgnoresOneOffBills(t *testing.T) {
 	}
 }
 
+// TestMaterializeGivesEachSeriesItsOwnCap builds two series that each need 15
+// new occurrences to reach the target month — comfortably under
+// materializeCap (24) on their own, but 30 combined, which is over a cap
+// shared across all series. If the cap is shared, whichever series
+// LatestPerSeries hands out second is starved and never reaches the target
+// month; the owner would see an incomplete month with no signal why.
+func TestMaterializeGivesEachSeriesItsOwnCap(t *testing.T) {
+	seriesA := seriesBill("a1", 2026, time.September, 10, 18000)
+	seriesB := seriesBill("b1", 2026, time.September, 10, 9000)
+	seriesBID := "series-2"
+	seriesB.SeriesID = &seriesBID
+
+	f := &fakeBills{bills: []domain.Bill{seriesA, seriesB}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	target := domain.YearMonth{Year: 2026, Month: 9}.Add(15) // December 2027
+	if _, err := s.Materialize(ctx, target); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+
+	for _, series := range []string{"series-1", "series-2"} {
+		var latest time.Time
+		count := 0
+		for _, b := range f.bills {
+			if b.SeriesID != nil && *b.SeriesID == series {
+				count++
+				if b.DueDate.After(latest) {
+					latest = b.DueDate
+				}
+			}
+		}
+		got := domain.YearMonthOf(latest)
+		if got.Before(target) {
+			t.Errorf("%s only reached %v (want %v); has %d occurrences — starved by a shared cap", series, got, target, count)
+		}
+	}
+}
+
 // TestServiceNeverInventsASeriesID guards the ruling behind Create and
 // Update: the service passes the caller's SeriesID through verbatim and
 // never mints one of its own. An earlier version of this code did mint a
@@ -204,6 +243,22 @@ func TestServiceNeverInventsASeriesID(t *testing.T) {
 		}
 		if updated.SeriesID == nil || *updated.SeriesID != series {
 			t.Fatalf("SeriesID = %v, want unchanged %q", updated.SeriesID, series)
+		}
+	})
+
+	t.Run("update with Recurring but no SeriesID leaves SeriesID nil", func(t *testing.T) {
+		updated, err := s.Update(ctx, "b2", NewBillInput{
+			Description: "Internet",
+			AmountCents: 12000,
+			DueDate:     time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC),
+			Direction:   domain.BillReceivable,
+			Recurring:   true,
+		})
+		if err != nil {
+			t.Fatalf("update: %v", err)
+		}
+		if updated.SeriesID != nil {
+			t.Fatalf("SeriesID = %v, want nil (Recurring alone must not make Update mint a series id)", updated.SeriesID)
 		}
 	})
 
