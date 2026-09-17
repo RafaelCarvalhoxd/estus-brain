@@ -288,30 +288,38 @@ func (r *BillRepo) Update(ctx context.Context, b domain.Bill) (domain.Bill, erro
 }
 
 // SetSeriesEnded flips whether a series still grows new occurrences, without
-// touching anything else about the bill: EndSeries (ended=true) stops
-// Materialize from creating any more occurrences past this one, and
+// touching anything else about the bills: EndSeries (ended=true) stops
+// Materialize from creating any more occurrences past the latest one, and
 // ResumeSeries (ended=false) undoes it. It follows MarkPaid's shape — one
-// column, one row — rather than reusing Update, which also revalidates and
-// rewrites every describable field; ending a series is neither of those.
+// column, no other field rewritten — rather than reusing Update, which also
+// revalidates and rewrites every describable field; ending a series is
+// neither of those.
+//
+// It updates EVERY occurrence of the series, not just the row the owner
+// clicked: Materialize only ever reads LatestPerSeries, so a flag stamped on
+// an older occurrence alone is invisible to it — the owner could end the
+// series from a past month's row, see "· Repetição encerrada" on that row,
+// and still get next month's occurrence materialized right back, because the
+// actual latest occurrence never got the flag. Setting it series-wide is also
+// what keeps the label consistent across every month of the series, instead
+// of only the one row that was clicked. A bill with no series (series_id is
+// null) matches no row here — `series_id = (select series_id ...)` is never
+// true against NULL — so it comes back as domain.ErrNotFound; the one-off
+// guard against ending a non-series bill lives in BillService.EndSeries,
+// which checks Recurring() before ever calling this.
 func (r *BillRepo) SetSeriesEnded(ctx context.Context, id string, ended bool) (domain.Bill, error) {
-	var b domain.Bill
-	err := r.db.Pool.QueryRow(ctx, `
+	tag, err := r.db.Pool.Exec(ctx, `
 		update bills set series_ended = $2
-		where id = $1
-		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
-			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies`,
+		where series_id = (select series_id from bills where id = $1)`,
 		id, ended,
-	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
-		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries)
-	if errors.Is(err, pgx.ErrNoRows) {
+	)
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("set series_ended for bill %s: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
 		return domain.Bill{}, domain.ErrNotFound
 	}
-	if err != nil {
-		return domain.Bill{}, fmt.Errorf("set series_ended on bill %s: %w", id, err)
-	}
-	return b, nil
+	return r.Get(ctx, id)
 }
 
 func (r *BillRepo) Delete(ctx context.Context, id string) error {
@@ -342,12 +350,22 @@ func (r *BillRepo) ReceivedTotalForMonth(ctx context.Context, ym domain.YearMont
 	return domain.Cents(total), nil
 }
 
+// OpenTotals is bounded to due_date < the first day of NEXT month: opening a
+// month is what materializes it (see ListByMonth), so clicking the
+// month-navigation arrow ahead a few times used to fabricate that many
+// months of every recurring series and inflate this total by rows nothing
+// made due — three clicks took "A pagar em aberto" from a real R$1.680 to a
+// fabricated R$6.720. A bill genuinely past due from an earlier month is
+// still counted (the bound is an upper limit on due_date, not a floor): it
+// really is open. Only bills due beyond the current month — which only exist
+// because the owner looked ahead — are excluded.
 func (r *BillRepo) OpenTotals(ctx context.Context) (payableCents, receivableCents domain.Cents, overdueCount int, err error) {
+	endOfCurrentMonth := domain.YearMonthOf(time.Now()).Add(1).FirstDay()
 	rows, err := r.db.Pool.Query(ctx, `
 		select direction, coalesce(sum(amount_cents), 0)
 		from bills
-		where paid_at is null
-		group by direction`)
+		where paid_at is null and due_date < $1
+		group by direction`, endOfCurrentMonth)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("open totals: %w", err)
 	}

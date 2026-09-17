@@ -57,8 +57,17 @@ func (f *fakeBills) LatestPerSeries(context.Context) ([]domain.Bill, error) {
 func (f *fakeBills) List(context.Context, *domain.BillDirection, bool) ([]domain.Bill, error) {
 	return f.bills, nil
 }
-func (f *fakeBills) MarkPaid(context.Context, string, time.Time) (domain.Bill, error) {
-	return domain.Bill{}, nil
+// MarkPaid mutates the matching bill in place, like Pay and SetSeriesEnded
+// do, so TestMarkPaidRefusesAPayableBill and its receivable counterpart can
+// tell a real settlement from BillService's guard never even reaching here.
+func (f *fakeBills) MarkPaid(_ context.Context, id string, paidAt time.Time) (domain.Bill, error) {
+	for i := range f.bills {
+		if f.bills[i].ID == id {
+			f.bills[i].PaidAt = &paidAt
+			return f.bills[i], nil
+		}
+	}
+	return domain.Bill{}, domain.ErrNotFound
 }
 
 func (f *fakeBills) Get(_ context.Context, id string) (domain.Bill, error) {
@@ -89,14 +98,37 @@ func (f *fakeBills) Unpay(context.Context, string) (domain.Bill, error) {
 	return domain.Bill{}, nil
 }
 
+// SetSeriesEnded mirrors the fixed BillRepo: it flips SeriesEnded on EVERY
+// occurrence of id's series, not just the row named by id — the same
+// series-wide update Finding 2 put in the real SQL, so a fake that stayed
+// row-scoped would let a service-level test believe Materialize is fixed
+// when only the postgres layer's bug was.
 func (f *fakeBills) SetSeriesEnded(_ context.Context, id string, ended bool) (domain.Bill, error) {
-	for i := range f.bills {
-		if f.bills[i].ID == id {
-			f.bills[i].SeriesEnded = ended
-			return f.bills[i], nil
+	var series *string
+	for _, b := range f.bills {
+		if b.ID == id {
+			series = b.SeriesID
+			break
 		}
 	}
-	return domain.Bill{}, domain.ErrNotFound
+	if series == nil {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	var out domain.Bill
+	found := false
+	for i := range f.bills {
+		if f.bills[i].SeriesID != nil && *f.bills[i].SeriesID == *series {
+			f.bills[i].SeriesEnded = ended
+			if f.bills[i].ID == id {
+				out = f.bills[i]
+				found = true
+			}
+		}
+	}
+	if !found {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	return out, nil
 }
 
 // fakeCategories and fakeCards stand in for *postgres.CategoryRepo and
@@ -138,7 +170,18 @@ func serviceWithPay(f *fakeBills, cats fakeCategories, cards fakeCards) *BillSer
 func (f *fakeBills) Update(_ context.Context, b domain.Bill) (domain.Bill, error) {
 	return b, nil
 }
-func (f *fakeBills) Delete(context.Context, string) error { return nil }
+// Delete actually removes the row, so TestDeleteEndsTheSeriesWhenDeletingTheLatestActiveOccurrence
+// can materialize afterwards and see whether the (now former) latest
+// occurrence's SeriesEnded stuck on what remains of the series.
+func (f *fakeBills) Delete(_ context.Context, id string) error {
+	for i, b := range f.bills {
+		if b.ID == id {
+			f.bills = append(f.bills[:i], f.bills[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
 func (f *fakeBills) ReceivedTotalForMonth(context.Context, domain.YearMonth) (domain.Cents, error) {
 	return 0, nil
 }
@@ -510,6 +553,82 @@ func TestServiceNeverInventsASeriesID(t *testing.T) {
 	})
 }
 
+// TestDeleteEndsTheSeriesWhenDeletingTheLatestActiveOccurrence guards
+// Finding 3: deleting the latest occurrence of an active series used to
+// undo itself, because ListByMonth's Materialize call on the next view
+// recreated the exact row just deleted (copied from the occurrence before
+// it), silently discarding whatever correction the owner had made to it.
+// Ending the series as part of the same Delete is what makes the delete
+// stick.
+func TestDeleteEndsTheSeriesWhenDeletingTheLatestActiveOccurrence(t *testing.T) {
+	september := seriesBill("b1", 2026, time.September, 10, 18000)
+	f := &fakeBills{bills: []domain.Bill{september}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	// October is materialized (and, per the branch's real bug, corrected):
+	// the owner changes the power bill from 18000 to 21200 once it arrives.
+	if _, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 10}); err != nil {
+		t.Fatalf("materialize outubro: %v", err)
+	}
+	var octoberID string
+	for i := range f.bills {
+		if f.bills[i].DueDate.Month() == time.October {
+			f.bills[i].AmountCents = 21200
+			f.bills[i].AmountEstimated = false
+			octoberID = f.bills[i].ID
+		}
+	}
+	if octoberID == "" {
+		t.Fatal("outubro não foi materializado")
+	}
+
+	if err := s.Delete(ctx, octoberID); err != nil {
+		t.Fatalf("delete outubro: %v", err)
+	}
+	for _, b := range f.bills {
+		if b.ID == octoberID {
+			t.Fatal("outubro ainda existe depois do delete")
+		}
+	}
+
+	// Reopening a later month must not recreate October, nor grow past it:
+	// deleting the series' latest occurrence must have ended the series.
+	n, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 12})
+	if err != nil {
+		t.Fatalf("materialize dezembro: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("materialize criou %d contas depois de apagar a última ocorrência de uma série ativa; want 0 (a série deveria ter sido encerrada)", n)
+	}
+}
+
+// TestDeleteOfANonLatestOccurrenceDoesNotEndTheSeries guards the other half:
+// deleting a PAST occurrence (not the series' latest) must stay a plain
+// delete — the series is still growing, and nothing should stop it just
+// because an old row was removed.
+func TestDeleteOfANonLatestOccurrenceDoesNotEndTheSeries(t *testing.T) {
+	september := seriesBill("b1", 2026, time.September, 10, 18000)
+	f := &fakeBills{bills: []domain.Bill{september}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	if _, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 10}); err != nil {
+		t.Fatalf("materialize outubro: %v", err)
+	}
+	if err := s.Delete(ctx, "b1"); err != nil {
+		t.Fatalf("delete setembro (não é a última ocorrência): %v", err)
+	}
+
+	n, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 11})
+	if err != nil {
+		t.Fatalf("materialize novembro: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("materialize criou %d contas, want 1 (novembro); a série não deveria ter sido encerrada por apagar setembro", n)
+	}
+}
+
 // TestServiceCreateMintsASeriesIDWhenRecurring guards the other half of the
 // same ruling: Create (and only Create) mints a fresh series id when the
 // caller marks a bill recurring and doesn't already supply one. This is safe
@@ -573,6 +692,42 @@ func TestServiceCreateMintsASeriesIDWhenRecurring(t *testing.T) {
 			t.Fatalf("SeriesID = %v, want the caller's own %q, not a fresh one", created.SeriesID, series)
 		}
 	})
+}
+
+// TestMarkPaidRefusesAPayableBill guards Finding 1 of the whole-branch
+// review: MarkPaid used to have no direction check at all, so
+// POST /api/bills/{id}/paid on a payable bill (and the assistant's
+// bills_mark_paid tool, which called MarkPaid directly) could stamp paid_at
+// on a payable bill and leave it with no expense behind it — silently
+// reproducing the exact balance bug this branch exists to fix, just through
+// a different door than Pay.
+func TestMarkPaidRefusesAPayableBill(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{{ID: "b1", Description: "Luz", Direction: domain.BillPayable}}}
+	s := serviceWith(f)
+
+	_, err := s.MarkPaid(context.Background(), "b1", time.Now())
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("MarkPaid numa conta a pagar = %v, want domain.ErrValidation", err)
+	}
+	if f.bills[0].PaidAt != nil {
+		t.Error("a conta a pagar não deveria ter sido marcada como paga")
+	}
+}
+
+// TestMarkPaidStillWorksOnAReceivable is the mirror: the guard added for
+// Finding 1 must not break the one case MarkPaid exists for — settling money
+// coming in, which has no expense to record.
+func TestMarkPaidStillWorksOnAReceivable(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{{ID: "b1", Description: "Freela", Direction: domain.BillReceivable}}}
+	s := serviceWith(f)
+
+	paid, err := s.MarkPaid(context.Background(), "b1", time.Now())
+	if err != nil {
+		t.Fatalf("MarkPaid numa conta a receber: %v", err)
+	}
+	if paid.PaidAt == nil {
+		t.Error("a conta a receber deveria ter sido marcada como paga")
+	}
 }
 
 // TestServicePayRefusesAReceivableBill guards the rule that only a payable

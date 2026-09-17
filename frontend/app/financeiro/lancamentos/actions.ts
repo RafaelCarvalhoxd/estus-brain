@@ -73,7 +73,26 @@ export async function updateTransactionAction(id: string, description: string, c
   revalidateFinance();
 }
 
-export async function deleteTransactionAction(id: string): Promise<void> {
-  await deleteTransaction(id);
+// isConflict recognizes the 409 apiFetch throws (see
+// frontend/app/financeiro/cartoes/actions.ts for the same pattern), so a
+// transaction a bill still points at (transactions.Delete now translates
+// Postgres' 23503 into domain.ErrConflict) shows a readable Portuguese
+// sentence instead of leaving the row silently stuck with no explanation.
+function isConflict(err: unknown): boolean {
+  return err instanceof Error && /-> 409:/.test(err.message);
+}
+
+export async function deleteTransactionAction(id: string): Promise<{ error?: string }> {
+  try {
+    await deleteTransaction(id);
+  } catch (err) {
+    if (isConflict(err)) {
+      return {
+        error: "Este lançamento veio da quitação de uma conta; desfaça o pagamento em Contas para removê-lo.",
+      };
+    }
+    return { error: err instanceof Error ? err.message : "Falha ao excluir." };
+  }
   revalidateFinance();
+  return {};
 }

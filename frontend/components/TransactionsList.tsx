@@ -102,6 +102,7 @@ export function TransactionsList({
   const [methodFilter, setMethodFilter] = useState<"" | PaymentMethod>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -121,8 +122,13 @@ export function TransactionsList({
   async function handleDelete(id: string) {
     if (!confirm("Excluir este lançamento? Não dá para desfazer.")) return;
     setDeletingId(id);
+    setDeleteError(null);
     try {
-      await deleteTransactionAction(id);
+      const result = await deleteTransactionAction(id);
+      if (result.error) {
+        setDeleteError({ id, message: result.error });
+        return;
+      }
       router.refresh();
     } finally {
       setDeletingId(null);
@@ -176,6 +182,7 @@ export function TransactionsList({
                     : ""}
                 </div>
                 <div className="txn-meta">{meta(t)}</div>
+                {deleteError?.id === t.id && <p className="form-error">{deleteError.message}</p>}
               </div>
               <div className="txn-amt">
                 <div className="txn-value tab">{t.amount.formatted}</div>

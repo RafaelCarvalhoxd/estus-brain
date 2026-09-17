@@ -487,6 +487,74 @@ func TestBillRepoPayRollsBillBackWhenTheExpenseFailsToInsert(t *testing.T) {
 	}
 }
 
+// TestOpenTotalsExcludesBillsFabricatedByLookingAhead guards Finding 5:
+// OpenTotals used to be unbounded (`where paid_at is null`, no month limit),
+// so every click of the Contas month-navigation arrow — which materializes
+// that month for every recurring series — inflated "A pagar em aberto" with
+// rows nothing actually made due; three clicks ahead took the tile from a
+// real R$1.680 to a fabricated R$6.720. The fix bounds the query to
+// due_date < the first day of next month: a bill due THIS month or earlier
+// (including a genuinely past-due one) still counts, but a bill due three
+// months out — which only exists because the owner looked ahead — must not.
+func TestOpenTotalsExcludesBillsFabricatedByLookingAhead(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	db, err := Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx, "../../../migrations"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := NewBillRepo(db)
+
+	now := time.Now()
+	thisMonth, err := repo.Create(ctx, domain.Bill{
+		Description: "Conta de teste (mês atual)", AmountCents: 12345,
+		DueDate: time.Date(now.Year(), now.Month(), 15, 0, 0, 0, 0, time.UTC), Direction: domain.BillPayable,
+	})
+	if err != nil {
+		t.Fatalf("create this-month bill: %v", err)
+	}
+	defer func() {
+		if err := repo.Delete(ctx, thisMonth.ID); err != nil {
+			t.Errorf("cleanup: delete bill %s: %v", thisMonth.ID, err)
+		}
+	}()
+
+	future := now.AddDate(0, 3, 0)
+	threeMonthsOut, err := repo.Create(ctx, domain.Bill{
+		Description: "Conta de teste (materializada olhando pra frente)", AmountCents: 99999,
+		DueDate: time.Date(future.Year(), future.Month(), 15, 0, 0, 0, 0, time.UTC), Direction: domain.BillPayable,
+	})
+	if err != nil {
+		t.Fatalf("create future bill: %v", err)
+	}
+	defer func() {
+		if err := repo.Delete(ctx, threeMonthsOut.ID); err != nil {
+			t.Errorf("cleanup: delete bill %s: %v", threeMonthsOut.ID, err)
+		}
+	}()
+
+	payableOpenCents, _, _, err := repo.OpenTotals(ctx)
+	if err != nil {
+		t.Fatalf("open totals: %v", err)
+	}
+	if payableOpenCents < thisMonth.AmountCents {
+		t.Errorf("open totals = %d, want at least %d (a conta deste mês)", payableOpenCents, thisMonth.AmountCents)
+	}
+	if payableOpenCents >= thisMonth.AmountCents+threeMonthsOut.AmountCents {
+		t.Errorf("open totals = %d inclui a conta de 3 meses no futuro (%d); a navegação não deveria inflar o total em aberto",
+			payableOpenCents, threeMonthsOut.AmountCents)
+	}
+}
+
 func containsBill(bills []domain.Bill, id string) bool {
 	for _, b := range bills {
 		if b.ID == id {

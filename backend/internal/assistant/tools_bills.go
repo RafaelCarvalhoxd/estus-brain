@@ -158,8 +158,8 @@ func (r *Registry) addBills() {
 	})
 
 	r.add(Tool{
-		Name: "bills_mark_paid", Title: "Marcar conta como paga", Module: "contas",
-		Description: "Marca uma conta como paga (ou recebida), pelo id de bills_list.",
+		Name: "bills_mark_paid", Title: "Marcar conta como recebida", Module: "contas",
+		Description: "Marca uma conta A RECEBER como recebida, pelo id de bills_list. NÃO use para uma conta a pagar (ex.: \"já paguei a luz\") — uma conta a pagar só é quitada registrando a despesa; essa ferramenta recusa e não faz nada nesse caso.",
 		Input: object(map[string]any{
 			"id":      str("Id da conta"),
 			"paid_on": str("Data do pagamento AAAA-MM-DD; padrão hoje"),

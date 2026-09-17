@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
@@ -229,9 +231,21 @@ func (r *TransactionRepo) UpdateDescriptionAndCategory(ctx context.Context, id, 
 	return nil
 }
 
+// Delete refuses a transaction that a settled bill still points at.
+// bills.transaction_id references transactions(id) with no `on delete`
+// clause (NO ACTION), so Postgres rejects the delete outright rather than
+// leaving the bill's pointer dangling; without translating that violation
+// here it would surface as an opaque 500. The right fix for the owner is not
+// "delete the expense" — it's undoing the payment in Contas, which deletes
+// the bill's own copy of this same expense in one commit (see
+// BillRepo.Unpay) — so the message points there instead of just saying no.
 func (r *TransactionRepo) Delete(ctx context.Context, id string) error {
 	tag, err := r.db.Pool.Exec(ctx, `delete from transactions where id = $1`, id)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation {
+			return fmt.Errorf("%w: este lançamento veio da quitação de uma conta; desfaça o pagamento em Contas para removê-lo", domain.ErrConflict)
+		}
 		return fmt.Errorf("delete transaction %s: %w", id, err)
 	}
 	if tag.RowsAffected() == 0 {

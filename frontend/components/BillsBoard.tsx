@@ -310,11 +310,23 @@ function BillColumn({
   const [unpayingId, setUnpayingId] = useState<string | null>(null);
   const [unpayError, setUnpayError] = useState<{ id: string; message: string } | null>(null);
 
-  async function handleDelete(id: string) {
-    if (!confirm("Excluir esta conta? Não dá para desfazer.")) return;
-    setDeletingId(id);
+  async function handleDelete(bill: Bill) {
+    // A recurring, still-active series' occurrence may be the LATEST one —
+    // only the backend can tell for sure (see BillService.Delete) — in which
+    // case deleting it also ends the series, or the very next month-open
+    // would materialize it right back from the occurrence before it, undoing
+    // the delete and any correction made to that row. The confirmation says
+    // so honestly instead of the old "não dá para desfazer", which was
+    // actively wrong for exactly this case. A one-off or already-ended
+    // series keeps the plain wording: nothing else is at stake for those.
+    const message =
+      bill.recurring && !bill.series_ended
+        ? "Excluir esta conta e encerrar a repetição? Os meses já registrados continuam no histórico."
+        : "Excluir esta conta? Não dá para desfazer.";
+    if (!confirm(message)) return;
+    setDeletingId(bill.id);
     try {
-      await deleteBillAction(id);
+      await deleteBillAction(bill.id);
       router.refresh();
     } finally {
       setDeletingId(null);
@@ -433,7 +445,7 @@ function BillColumn({
                 type="button"
                 aria-label="Excluir"
                 disabled={deletingId === bill.id}
-                onClick={() => handleDelete(bill.id)}
+                onClick={() => handleDelete(bill)}
               >
                 <IconTrash />
               </button>

@@ -154,12 +154,26 @@ func (s *BillService) ListByMonth(ctx context.Context, ym domain.YearMonth, dire
 	return bills, nil
 }
 
+// MarkPaid settles a RECEIVABLE bill: it only stamps paid_at, because there is
+// no expense to record for money coming in. A payable bill must go through
+// Pay instead, which records the expense in the same commit — that is the
+// balance-bug fix this whole branch exists for, and it only works if nothing
+// else can mark a payable bill paid without it. Get (like Pay and EndSeries
+// already do) is what lets this guard see the bill's Direction before
+// touching the row.
 func (s *BillService) MarkPaid(ctx context.Context, id string, paidAt time.Time) (domain.Bill, error) {
-	bill, err := s.bills.MarkPaid(ctx, id, paidAt)
+	bill, err := s.bills.Get(ctx, id)
 	if err != nil {
 		return domain.Bill{}, err
 	}
-	return bill, nil
+	if bill.Direction == domain.BillPayable {
+		return domain.Bill{}, fmt.Errorf("%w: uma conta a pagar é quitada confirmando o pagamento, não marcada como paga diretamente — assim a despesa é registrada", domain.ErrValidation)
+	}
+	paid, err := s.bills.MarkPaid(ctx, id, paidAt)
+	if err != nil {
+		return domain.Bill{}, err
+	}
+	return paid, nil
 }
 
 // PaymentInput is what the owner confirms when settling a bill: the amount
@@ -276,7 +290,39 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 	return updated, nil
 }
 
+// Delete removes one occurrence. When it is the LATEST occurrence of a series
+// that is still active (not already ended), the series is ended first, in a
+// separate call but before the row is gone: otherwise the very next time the
+// month is opened, ListByMonth's call to Materialize recreates it from the
+// occurrence before it — undoing the delete and, worse, replacing whatever
+// correction (an edited amount, say) the owner made to the row they just
+// deleted. This check has to live here, not in the frontend: only the
+// backend knows which occurrence is actually the series' latest — the
+// frontend only ever has the bills of the month it is looking at. Deleting a
+// one-off bill, a non-latest occurrence, or an occurrence of an
+// already-ended series is unaffected: it stays a plain delete, because there
+// is nothing for Materialize to undo in those cases (a non-latest occurrence
+// isn't what Materialize copies from, and an ended series is not growing
+// regardless).
 func (s *BillService) Delete(ctx context.Context, id string) error {
+	bill, err := s.bills.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if bill.Recurring() && !bill.SeriesEnded {
+		latest, err := s.bills.LatestPerSeries(ctx)
+		if err != nil {
+			return fmt.Errorf("check latest occurrence before delete: %w", err)
+		}
+		for _, l := range latest {
+			if l.SeriesID != nil && bill.SeriesID != nil && *l.SeriesID == *bill.SeriesID && l.ID == bill.ID {
+				if _, err := s.bills.SetSeriesEnded(ctx, id, true); err != nil {
+					return fmt.Errorf("end series before deleting its latest occurrence: %w", err)
+				}
+				break
+			}
+		}
+	}
 	return s.bills.Delete(ctx, id)
 }
 
