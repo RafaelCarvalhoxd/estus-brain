@@ -15,10 +15,7 @@ import {
 } from "@/app/financeiro/contas/actions";
 import { Modal } from "./Modal";
 import { IconPencil, IconTrash } from "./icons";
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { dayKeyIn, TZ } from "@/lib/week";
 
 // PayBillModal is what turns "marcar como pago" into a real expense: the
 // bill's own amount/categoria/forma only seed the fields (the brief calls
@@ -43,9 +40,23 @@ function PayBillModal({
   const [categoryId, setCategoryId] = useState(bill.category_id ?? "");
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">(bill.payment_method ?? "");
   const [creditCardId, setCreditCardId] = useState(() => cards[0]?.id ?? "");
-  const [paidOn, setPaidOn] = useState(todayISO());
+  // "hoje" é sobre onde o dono mora, não sobre o fuso do servidor/browser —
+  // dayKeyIn(TZ) (frontend/lib/week.ts) já resolve isso; new Date().toISOString()
+  // devolveria o dia em UTC, que vira "amanhã" das 21h às 23h59 em
+  // America/Sao_Paulo.
+  const [paidOn, setPaidOn] = useState(dayKeyIn(TZ));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Pay requires a category (BillService.Pay rejects an empty one), unlike
+  // the create/edit form where "Sem categoria" is valid — so this dialog
+  // does not offer that option, and the button stays disabled until every
+  // field Pay needs is filled in.
+  const canConfirm =
+    amount.trim() !== "" &&
+    categoryId !== "" &&
+    paymentMethod !== "" &&
+    (paymentMethod !== "credito" || creditCardId !== "");
 
   async function confirm() {
     setSaving(true);
@@ -86,7 +97,9 @@ function PayBillModal({
           <div className="field">
             <label htmlFor="p-cat">Categoria</label>
             <select id="p-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving}>
-              <option value="">Sem categoria</option>
+              <option value="" disabled>
+                Selecione
+              </option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -141,7 +154,7 @@ function PayBillModal({
           <button className="btn-text" type="button" onClick={onClose} disabled={saving}>
             Cancelar
           </button>
-          <button className="btn-primary" type="button" onClick={confirm} disabled={saving}>
+          <button className="btn-primary" type="button" onClick={confirm} disabled={saving || !canConfirm}>
             {saving ? "Salvando…" : "Confirmar pagamento"}
           </button>
         </div>
@@ -295,6 +308,7 @@ function BillColumn({
   const [seriesActionId, setSeriesActionId] = useState<string | null>(null);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [unpayingId, setUnpayingId] = useState<string | null>(null);
+  const [unpayError, setUnpayError] = useState<{ id: string; message: string } | null>(null);
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir esta conta? Não dá para desfazer.")) return;
@@ -310,8 +324,13 @@ function BillColumn({
   async function handleUnpay(id: string) {
     if (!confirm("Desfazer o pagamento? O lançamento criado por ele também será apagado.")) return;
     setUnpayingId(id);
+    setUnpayError(null);
     try {
-      await unpayBillAction(id);
+      const result = await unpayBillAction(id);
+      if (result.error) {
+        setUnpayError({ id, message: result.error });
+        return;
+      }
       router.refresh();
     } finally {
       setUnpayingId(null);
@@ -356,6 +375,7 @@ function BillColumn({
                 {bill.recurring ? " · recorrente" : ""}
                 {bill.recurring && bill.series_ended ? " · Repetição encerrada" : ""}
               </div>
+              {unpayError?.id === bill.id && <p className="form-error">{unpayError.message}</p>}
             </div>
             <span className={statusPillClass(bill.status)}>{statusLabel(bill.status)}</span>
             <span className="bill-amt tab">

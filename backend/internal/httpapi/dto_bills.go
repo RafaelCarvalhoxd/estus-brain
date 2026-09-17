@@ -39,7 +39,13 @@ func toBillDTO(b domain.Bill, now time.Time) billDTO {
 		Status:          b.Status(now),
 	}
 	if b.PaidAt != nil {
-		formatted := b.PaidAt.Format("2006-01-02")
+		// PaidAt is a timestamptz: paid_on is parsed as a bare YYYY-MM-DD (UTC
+		// midnight — see payBillRequest.toInput), stored as that instant, and
+		// pgx hands it back in time.Local. On a server whose local zone is
+		// behind UTC (e.g. America/Sao_Paulo), formatting it directly would
+		// roll the date back a day. Format from UTC to get the same date the
+		// owner confirmed, regardless of the server's local zone.
+		formatted := b.PaidAt.UTC().Format("2006-01-02")
 		dto.PaidAt = &formatted
 	}
 	return dto

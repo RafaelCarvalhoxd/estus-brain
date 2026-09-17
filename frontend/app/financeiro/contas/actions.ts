@@ -165,13 +165,22 @@ export async function payBillAction(id: string, fields: PayBillFields): Promise<
 
 // unpayBillAction undoes a payment: the bill goes back to pending and the
 // expense it created is deleted, in the same backend commit
-// (DELETE /api/bills/{id}/paid).
-export async function unpayBillAction(id: string): Promise<void> {
-  await unpayBill(id);
+// (DELETE /api/bills/{id}/paid). Errors (e.g. the bill was already un-paid
+// in another tab, or no longer exists — BillRepo.Unpay's not-found) get the
+// same friendlyMessage treatment as payBillAction instead of rising raw out
+// of the Server Function, where Next redacts it to an opaque digest and the
+// owner would see nothing at all.
+export async function unpayBillAction(id: string): Promise<{ error?: string }> {
+  try {
+    await unpayBill(id);
+  } catch (err) {
+    return { error: friendlyMessage(err, "Falha ao desfazer o pagamento.") };
+  }
   revalidatePath("/financeiro/contas");
   revalidatePath("/financeiro");
   revalidatePath("/financeiro/lancamentos");
   revalidatePath("/financeiro/categorias");
+  return {};
 }
 
 export type UpdateBillFields = {
