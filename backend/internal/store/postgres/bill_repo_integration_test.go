@@ -123,7 +123,13 @@ func TestBillRepo_SeriesColumnsAndMonthQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create category: %v", err)
 	}
-	defer categories.Delete(ctx, cat.ID)
+	// LIFO: this runs after repo.Delete(created.ID) below, so the bill is
+	// gone before the category it references is deleted.
+	defer func() {
+		if err := categories.Delete(ctx, cat.ID); err != nil {
+			t.Errorf("cleanup: delete category %s: %v", cat.ID, err)
+		}
+	}()
 
 	series, method := "11111111-1111-1111-1111-111111111111", domain.PaymentPix
 	created, err := repo.Create(ctx, domain.Bill{
@@ -135,7 +141,11 @@ func TestBillRepo_SeriesColumnsAndMonthQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create bill: %v", err)
 	}
-	defer repo.Delete(ctx, created.ID)
+	defer func() {
+		if err := repo.Delete(ctx, created.ID); err != nil {
+			t.Errorf("cleanup: delete bill %s: %v", created.ID, err)
+		}
+	}()
 
 	if created.SeriesID == nil || *created.SeriesID != series {
 		t.Errorf("series_id = %v, want %s", created.SeriesID, series)
