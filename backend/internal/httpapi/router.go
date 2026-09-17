@@ -69,11 +69,7 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("POST /api/vault", v.Create)
 		mux.HandleFunc("PUT /api/vault/{id}", v.Update)
 		mux.HandleFunc("DELETE /api/vault/{id}", v.Delete)
-		mux.HandleFunc("GET /api/vault/webauthn-status", v.WebAuthnStatus)
-		mux.HandleFunc("POST /api/vault/webauthn/register/begin", v.RegisterBegin)
-		mux.HandleFunc("POST /api/vault/webauthn/register/finish", v.RegisterFinish)
-		mux.HandleFunc("POST /api/vault/{id}/reveal/begin", v.RevealBegin)
-		mux.HandleFunc("POST /api/vault/{id}/reveal/finish", v.RevealFinish)
+		mux.HandleFunc("POST /api/vault/{id}/reveal", v.Reveal)
 	}
 
 	if n := m.Notes; n != nil {

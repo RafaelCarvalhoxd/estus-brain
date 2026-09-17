@@ -104,19 +104,18 @@ func run() error {
 		documentHandlers = httpapi.NewDocumentHandlers(documentService)
 	}
 
-	// The vault module needs VAULT_ENCRYPTION_KEY and the WEBAUTHN_* env vars
-	// to exist at all — treat their absence as "module disabled" rather than
-	// a fatal boot error, so the rest of the app still comes up on a fresh
-	// checkout before those are configured.
+	// The vault module needs VAULT_ENCRYPTION_KEY to exist at all — treat its
+	// absence as "module disabled" rather than a fatal boot error, so the
+	// rest of the app still comes up on a fresh checkout before it's
+	// configured. Access control for /senhas isn't app-level: it's the mTLS
+	// edge in front of the whole deployment.
 	var vaultHandlers *httpapi.VaultHandlers
 	vaultRepo := postgres.NewVaultRepo(db)
-	webauthnCredRepo := postgres.NewWebAuthnCredentialRepo(db)
 	vaultService, vaultErr := service.NewVaultService(vaultRepo)
-	webauthnService, webauthnErr := service.NewWebAuthnService(webauthnCredRepo)
-	if vaultErr != nil || webauthnErr != nil {
-		slog.Warn("vault module disabled: set VAULT_ENCRYPTION_KEY and WEBAUTHN_* to enable /senhas", "vault_error", vaultErr, "webauthn_error", webauthnErr)
+	if vaultErr != nil {
+		slog.Warn("vault module disabled: set VAULT_ENCRYPTION_KEY to enable /senhas", "vault_error", vaultErr)
 	} else {
-		vaultHandlers = httpapi.NewVaultHandlers(vaultService, webauthnService)
+		vaultHandlers = httpapi.NewVaultHandlers(vaultService)
 	}
 
 	// The assistant: every action as a tool, shared by the chat, MCP and the

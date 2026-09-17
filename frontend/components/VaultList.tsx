@@ -4,14 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { deleteVaultEntryAction } from "@/app/senhas/actions";
 import { VaultEntryForm } from "@/components/VaultEntryForm";
 import type { VaultEntry } from "@/lib/vault";
-import { assertionCredentialToJSON, requestOptionsFromServer } from "@/lib/webauthn-encoding";
 import { IconSearch } from "./icons";
 
 const REVEAL_SECONDS = 10;
 
 type RevealState = { password: string; secondsLeft: number };
 
-export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canReveal: boolean }) {
+export function VaultList({ entries }: { entries: VaultEntry[] }) {
   const [revealed, setRevealed] = useState<Record<string, RevealState>>({});
   const [revealing, setRevealing] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -47,28 +46,9 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
     setErrors((e) => ({ ...e, [id]: "" }));
     setRevealing(id);
     try {
-      const beginRes = await fetch(`/api/vault-webauthn/reveal/${id}/begin`, { method: "POST" });
-      if (!beginRes.ok) {
-        const body = await beginRes.json().catch(() => null);
-        throw new Error(body?.error ?? "Configure o Touch ID antes de revelar uma senha.");
-      }
-      const begin = await beginRes.json();
-
-      const credential = (await navigator.credentials.get(
-        requestOptionsFromServer(begin.options.publicKey),
-      )) as PublicKeyCredential | null;
-      if (!credential) throw new Error("Nenhuma confirmação recebida.");
-
-      const finishRes = await fetch(
-        `/api/vault-webauthn/reveal/${id}/finish?session=${encodeURIComponent(begin.reveal_session)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(assertionCredentialToJSON(credential)),
-        },
-      );
-      if (!finishRes.ok) throw new Error("Não foi possível confirmar sua identidade.");
-      const { password } = await finishRes.json();
+      const res = await fetch(`/api/vault/${id}/reveal`, { method: "POST" });
+      if (!res.ok) throw new Error("Não foi possível revelar a senha.");
+      const { password } = await res.json();
 
       setRevealed((prev) => ({ ...prev, [id]: { password, secondsLeft: REVEAL_SECONDS } }));
       startCountdown(id);
@@ -140,17 +120,15 @@ export function VaultList({ entries, canReveal }: { entries: VaultEntry[]; canRe
                     <button className="btn-text" type="button" onClick={() => copiar(state.password)}>
                       Copiar
                     </button>
-                  ) : canReveal ? (
+                  ) : (
                     <button
                       className="btn-text"
                       type="button"
                       onClick={() => revelar(entry.id)}
                       disabled={revealing === entry.id}
                     >
-                      {revealing === entry.id ? "Confirmando…" : "Revelar"}
+                      {revealing === entry.id ? "Revelando…" : "Revelar"}
                     </button>
-                  ) : (
-                    <span className="vault-row-meta">configure o Touch ID para revelar</span>
                   )}
                   <button className="btn-text" type="button" onClick={() => setEditingId(entry.id)}>
                     Editar

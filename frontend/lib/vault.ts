@@ -1,10 +1,9 @@
 import "server-only";
 
 // Mirrors backend/internal/httpapi/dto_vault.go by hand, same convention as
-// lib/api.ts and lib/reminders.ts. This file only covers plain CRUD — the
-// WebAuthn ceremonies (register/reveal begin+finish) run in the browser
-// against this app's own Route Handlers under app/api/vault-webauthn/, not
-// through this server-only module.
+// lib/api.ts and lib/reminders.ts. Reveal isn't here — it runs client-side
+// against app/api/vault/[id]/reveal/route.ts, not through this server-only
+// module.
 
 const API_URL = process.env.API_URL ?? "http://localhost:8080";
 
@@ -58,8 +57,4 @@ export function updateVaultEntry(id: string, input: VaultEntryInput): Promise<Va
 
 export function deleteVaultEntry(id: string): Promise<void> {
   return apiFetch<void>(`/api/vault/${id}`, { method: "DELETE" });
-}
-
-export function getVaultWebAuthnStatus(): Promise<{ registered: boolean }> {
-  return apiFetch<{ registered: boolean }>("/api/vault/webauthn-status", { cache: "no-store" });
 }

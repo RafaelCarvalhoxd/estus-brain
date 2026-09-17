@@ -115,9 +115,8 @@ if ! listening "$API_PORT"; then
     val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
     backend_env+=("$key=$val")
   done <"$ROOT/backend/.env"
-  # Depois do .env, então vencem: a porta do front manda, porque o WebAuthn
-  # recusa origem que não bate com a do navegador.
-  backend_env+=("PORT=$API_PORT" "WEBAUTHN_RP_ORIGIN=$URL" "FRONTEND_URL=$URL")
+  # Depois do .env, então vencem: a porta do front manda.
+  backend_env+=("PORT=$API_PORT" "FRONTEND_URL=$URL")
 
   note "Compilando o backend…"
   ( cd "$ROOT/backend" && go build -o bin/estus-api ./cmd/api ) >>"$LOG_DIR/backend.log" 2>&1 ||
@@ -192,8 +191,7 @@ APPLESCRIPT
 )"
 
 if [ "$focused" != "found" ]; then
-  # --app abre sem barra de endereço nem abas, no perfil padrão do Chrome
-  # (é o perfil que guarda a passkey do Touch ID usada no módulo Senhas).
+  # --app abre sem barra de endereço nem abas, no perfil padrão do Chrome.
   open -na "Google Chrome" --args --app="$URL" ||
     die "Não consegui abrir o Google Chrome."
 fi

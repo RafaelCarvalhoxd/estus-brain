@@ -47,23 +47,7 @@ func (r vaultEntryRequest) toInput() service.VaultEntryInput {
 }
 
 // revealResponseDTO is the one and only place a plaintext password crosses
-// the API boundary — returned by RevealFinish, and only after a successful
-// WebAuthn assertion.
+// the API boundary — returned by Reveal.
 type revealResponseDTO struct {
 	Password string `json:"password"`
-}
-
-type vaultWebAuthnStatusDTO struct {
-	Registered bool `json:"registered"`
-}
-
-// vaultCeremonyBeginResponse bundles the WebAuthn options a browser needs
-// for navigator.credentials.create()/.get() with the ephemeral session
-// token it must echo back (as a query parameter) to the matching finish
-// endpoint. The corresponding finish endpoints take the raw
-// PublicKeyCredential JSON as their request body — the go-webauthn library
-// parses that body itself — so there is no finish request DTO.
-type vaultCeremonyBeginResponse struct {
-	Options       any    `json:"options"`
-	RevealSession string `json:"reveal_session"`
 }

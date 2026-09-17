@@ -331,7 +331,7 @@ export function HomeDashboard({ data }: { data: DashData }) {
               {fmt(vault.count)}
               <small> {vault.count === 1 ? "senha" : "senhas"}</small>
             </p>
-            <p className="dash-sub">Revelação só com Touch ID</p>
+            <p className="dash-sub">Protegido por mTLS</p>
           </>
         )}
       </Card>

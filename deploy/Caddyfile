@@ -1,0 +1,12 @@
+{$DOMAIN} {
+	tls {
+		client_auth {
+			mode require_and_verify
+			trust_pool file {
+				pem_file /mtls/ca.crt
+			}
+		}
+	}
+
+	reverse_proxy frontend:3000
+}

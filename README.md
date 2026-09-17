@@ -30,9 +30,10 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
     pendente/pago) a partir da data de vencimento — separado do extrato de
     lançamentos porque é sobre o que ainda vai acontecer, não sobre o que já
     aconteceu.
-- **Senhas** (`/senhas`) — um cofre de senhas criptografado (AES-256-GCM), que
-  só revela uma senha depois de uma checagem biométrica (Touch ID/Face ID)
-  via WebAuthn.
+- **Senhas** (`/senhas`) — um cofre de senhas criptografado (AES-256-GCM).
+  Não tem checagem extra pra revelar: a proteção é o mTLS na borda (ver
+  "Deploy com mTLS") — quem chega até o app já provou quem é com o
+  certificado.
 - **Notas** (`/notas`) — um app de escrita: cadernos na lateral, a lista no
   meio e a nota aberta à direita, com editor
   [Tiptap](https://tiptap.dev) (MIT). Títulos, listas, checklists, citações,
@@ -136,13 +137,16 @@ não derruba os outros — o servidor simplesmente não monta aquelas rotas.
 └─────────────┘                                  └──────────────┘        └────────────┘
 ```
 
-- **O navegador nunca fala com o Go diretamente**, com uma única exceção: o
-  fluxo de WebAuthn (Touch ID/Face ID) precisa rodar no navegador de verdade,
-  então esse caminho específico passa por Route Handlers do Next.js
-  (`app/api/vault-webauthn/...`, `app/api/google/oauth/start`) que só
-  repassam a chamada para o Go — o Go continua nunca exposto publicamente.
-  Toda leitura normal acontece em Server Components, toda escrita normal via
-  Server Action.
+- **O navegador nunca fala com o Go diretamente** — toda leitura normal
+  acontece em Server Components, toda escrita normal via Server Action, e as
+  chamadas que precisam rodar no navegador (ex.: `POST
+  /api/vault/[id]/reveal`) passam por Route Handlers do Next.js que só
+  repassam para o Go. O Go nunca é exposto publicamente.
+- **A app não tem login nem sessão de usuário — quem entra é quem tem o
+  certificado.** Em produção o único ponto exposto na internet é o proxy
+  Caddy (`deploy/Caddyfile`), que exige um certificado de cliente (mTLS)
+  assinado pela sua própria CA antes de sequer repassar a requisição pro
+  Next.js. Ver "Deploy com mTLS" abaixo.
 - **Dinheiro é inteiro, sempre.** `amount_cents bigint` no Postgres,
   `domain.Cents int64` no Go. Nenhuma soma financeira passa por `float`.
 - **A regra da fatura é uma função pura e testada:**
@@ -150,8 +154,9 @@ não derruba os outros — o servidor simplesmente não monta aquelas rotas.
 - **Senhas nunca ficam em texto puro em repouso.** `vault_entries` guarda
   `password_ciphertext`/`password_nonce` (AES-256-GCM); a chave mestra vem
   de `VAULT_ENCRYPTION_KEY` (variável de ambiente, nunca no banco). A rota de
-  listagem nunca seleciona essas colunas — só a rota de "revelar", que exige
-  uma verificação WebAuthn válida por chamada.
+  listagem nunca seleciona essas colunas — só a rota de "revelar" as
+  descriptografa, e ela pode ser chamada à vontade por quem já passou pelo
+  mTLS (não há checagem extra dentro do app).
 - **Backend em camadas, um handler/serviço/repo por módulo:** `domain`
   (regras de negócio, sem I/O) → `store/postgres` (SQL explícito, sem ORM) →
   `service` (orquestra repositórios) → `httpapi` (HTTP puro, sem framework —
@@ -188,10 +193,9 @@ npm run dev
 Abra `http://localhost:3000`. O seed (`backend/migrations/0002_seed.up.sql`)
 já cria as 7 categorias e um cartão.
 
-Para rodar tudo containerizado: `docker compose up --build` (o
-`docker-compose.yml` ainda não passa as variáveis do vault/agenda para o
-container do backend — adicione-as em `environment:` do serviço `backend`
-quando for usar esses módulos containerizados).
+Para rodar tudo containerizado: `docker compose up --build`. O serviço
+`caddy` (mTLS) fica atrás de um profile e não sobe nesse comando — ele é só
+para produção, ver "Deploy com mTLS" abaixo.
 
 ## App do Mac
 
@@ -221,15 +225,16 @@ Detalhes que valem saber:
   ficam abaixo de 49152, onde o macOS começa a sortear portas efêmeras. Se
   você seguiu o passo a passo antes, ajuste `PORT` em `backend/.env` e
   `API_URL` em `frontend/.env.local`.
-- O script **força** `WEBAUTHN_RP_ORIGIN` e `FRONTEND_URL` para a porta do
-  app, sobrescrevendo o `.env`: o WebAuthn recusa origem que não bate com a
-  do navegador, e sem isso o módulo Senhas para de abrir.
+- O script **força** `FRONTEND_URL` para a porta do app, sobrescrevendo o
+  `.env`.
 - Roda o **build de produção** (`next start`), não o dev server — bem mais
   leve de memória. O rebuild acontece sozinho quando algo em `app/`,
   `components/`, `lib/`, `public/`, `next.config.*` ou `package.json` for
   mais novo que o último build.
-- A janela usa o **perfil padrão do Chrome**, porque é nele que mora a
-  passkey do Touch ID usada no módulo Senhas.
+- A janela usa o **perfil padrão do Chrome**.
+- Esse fluxo é só local, sem mTLS — o Chrome fala direto com `localhost`. O
+  mTLS entra quando você expõe o app numa VPS pública; ver "Deploy com
+  mTLS".
 - Logs em `~/Library/Logs/EstusBrain/`.
 - O `.app` guarda o caminho absoluto do repo: se mover o projeto de pasta,
   rode `scripts/make-app.sh` de novo.
@@ -290,20 +295,40 @@ com o nome exatamente como `say -v '?'` imprime — incluindo o parêntese quand
 houver, como em `Eddy (Portuguese (Brazil))`.
 Num servidor sem macOS a voz fica indisponível e o resto do app funciona normalmente.
 
-## Configurando o cofre de senhas (Touch ID/Face ID)
+## Deploy com mTLS
 
-1. Defina `VAULT_ENCRYPTION_KEY`, `WEBAUTHN_RP_ID` e `WEBAUTHN_RP_ORIGIN` no
-   `.env` do backend (valores de exemplo já em `.env.example`, funcionam em
-   `localhost` sem HTTPS — os navegadores isentam `localhost` da exigência de
-   contexto seguro do WebAuthn).
-2. Abra `/senhas` e clique em "Configurar Touch ID" uma vez — isso registra
-   seu Mac/iPhone como autenticador.
-3. A partir daí, "Revelar" em qualquer senha pede a checagem biométrica na
-   hora, por chamada — não existe uma sessão "destravada" que fica aberta.
-4. **Em produção**, atrás do seu proxy mTLS, `WEBAUTHN_RP_ORIGIN` precisa ser
-   a origem HTTPS real (ex.: `https://vault.seudominio.com`) e `WEBAUTHN_RP_ID`
-   o domínio efetivo — um valor errado aqui faz toda checagem falhar
-   silenciosamente na verificação, não é só um aviso.
+Em produção (VPS com IP público — ex.: Contabo) o único serviço exposto na
+internet é o `caddy` do `docker-compose.yml`: ele termina o HTTPS público de
+verdade (Let's Encrypt, via `DOMAIN`) e **exige um certificado de cliente
+válido antes de repassar qualquer requisição** para o frontend. `backend` e
+`frontend` publicam suas portas só em `127.0.0.1` — inalcançáveis de fora da
+máquina mesmo que o firewall da VPS esteja aberto.
+
+**Não existe login nem sessão de usuário no app.** O certificado de cliente
+é a única credencial que existe: quem tem, entra e usa tudo (inclusive
+revelar qualquer senha do módulo Senhas, sem checagem extra); quem não tem,
+nem chega a completar a conexão HTTPS. Como funciona por dentro (CA própria,
+o que o Caddy verifica, como revogar um certificado vazado, troubleshooting)
+está em **[`deploy/mtls/README.md`](deploy/mtls/README.md)** — aqui vai só o
+passo a passo para colocar no ar:
+
+1. Aponte o DNS do seu domínio (ex.: `vault.seudominio.com`) para o IP da
+   VPS. Abra as portas 80 e 443 no firewall (Caddy precisa da 80 para emitir
+   o certificado via ACME).
+2. Na raiz do projeto, crie um `.env` com `DOMAIN=vault.seudominio.com` (e
+   `VAULT_ENCRYPTION_KEY` etc., se for usar esses módulos).
+3. Gere a CA e o certificado do seu Mac: `deploy/mtls/issue-client-cert.sh
+   mac`. Cria `deploy/mtls/ca/` (a CA — nunca vai pro git) e
+   `deploy/mtls/clients/mac/client.p12`.
+4. Importe o `client.p12` no Keychain do Mac (duplo clique, ou Keychain
+   Access → File → Import Items) com a senha definida no passo 3. A partir
+   daí o Safari/Chrome oferecem esse certificado sozinhos ao abrir o
+   domínio do vault.
+5. Suba tudo na VPS: `docker compose --profile mtls up -d --build`. O Caddy
+   só passa a servir o site depois de emitir o certificado Let's Encrypt
+   (leva alguns segundos na primeira vez).
+6. Outro dispositivo (iPhone etc.): `deploy/mtls/issue-client-cert.sh
+   iphone` — reaproveita a CA existente, emite mais um certificado.
 
 ## Configurando a sincronização com Google Calendar
 

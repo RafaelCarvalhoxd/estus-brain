@@ -63,7 +63,7 @@ func (s *VaultService) List(ctx context.Context) ([]domain.VaultEntry, error) {
 
 // Update leaves the stored password untouched when in.Password is empty —
 // editing a title or username shouldn't force the caller to re-type (or
-// re-reveal, via another Touch ID prompt) the password just to keep it.
+// re-reveal) the password just to keep it.
 func (s *VaultService) Update(ctx context.Context, id string, in VaultEntryInput) (domain.VaultEntry, error) {
 	e := in.toEntry()
 	e.ID = id

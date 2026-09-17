@@ -9,17 +9,17 @@ import (
 	"github.com/rafael/estus-vault/backend/internal/service"
 )
 
-// VaultHandlers serves the password manager module: plain CRUD for
-// vault entries plus the WebAuthn ceremonies that gate revealing one. It's
-// intentionally a separate handler struct from Handlers so this module's
-// routes can be reviewed and evolved without touching the ledger's.
+// VaultHandlers serves the password manager module: plain CRUD for vault
+// entries plus revealing one in plaintext. It's intentionally a separate
+// handler struct from Handlers so this module's routes can be reviewed and
+// evolved without touching the ledger's. Access control lives outside the
+// app entirely — the mTLS edge in front of it is the only gate.
 type VaultHandlers struct {
-	vault    *service.VaultService
-	webauthn *service.WebAuthnService
+	vault *service.VaultService
 }
 
-func NewVaultHandlers(vault *service.VaultService, webauthn *service.WebAuthnService) *VaultHandlers {
-	return &VaultHandlers{vault: vault, webauthn: webauthn}
+func NewVaultHandlers(vault *service.VaultService) *VaultHandlers {
+	return &VaultHandlers{vault: vault}
 }
 
 func (h *VaultHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -75,67 +75,12 @@ func (h *VaultHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusNoContent, nil)
 }
 
-// WebAuthnStatus handles GET /api/vault/webauthn-status.
-func (h *VaultHandlers) WebAuthnStatus(w http.ResponseWriter, r *http.Request) {
-	registered, err := h.webauthn.HasCredential(r.Context())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, vaultWebAuthnStatusDTO{Registered: registered})
-}
-
-// RegisterBegin handles POST /api/vault/webauthn/register/begin — the
-// one-time "Configurar Touch ID" ceremony.
-func (h *VaultHandlers) RegisterBegin(w http.ResponseWriter, r *http.Request) {
-	options, session, err := h.webauthn.BeginRegistration(r.Context())
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, vaultCeremonyBeginResponse{Options: options, RevealSession: session})
-}
-
-// RegisterFinish handles POST /api/vault/webauthn/register/finish?session=...
-// The request body is the raw navigator.credentials.create() response;
-// go-webauthn parses it directly off r.
-func (h *VaultHandlers) RegisterFinish(w http.ResponseWriter, r *http.Request) {
-	session := r.URL.Query().Get("session")
-	if session == "" {
-		writeError(w, fmt.Errorf("%w: session query parameter is required", domain.ErrValidation))
-		return
-	}
-	if err := h.webauthn.FinishRegistration(r.Context(), session, r); err != nil {
-		writeError(w, fmt.Errorf("%w: %v", domain.ErrValidation, err))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// RevealBegin handles POST /api/vault/{id}/reveal/begin.
-func (h *VaultHandlers) RevealBegin(w http.ResponseWriter, r *http.Request) {
-	options, session, err := h.webauthn.BeginAssertion(r.Context())
-	if err != nil {
-		writeError(w, fmt.Errorf("%w: %v", domain.ErrValidation, err))
-		return
-	}
-	writeJSON(w, http.StatusOK, vaultCeremonyBeginResponse{Options: options, RevealSession: session})
-}
-
-// RevealFinish handles POST /api/vault/{id}/reveal/finish?session=...  The
-// request body is the raw navigator.credentials.get() response. Only on a
-// verified assertion does this decrypt and return the plaintext password.
-func (h *VaultHandlers) RevealFinish(w http.ResponseWriter, r *http.Request) {
+// Reveal handles POST /api/vault/{id}/reveal, decrypting and returning the
+// entry's plaintext password. Whoever reaches this endpoint has already
+// cleared the mTLS edge in front of the app, so there is no further gate
+// here.
+func (h *VaultHandlers) Reveal(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	session := r.URL.Query().Get("session")
-	if session == "" {
-		writeError(w, fmt.Errorf("%w: session query parameter is required", domain.ErrValidation))
-		return
-	}
-	if err := h.webauthn.FinishAssertion(r.Context(), session, r); err != nil {
-		writeError(w, fmt.Errorf("%w: %v", domain.ErrValidation, err))
-		return
-	}
 	password, err := h.vault.Reveal(r.Context(), id)
 	if err != nil {
 		writeError(w, err)
