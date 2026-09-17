@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 // fakeBills keeps bills in memory, which is all Materialize needs.
 type fakeBills struct {
 	bills []domain.Bill
+	// paidExpense captures the exact domain.Transaction Pay handed the
+	// repository, so tests can assert on it — a fake that discarded this
+	// argument would let a wrong competence month, amount or IsRecurring
+	// sail through the whole suite unnoticed.
+	paidExpense *domain.Transaction
 }
 
 func (f *fakeBills) Create(_ context.Context, b domain.Bill) (domain.Bill, error) {
@@ -64,12 +70,55 @@ func (f *fakeBills) Get(_ context.Context, id string) (domain.Bill, error) {
 	return domain.Bill{}, domain.ErrNotFound
 }
 
-func (f *fakeBills) Pay(context.Context, string, time.Time, domain.Transaction) (domain.Bill, error) {
-	return domain.Bill{}, nil
+// Pay records the expense it was handed (see paidExpense) and marks the
+// matching bill paid, so a test can inspect both what the service decided
+// to persist and that it used the right bill.
+func (f *fakeBills) Pay(_ context.Context, id string, paidAt time.Time, expense domain.Transaction) (domain.Bill, error) {
+	f.paidExpense = &expense
+	for i := range f.bills {
+		if f.bills[i].ID == id {
+			f.bills[i].PaidAt = &paidAt
+			f.bills[i].TransactionID = &expense.ID
+			return f.bills[i], nil
+		}
+	}
+	return domain.Bill{}, domain.ErrNotFound
 }
 
 func (f *fakeBills) Unpay(context.Context, string) (domain.Bill, error) {
 	return domain.Bill{}, nil
+}
+
+// fakeCategories and fakeCards stand in for *postgres.CategoryRepo and
+// *postgres.CreditCardRepo (via categoryStore/cardStore) so
+// BillService.Pay's category and credit-card lookups can be tested without
+// a database.
+type fakeCategories struct{ known map[string]domain.Category }
+
+func (f fakeCategories) Get(_ context.Context, id string) (domain.Category, error) {
+	if c, ok := f.known[id]; ok {
+		return c, nil
+	}
+	return domain.Category{}, domain.ErrNotFound
+}
+
+type fakeCards struct{ known map[string]domain.CreditCard }
+
+func (f fakeCards) Get(_ context.Context, id string) (domain.CreditCard, error) {
+	if c, ok := f.known[id]; ok {
+		return c, nil
+	}
+	return domain.CreditCard{}, domain.ErrNotFound
+}
+
+// serviceWithPay wires a BillService whose categories and credit cards are
+// fakes too, which serviceWith's nil fields don't allow — Pay needs both.
+func serviceWithPay(f *fakeBills, cats fakeCategories, cards fakeCards) *BillService {
+	s := NewBillService(nil, nil, nil)
+	s.bills = f
+	s.categories = cats
+	s.cards = cards
+	return s
 }
 
 // Update echoes back whatever bill the service handed it, unchanged. That is
@@ -294,4 +343,92 @@ func TestServiceNeverInventsASeriesID(t *testing.T) {
 			t.Fatalf("SeriesID = %v, want nil (Recurring alone must not invent a series id)", created.SeriesID)
 		}
 	})
+}
+
+// TestServicePayRefusesAReceivableBill guards the rule that only a payable
+// bill settlement records an expense: the transactions ledger is an expense
+// ledger, and a credit there would be a negative every aggregate would have
+// to special-case.
+func TestServicePayRefusesAReceivableBill(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{{ID: "b1", Description: "Freela", Direction: domain.BillReceivable}}}
+	s := serviceWithPay(f, fakeCategories{}, fakeCards{})
+
+	_, _, err := s.Pay(context.Background(), "b1", PaymentInput{
+		PaidAt: time.Now(), AmountCents: 1000, CategoryID: "cat-1", PaymentMethod: domain.PaymentPix,
+	})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("Pay numa conta a receber = %v, want domain.ErrValidation", err)
+	}
+}
+
+// TestServicePayRefusesCreditWithoutACard guards the same rule enforced
+// elsewhere for regular purchases: a credit expense with no card to book an
+// invoice against is not a payment method, it's a missing field.
+func TestServicePayRefusesCreditWithoutACard(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{{ID: "b1", Description: "Luz", Direction: domain.BillPayable}}}
+	cats := fakeCategories{known: map[string]domain.Category{"cat-1": {ID: "cat-1"}}}
+	s := serviceWithPay(f, cats, fakeCards{})
+
+	_, _, err := s.Pay(context.Background(), "b1", PaymentInput{
+		PaidAt: time.Now(), AmountCents: 1000, CategoryID: "cat-1", PaymentMethod: domain.PaymentCredit,
+	})
+	if !errors.Is(err, domain.ErrCreditCardMissing) {
+		t.Fatalf("Pay a crédito sem cartão = %v, want domain.ErrCreditCardMissing", err)
+	}
+}
+
+// TestServicePayBuildsTheExpenseFromThePaymentInput is the test a fakeBills
+// that discards its Pay argument would let sail through: it pins down that
+// the expense uses the CONFIRMED amount and category (not the bill's own),
+// that a credit payment's competence month is the invoice's due month (not
+// the calendar month the owner clicked "pago" in), and that IsRecurring
+// mirrors the bill's series membership.
+func TestServicePayBuildsTheExpenseFromThePaymentInput(t *testing.T) {
+	series := "series-1"
+	bill := domain.Bill{
+		ID: "b1", Description: "Cartão de crédito (teste)", AmountCents: 9999,
+		Direction: domain.BillPayable, SeriesID: &series,
+	}
+	f := &fakeBills{bills: []domain.Bill{bill}}
+	cats := fakeCategories{known: map[string]domain.Category{"cat-1": {ID: "cat-1"}}}
+	// Closing on the 25th, due on the 15th: a purchase made ON the closing
+	// day (September 25) still closes in September (buying on the closing
+	// day is one more day of grace), and a due day at or before the closing
+	// day belongs to the NEXT month — so the invoice is due in October, not
+	// September. If CompetenceMonth ever used the payment month instead of
+	// this card math, this test would catch it.
+	card := domain.CreditCard{ID: "card-1", Name: "Cartão de teste", ClosingDay: 25, DueDay: 15}
+	cards := fakeCards{known: map[string]domain.CreditCard{"card-1": card}}
+	s := serviceWithPay(f, cats, cards)
+
+	paidAt := time.Date(2026, time.September, 25, 0, 0, 0, 0, time.UTC)
+	cardID := "card-1"
+	_, expense, err := s.Pay(context.Background(), "b1", PaymentInput{
+		PaidAt: paidAt,
+		// Deliberately different from bill.AmountCents (9999), to prove Pay
+		// uses the confirmed amount, not the bill's original estimate.
+		AmountCents:   4321,
+		CategoryID:    "cat-1",
+		PaymentMethod: domain.PaymentCredit,
+		CreditCardID:  &cardID,
+	})
+	if err != nil {
+		t.Fatalf("pay: %v", err)
+	}
+	if expense.AmountCents != 4321 {
+		t.Errorf("expense.AmountCents = %d, want 4321 (o valor confirmado, não o valor original da conta)", expense.AmountCents)
+	}
+	if expense.CategoryID != "cat-1" {
+		t.Errorf("expense.CategoryID = %q, want cat-1", expense.CategoryID)
+	}
+	wantMonth := domain.YearMonth{Year: 2026, Month: 10}
+	if expense.CompetenceMonth != wantMonth {
+		t.Errorf("expense.CompetenceMonth = %v, want %v (o mês de vencimento da fatura, não o mês do pagamento)", expense.CompetenceMonth, wantMonth)
+	}
+	if !expense.IsRecurring {
+		t.Error("expense.IsRecurring deveria ser true: a conta pertence a uma série")
+	}
+	if f.paidExpense == nil || f.paidExpense.CompetenceMonth != wantMonth {
+		t.Error("o repositório não recebeu o mesmo lançamento devolvido pelo serviço")
+	}
 }

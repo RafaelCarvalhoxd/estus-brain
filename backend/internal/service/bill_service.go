@@ -26,10 +26,22 @@ type billStore interface {
 	OpenTotals(ctx context.Context) (domain.Cents, domain.Cents, int, error)
 }
 
+// categoryStore is the part of *postgres.CategoryRepo the service uses, so
+// Pay's category-existence check can be tested without a database.
+type categoryStore interface {
+	Get(ctx context.Context, id string) (domain.Category, error)
+}
+
+// cardStore is the part of *postgres.CreditCardRepo the service uses, so
+// Pay's credit-card competence-month math can be tested without a database.
+type cardStore interface {
+	Get(ctx context.Context, id string) (domain.CreditCard, error)
+}
+
 type BillService struct {
 	bills      billStore
-	categories *postgres.CategoryRepo
-	cards      *postgres.CreditCardRepo
+	categories categoryStore
+	cards      cardStore
 }
 
 func NewBillService(repo *postgres.BillRepo, categories *postgres.CategoryRepo, cards *postgres.CreditCardRepo) *BillService {

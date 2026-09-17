@@ -212,15 +212,24 @@ func (r *BillRepo) Unpay(ctx context.Context, id string) (domain.Bill, error) {
 	}
 	defer tx.Rollback(ctx)
 
+	// RETURNING reflects the row AFTER the update, so a single
+	// "update ... transaction_id = null ... returning transaction_id" would
+	// always hand back null — the pointer has to be read before it is
+	// cleared, in the same locked row, or the expense it names is lost
+	// forever (the FK is NO ACTION, so nothing else can recover it).
 	var transactionID *string
 	err = tx.QueryRow(ctx, `
-		update bills set paid_at = null, transaction_id = null
-		where id = $1 and paid_at is not null
-		returning transaction_id`, id).Scan(&transactionID)
+		select transaction_id from bills where id = $1 and paid_at is not null for update`,
+		id).Scan(&transactionID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
 	if err != nil {
+		return domain.Bill{}, fmt.Errorf("read bill %s before unpay: %w", id, err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		update bills set paid_at = null, transaction_id = null where id = $1`, id); err != nil {
 		return domain.Bill{}, fmt.Errorf("unpay bill %s: %w", id, err)
 	}
 	if transactionID != nil {

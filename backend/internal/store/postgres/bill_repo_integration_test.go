@@ -211,7 +211,18 @@ func TestBillRepoPayWritesTheBillAndTheExpenseTogether(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create category: %v", err)
 	}
-	defer categories.Delete(ctx, cat.ID)
+	// Cleanup order matters: bills.transaction_id references transactions(id)
+	// with no cascade, so the bill row must go before the transaction row, and
+	// both must go before the category they reference. Deferred statements run
+	// LIFO, so declaring the transaction cleanup before the bill cleanup makes
+	// the bill delete run first. Every cleanup error is asserted on, not
+	// dropped — a silently failed delete here is exactly the kind of leak
+	// that already put orphan rows in the owner's real database this session.
+	defer func() {
+		if err := categories.Delete(ctx, cat.ID); err != nil {
+			t.Errorf("cleanup: delete category %s: %v", cat.ID, err)
+		}
+	}()
 
 	method := domain.PaymentPix
 	bill, err := repo.Create(ctx, domain.Bill{
@@ -230,13 +241,16 @@ func TestBillRepoPayWritesTheBillAndTheExpenseTogether(t *testing.T) {
 		CompetenceMonth:  domain.YearMonth{Year: 2026, Month: 9},
 		InstallmentTotal: 1, IsRecurring: false,
 	}
-	// Cleanup order matters: bills.transaction_id references transactions(id)
-	// with no cascade, so the bill row must go before the transaction row, and
-	// both must go before the category they reference. Deferred statements run
-	// LIFO, so declaring repo.Delete(bill) after transactions.Delete(expense)
-	// makes the bill delete run first.
-	defer transactions.Delete(ctx, expense.ID)
-	defer repo.Delete(ctx, bill.ID)
+	defer func() {
+		if err := transactions.Delete(ctx, expense.ID); err != nil {
+			t.Errorf("cleanup: delete transaction %s: %v", expense.ID, err)
+		}
+	}()
+	defer func() {
+		if err := repo.Delete(ctx, bill.ID); err != nil {
+			t.Errorf("cleanup: delete bill %s: %v", bill.ID, err)
+		}
+	}()
 
 	paid, err := repo.Pay(ctx, bill.ID, time.Now(), expense)
 	if err != nil {
@@ -266,6 +280,200 @@ func TestBillRepoPayWritesTheBillAndTheExpenseTogether(t *testing.T) {
 	// Paying an already-paid bill must not create a second expense.
 	if _, err := repo.Pay(ctx, bill.ID, time.Now(), expense); err != domain.ErrNotFound {
 		t.Errorf("Pay on an already-paid bill = %v, want domain.ErrNotFound", err)
+	}
+}
+
+// Undoing a payment must delete the exact expense Pay created, not merely
+// wipe the only column that names it. A naive
+// "update bills set transaction_id = null ... returning transaction_id"
+// always returns null — RETURNING reflects the row AFTER the update — so a
+// bug there leaves the expense orphaned in the ledger forever (the foreign
+// key is NO ACTION: nothing else in the schema can clean it up), still
+// counted in "Saídas" for a payment the owner just undid.
+func TestBillRepoUnpayRemovesTheBillAndTheExpenseTogether(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	db, err := Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx, "../../../migrations"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := NewBillRepo(db)
+	categories := NewCategoryRepo(db)
+	transactions := NewTransactionRepo(db)
+
+	cat, err := categories.Create(ctx, domain.Category{Name: "Categoria de teste (desfazer pagamento)", Nature: "essencial", Color: "#123abc"})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	defer func() {
+		if err := categories.Delete(ctx, cat.ID); err != nil {
+			t.Errorf("cleanup: delete category %s: %v", cat.ID, err)
+		}
+	}()
+
+	method := domain.PaymentPix
+	bill, err := repo.Create(ctx, domain.Bill{
+		Description: "Conta de teste (desfazer pagamento)", AmountCents: 7000,
+		DueDate:   time.Date(2026, time.September, 12, 0, 0, 0, 0, time.UTC),
+		Direction: domain.BillPayable, CategoryID: &cat.ID, PaymentMethod: &method,
+	})
+	if err != nil {
+		t.Fatalf("create bill: %v", err)
+	}
+
+	expense := domain.Transaction{
+		ID: domain.NewID(), Description: "Conta de teste (desfazer pagamento)", AmountCents: 7000,
+		CategoryID: cat.ID, PaymentMethod: domain.PaymentPix,
+		PurchaseDate:     time.Date(2026, time.September, 12, 0, 0, 0, 0, time.UTC),
+		CompetenceMonth:  domain.YearMonth{Year: 2026, Month: 9},
+		InstallmentTotal: 1, IsRecurring: false,
+	}
+	// Safety-net cleanup for if the test fails before reaching (or because
+	// of) Unpay itself; a successful Unpay already removes the transaction
+	// and repo.Delete below removes the bill, so both calls are expected to
+	// return domain.ErrNotFound on the happy path — anything else is a real
+	// leak and must be reported, not swallowed.
+	defer func() {
+		if err := transactions.Delete(ctx, expense.ID); err != nil && err != domain.ErrNotFound {
+			t.Errorf("cleanup: delete transaction %s: %v", expense.ID, err)
+		}
+	}()
+	defer func() {
+		if err := repo.Delete(ctx, bill.ID); err != nil && err != domain.ErrNotFound {
+			t.Errorf("cleanup: delete bill %s: %v", bill.ID, err)
+		}
+	}()
+
+	if _, err := repo.Pay(ctx, bill.ID, time.Now(), expense); err != nil {
+		t.Fatalf("pay: %v", err)
+	}
+
+	unpaid, err := repo.Unpay(ctx, bill.ID)
+	if err != nil {
+		t.Fatalf("unpay: %v", err)
+	}
+	if unpaid.PaidAt != nil {
+		t.Error("a conta deveria voltar a ficar pendente depois do unpay")
+	}
+	if unpaid.TransactionID != nil {
+		t.Errorf("bill.TransactionID = %v, want nil depois do unpay", unpaid.TransactionID)
+	}
+
+	txns, err := transactions.ListByCompetenceMonth(ctx, domain.YearMonth{Year: 2026, Month: 9})
+	if err != nil {
+		t.Fatalf("list transactions: %v", err)
+	}
+	for _, row := range txns {
+		if row.ID == expense.ID {
+			t.Error("o lançamento deveria ter sido apagado pelo unpay, mas ainda existe")
+		}
+	}
+
+	// The bill itself must still exist (unpaid, not deleted) so the deferred
+	// repo.Delete above is expected to succeed, not hit ErrNotFound.
+	stillThere, err := repo.Get(ctx, bill.ID)
+	if err != nil {
+		t.Fatalf("get bill after unpay: %v", err)
+	}
+	if stillThere.PaidAt != nil {
+		t.Error("Get depois do unpay ainda mostra a conta como paga")
+	}
+}
+
+// Pay must be one commit: if the expense insert fails for any reason — here,
+// a category that doesn't exist, which the foreign key on
+// transactions.category_id rejects — the bill must stay unpaid. An
+// implementation that runs the bill update and the expense insert as two
+// separate commits instead of one shared transaction would let the bill
+// update stick regardless of what happens to the second one; this is the
+// case the atomicity guarantee this task exists to add is actually for.
+func TestBillRepoPayRollsBillBackWhenTheExpenseFailsToInsert(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	db, err := Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx, "../../../migrations"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := NewBillRepo(db)
+	categories := NewCategoryRepo(db)
+	transactions := NewTransactionRepo(db)
+
+	cat, err := categories.Create(ctx, domain.Category{Name: "Categoria de teste (rollback pagamento)", Nature: "essencial", Color: "#abcdef"})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	defer func() {
+		if err := categories.Delete(ctx, cat.ID); err != nil {
+			t.Errorf("cleanup: delete category %s: %v", cat.ID, err)
+		}
+	}()
+
+	method := domain.PaymentPix
+	bill, err := repo.Create(ctx, domain.Bill{
+		Description: "Conta de teste (rollback pagamento)", AmountCents: 4000,
+		DueDate:   time.Date(2026, time.September, 14, 0, 0, 0, 0, time.UTC),
+		Direction: domain.BillPayable, CategoryID: &cat.ID, PaymentMethod: &method,
+	})
+	if err != nil {
+		t.Fatalf("create bill: %v", err)
+	}
+	defer func() {
+		if err := repo.Delete(ctx, bill.ID); err != nil {
+			t.Errorf("cleanup: delete bill %s: %v", bill.ID, err)
+		}
+	}()
+
+	expense := domain.Transaction{
+		ID: domain.NewID(), Description: "Conta de teste (rollback pagamento)", AmountCents: 4000,
+		// A category id that doesn't exist: the insert must fail on the
+		// transactions.category_id foreign key.
+		CategoryID: "00000000-0000-0000-0000-000000000000", PaymentMethod: domain.PaymentPix,
+		PurchaseDate:     time.Date(2026, time.September, 14, 0, 0, 0, 0, time.UTC),
+		CompetenceMonth:  domain.YearMonth{Year: 2026, Month: 9},
+		InstallmentTotal: 1, IsRecurring: false,
+	}
+	// Safety net only: the insert is expected to fail, so this row should
+	// never exist. If it does, that itself is a defect worth failing loudly
+	// on rather than silently cleaning up.
+	defer func() {
+		if err := transactions.Delete(ctx, expense.ID); err != nil && err != domain.ErrNotFound {
+			t.Errorf("cleanup: delete transaction %s: %v", expense.ID, err)
+		} else if err == nil {
+			t.Error("o lançamento com categoria inexistente foi inserido mesmo assim — Pay não é atômico")
+		}
+	}()
+
+	if _, err := repo.Pay(ctx, bill.ID, time.Now(), expense); err == nil {
+		t.Fatal("pay com categoria inexistente deveria falhar")
+	}
+
+	got, err := repo.Get(ctx, bill.ID)
+	if err != nil {
+		t.Fatalf("get bill: %v", err)
+	}
+	if got.PaidAt != nil {
+		t.Error("a conta ficou marcada como paga mesmo com o lançamento falhando ao ser inserido — Pay não é atômico")
+	}
+	if got.TransactionID != nil {
+		t.Errorf("bill.TransactionID = %v, want nil quando o pagamento falha", got.TransactionID)
 	}
 }
 
