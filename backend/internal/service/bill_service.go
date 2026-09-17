@@ -9,8 +9,22 @@ import (
 	"github.com/rafael/estus-vault/backend/internal/store/postgres"
 )
 
+// billStore is the part of *postgres.BillRepo the service uses, so the
+// materialization rules can be tested without a database.
+type billStore interface {
+	Create(ctx context.Context, b domain.Bill) (domain.Bill, error)
+	List(ctx context.Context, direction *domain.BillDirection, onlyOpen bool) ([]domain.Bill, error)
+	ListByMonth(ctx context.Context, ym domain.YearMonth, direction *domain.BillDirection) ([]domain.Bill, error)
+	LatestPerSeries(ctx context.Context) ([]domain.Bill, error)
+	MarkPaid(ctx context.Context, id string, paidAt time.Time) (domain.Bill, error)
+	Update(ctx context.Context, b domain.Bill) (domain.Bill, error)
+	Delete(ctx context.Context, id string) error
+	ReceivedTotalForMonth(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
+	OpenTotals(ctx context.Context) (domain.Cents, domain.Cents, int, error)
+}
+
 type BillService struct {
-	bills      *postgres.BillRepo
+	bills      billStore
 	categories *postgres.CategoryRepo
 }
 
@@ -139,4 +153,42 @@ func (s *BillService) Summary(ctx context.Context) (BillSummary, error) {
 
 func (s *BillService) ReceivedTotal(ctx context.Context, ym domain.YearMonth) (domain.Cents, error) {
 	return s.bills.ReceivedTotalForMonth(ctx, ym)
+}
+
+// materializeCap is how many months one call may create. Opening a month
+// years away should return what fits instead of writing hundreds of rows;
+// the next opening carries on from where this one stopped.
+const materializeCap = 24
+
+// Materialize creates the missing occurrences of every active series up to
+// and including ym, oldest first, each copied from the one before it, and
+// returns how many it created. It is idempotent: a month a series already
+// has an occurrence in is left alone.
+//
+// This is a write driven by a read, on purpose: the app runs on a laptop
+// that is off for days at a time, so a scheduler on the first of the month
+// would need catch-up logic for every month it slept through.
+func (s *BillService) Materialize(ctx context.Context, ym domain.YearMonth) (int, error) {
+	latest, err := s.bills.LatestPerSeries(ctx)
+	if err != nil {
+		return 0, err
+	}
+	created := 0
+	for _, last := range latest {
+		current := last
+		for created < materializeCap {
+			currentMonth := domain.YearMonthOf(current.DueDate)
+			if !currentMonth.Before(ym) {
+				break
+			}
+			next := current.NextOccurrence(current.AmountEstimated)
+			saved, err := s.bills.Create(ctx, next)
+			if err != nil {
+				return created, err
+			}
+			created++
+			current = saved
+		}
+	}
+	return created, nil
 }
