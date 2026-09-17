@@ -60,7 +60,7 @@ func run() error {
 	handlers := httpapi.NewHandlers(categoryRepo, cardRepo, transactionService, dashboardService)
 
 	billRepo := postgres.NewBillRepo(db)
-	billService := service.NewBillService(billRepo, categoryRepo)
+	billService := service.NewBillService(billRepo, categoryRepo, cardRepo)
 	billHandlers := httpapi.NewBillHandlers(billService)
 
 	noteRepo := postgres.NewNoteRepo(db)

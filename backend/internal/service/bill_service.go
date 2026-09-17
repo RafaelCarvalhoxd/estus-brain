@@ -13,10 +13,13 @@ import (
 // materialization rules can be tested without a database.
 type billStore interface {
 	Create(ctx context.Context, b domain.Bill) (domain.Bill, error)
+	Get(ctx context.Context, id string) (domain.Bill, error)
 	List(ctx context.Context, direction *domain.BillDirection, onlyOpen bool) ([]domain.Bill, error)
 	ListByMonth(ctx context.Context, ym domain.YearMonth, direction *domain.BillDirection) ([]domain.Bill, error)
 	LatestPerSeries(ctx context.Context) ([]domain.Bill, error)
 	MarkPaid(ctx context.Context, id string, paidAt time.Time) (domain.Bill, error)
+	Pay(ctx context.Context, id string, paidAt time.Time, expense domain.Transaction) (domain.Bill, error)
+	Unpay(ctx context.Context, id string) (domain.Bill, error)
 	Update(ctx context.Context, b domain.Bill) (domain.Bill, error)
 	Delete(ctx context.Context, id string) error
 	ReceivedTotalForMonth(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
@@ -26,10 +29,11 @@ type billStore interface {
 type BillService struct {
 	bills      billStore
 	categories *postgres.CategoryRepo
+	cards      *postgres.CreditCardRepo
 }
 
-func NewBillService(repo *postgres.BillRepo, categories *postgres.CategoryRepo) *BillService {
-	return &BillService{bills: repo, categories: categories}
+func NewBillService(repo *postgres.BillRepo, categories *postgres.CategoryRepo, cards *postgres.CreditCardRepo) *BillService {
+	return &BillService{bills: repo, categories: categories, cards: cards}
 }
 
 type NewBillInput struct {
@@ -106,6 +110,76 @@ func (s *BillService) MarkPaid(ctx context.Context, id string, paidAt time.Time)
 		return domain.Bill{}, err
 	}
 	return bill, nil
+}
+
+// PaymentInput is what the owner confirms when settling a bill: the amount
+// that actually left the account, and how.
+type PaymentInput struct {
+	PaidAt        time.Time
+	AmountCents   domain.Cents
+	CategoryID    string
+	PaymentMethod domain.PaymentMethod
+	CreditCardID  *string
+}
+
+// Pay settles a payable bill and records the expense behind it, in one
+// database transaction: either the bill and the expense both land or
+// neither does. A receivable is settled with MarkPaid instead: the
+// transactions ledger is an expense ledger, and a credit there would be a
+// negative every aggregate would have to special-case.
+func (s *BillService) Pay(ctx context.Context, id string, in PaymentInput) (domain.Bill, domain.Transaction, error) {
+	bill, err := s.bills.Get(ctx, id)
+	if err != nil {
+		return domain.Bill{}, domain.Transaction{}, err
+	}
+	if bill.Direction != domain.BillPayable {
+		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("%w: only a payable bill records an expense", domain.ErrValidation)
+	}
+	if in.AmountCents <= 0 {
+		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("%w: amount must be positive", domain.ErrValidation)
+	}
+	if !in.PaymentMethod.Valid() {
+		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("%w: invalid payment method %q", domain.ErrValidation, in.PaymentMethod)
+	}
+	if in.PaymentMethod == domain.PaymentCredit && (in.CreditCardID == nil || *in.CreditCardID == "") {
+		return domain.Bill{}, domain.Transaction{}, domain.ErrCreditCardMissing
+	}
+	if _, err := s.categories.Get(ctx, in.CategoryID); err != nil {
+		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("category %s: %w", in.CategoryID, err)
+	}
+
+	var card *domain.CreditCard
+	if in.PaymentMethod == domain.PaymentCredit {
+		c, err := s.cards.Get(ctx, *in.CreditCardID)
+		if err != nil {
+			return domain.Bill{}, domain.Transaction{}, fmt.Errorf("credit card %s: %w", *in.CreditCardID, err)
+		}
+		card = &c
+	}
+
+	expense := domain.Transaction{
+		ID:               domain.NewID(),
+		Description:      bill.Description,
+		AmountCents:      in.AmountCents,
+		CategoryID:       in.CategoryID,
+		PaymentMethod:    in.PaymentMethod,
+		PurchaseDate:     in.PaidAt,
+		CreditCardID:     in.CreditCardID,
+		CompetenceMonth:  domain.CompetenceMonth(in.PaidAt, in.PaymentMethod, card),
+		InstallmentTotal: 1,
+		IsRecurring:      bill.Recurring(),
+	}
+	paid, err := s.bills.Pay(ctx, id, in.PaidAt, expense)
+	if err != nil {
+		return domain.Bill{}, domain.Transaction{}, err
+	}
+	return paid, expense, nil
+}
+
+// Unpay reverses Pay: the bill goes back to pending and the expense it
+// created is removed, in the same commit.
+func (s *BillService) Unpay(ctx context.Context, id string) (domain.Bill, error) {
+	return s.bills.Unpay(ctx, id)
 }
 
 func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (domain.Bill, error) {

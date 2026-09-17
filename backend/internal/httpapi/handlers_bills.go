@@ -146,3 +146,38 @@ func (h *BillHandlers) MarkPaid(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
 }
+
+// Pay handles POST /api/bills/{id}/pay: settling a payable bill, which
+// records its expense in the transactions ledger in the same commit.
+func (h *BillHandlers) Pay(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	var req payBillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	input, err := req.toInput()
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: paid_on must be YYYY-MM-DD", domain.ErrValidation))
+		return
+	}
+
+	bill, _, err := h.bills.Pay(r.Context(), id, input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
+}
+
+// Unpay handles DELETE /api/bills/{id}/paid: undoing a payment removes the
+// expense it created and puts the bill back to pending.
+func (h *BillHandlers) Unpay(w http.ResponseWriter, r *http.Request) {
+	bill, err := h.bills.Unpay(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
+}

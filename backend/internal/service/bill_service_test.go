@@ -55,6 +55,23 @@ func (f *fakeBills) MarkPaid(context.Context, string, time.Time) (domain.Bill, e
 	return domain.Bill{}, nil
 }
 
+func (f *fakeBills) Get(_ context.Context, id string) (domain.Bill, error) {
+	for _, b := range f.bills {
+		if b.ID == id {
+			return b, nil
+		}
+	}
+	return domain.Bill{}, domain.ErrNotFound
+}
+
+func (f *fakeBills) Pay(context.Context, string, time.Time, domain.Transaction) (domain.Bill, error) {
+	return domain.Bill{}, nil
+}
+
+func (f *fakeBills) Unpay(context.Context, string) (domain.Bill, error) {
+	return domain.Bill{}, nil
+}
+
 // Update echoes back whatever bill the service handed it, unchanged. That is
 // what makes TestServiceNeverInventsASeriesID meaningful: it lets the test
 // see exactly what BillService.Update passed through, rather than a stub
@@ -81,7 +98,7 @@ func seriesBill(id string, y int, m time.Month, d int, cents domain.Cents) domai
 }
 
 func serviceWith(f *fakeBills) *BillService {
-	s := NewBillService(nil, nil)
+	s := NewBillService(nil, nil, nil)
 	s.bills = f
 	return s
 }

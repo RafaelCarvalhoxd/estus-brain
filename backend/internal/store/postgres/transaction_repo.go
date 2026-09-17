@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/rafael/estus-vault/backend/internal/domain"
 )
 
@@ -32,6 +34,16 @@ func (r *TransactionRepo) CreateBatch(ctx context.Context, txns []domain.Transac
 	}
 	defer tx.Rollback(ctx)
 
+	if err := insertTransactions(ctx, tx, txns); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// insertTransactions writes txns inside an already-open database
+// transaction, so a caller that has more to write in the same commit — a
+// bill being settled, say — can reuse the exact same insert.
+func insertTransactions(ctx context.Context, tx pgx.Tx, txns []domain.Transaction) error {
 	for _, t := range txns {
 		_, err := tx.Exec(ctx, `
 			insert into transactions (
@@ -49,7 +61,7 @@ func (r *TransactionRepo) CreateBatch(ctx context.Context, txns []domain.Transac
 			return fmt.Errorf("insert transaction %s: %w", t.Description, err)
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (r *TransactionRepo) ListByCompetenceMonth(ctx context.Context, ym domain.YearMonth) ([]TransactionRow, error) {

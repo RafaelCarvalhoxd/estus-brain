@@ -86,3 +86,27 @@ func (r createBillRequest) toInput() (service.NewBillInput, error) {
 type markBillPaidRequest struct {
 	PaidAt string `json:"paid_at,omitempty"` // YYYY-MM-DD, defaults to today
 }
+
+// payBillRequest is what the owner confirms when settling a payable bill:
+// the amount that actually left the account, and how.
+type payBillRequest struct {
+	PaidOn        string  `json:"paid_on"` // YYYY-MM-DD
+	AmountCents   int64   `json:"amount_cents"`
+	CategoryID    string  `json:"category_id"`
+	PaymentMethod string  `json:"payment_method"`
+	CreditCardID  *string `json:"credit_card_id,omitempty"`
+}
+
+func (r payBillRequest) toInput() (service.PaymentInput, error) {
+	paidOn, err := time.Parse("2006-01-02", r.PaidOn)
+	if err != nil {
+		return service.PaymentInput{}, err
+	}
+	return service.PaymentInput{
+		PaidAt:        paidOn,
+		AmountCents:   domain.Cents(r.AmountCents),
+		CategoryID:    r.CategoryID,
+		PaymentMethod: domain.PaymentMethod(r.PaymentMethod),
+		CreditCardID:  r.CreditCardID,
+	}, nil
+}

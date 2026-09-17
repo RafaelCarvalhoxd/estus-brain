@@ -151,6 +151,89 @@ func (r *BillRepo) MarkPaid(ctx context.Context, id string, paidAt time.Time) (d
 	return b, nil
 }
 
+// Pay settles a payable bill and records its expense in one commit. Either
+// both land or neither does: a bill marked paid with no transaction behind
+// it is money that vanished from the budget. The `paid_at is null` guard
+// makes paying twice impossible — a second attempt matches no row and comes
+// back as domain.ErrNotFound instead of creating a duplicate expense.
+func (r *BillRepo) Pay(ctx context.Context, id string, paidAt time.Time, expense domain.Transaction) (domain.Bill, error) {
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("begin pay bill: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// The bill row must be locked and confirmed unpaid before the expense is
+	// inserted: bills.transaction_id has a foreign key into transactions, so
+	// the transaction row has to exist first, but we must not insert it for a
+	// bill that turns out to already be paid. "for update" holds the row lock
+	// across both statements, so a concurrent Pay on the same id blocks here
+	// instead of racing.
+	var exists string
+	err = tx.QueryRow(ctx, `select id from bills where id = $1 and paid_at is null for update`, id).Scan(&exists)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("lock bill %s: %w", id, err)
+	}
+
+	if err := insertTransactions(ctx, tx, []domain.Transaction{expense}); err != nil {
+		return domain.Bill{}, err
+	}
+
+	var b domain.Bill
+	err = tx.QueryRow(ctx, `
+		update bills set paid_at = $2, amount_cents = $3, amount_estimated = false, transaction_id = $4
+		where id = $1 and paid_at is null
+		returning id, description, amount_cents, due_date, direction, category_id,
+			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at`,
+		id, paidAt, int64(expense.AmountCents), expense.ID,
+	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID,
+		&b.PaidAt, &b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("pay bill %s: %w", id, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Bill{}, fmt.Errorf("commit pay bill %s: %w", id, err)
+	}
+	return b, nil
+}
+
+// Unpay reverses Pay: the bill goes back to pending and the expense it
+// created is removed, in one commit.
+func (r *BillRepo) Unpay(ctx context.Context, id string) (domain.Bill, error) {
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("begin unpay bill: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var transactionID *string
+	err = tx.QueryRow(ctx, `
+		update bills set paid_at = null, transaction_id = null
+		where id = $1 and paid_at is not null
+		returning transaction_id`, id).Scan(&transactionID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Bill{}, fmt.Errorf("unpay bill %s: %w", id, err)
+	}
+	if transactionID != nil {
+		if _, err := tx.Exec(ctx, `delete from transactions where id = $1`, *transactionID); err != nil {
+			return domain.Bill{}, fmt.Errorf("delete expense of bill %s: %w", id, err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Bill{}, fmt.Errorf("commit unpay bill %s: %w", id, err)
+	}
+	return r.Get(ctx, id)
+}
+
 // Update edits the fields that describe the obligation itself. It leaves
 // paid_at and transaction_id untouched — those describe this occurrence's
 // settlement and are only ever changed by MarkPaid (and, later, undoing a

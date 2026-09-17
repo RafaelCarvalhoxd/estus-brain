@@ -184,6 +184,91 @@ func TestBillRepo_SeriesColumnsAndMonthQueries(t *testing.T) {
 	}
 }
 
+// Paying a bill has to record the expense in the same database transaction:
+// a bill marked paid with no matching transaction is exactly the balance bug
+// this phase exists to fix.
+func TestBillRepoPayWritesTheBillAndTheExpenseTogether(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
+	ctx := context.Background()
+	db, err := Connect(ctx, url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer db.Close()
+	if err := db.Migrate(ctx, "../../../migrations"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	repo := NewBillRepo(db)
+	categories := NewCategoryRepo(db)
+	transactions := NewTransactionRepo(db)
+
+	cat, err := categories.Create(ctx, domain.Category{Name: "Categoria de teste (pagamento)", Nature: "essencial", Color: "#654321"})
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	defer categories.Delete(ctx, cat.ID)
+
+	method := domain.PaymentPix
+	bill, err := repo.Create(ctx, domain.Bill{
+		Description: "Conta de teste (pagamento)", AmountCents: 5000,
+		DueDate:   time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC),
+		Direction: domain.BillPayable, CategoryID: &cat.ID, PaymentMethod: &method,
+	})
+	if err != nil {
+		t.Fatalf("create bill: %v", err)
+	}
+
+	expense := domain.Transaction{
+		ID: domain.NewID(), Description: "Conta de teste (pagamento)", AmountCents: 5000,
+		CategoryID: cat.ID, PaymentMethod: domain.PaymentPix,
+		PurchaseDate:     time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC),
+		CompetenceMonth:  domain.YearMonth{Year: 2026, Month: 9},
+		InstallmentTotal: 1, IsRecurring: false,
+	}
+	// Cleanup order matters: bills.transaction_id references transactions(id)
+	// with no cascade, so the bill row must go before the transaction row, and
+	// both must go before the category they reference. Deferred statements run
+	// LIFO, so declaring repo.Delete(bill) after transactions.Delete(expense)
+	// makes the bill delete run first.
+	defer transactions.Delete(ctx, expense.ID)
+	defer repo.Delete(ctx, bill.ID)
+
+	paid, err := repo.Pay(ctx, bill.ID, time.Now(), expense)
+	if err != nil {
+		t.Fatalf("pay: %v", err)
+	}
+	if paid.PaidAt == nil {
+		t.Error("a conta não ficou paga")
+	}
+	if paid.TransactionID == nil || *paid.TransactionID != expense.ID {
+		t.Errorf("bill.TransactionID = %v, want %s", paid.TransactionID, expense.ID)
+	}
+
+	txns, err := transactions.ListByCompetenceMonth(ctx, domain.YearMonth{Year: 2026, Month: 9})
+	if err != nil {
+		t.Fatalf("list transactions: %v", err)
+	}
+	found := false
+	for _, row := range txns {
+		if row.ID == expense.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("o lançamento não foi criado junto com o pagamento")
+	}
+
+	// Paying an already-paid bill must not create a second expense.
+	if _, err := repo.Pay(ctx, bill.ID, time.Now(), expense); err != domain.ErrNotFound {
+		t.Errorf("Pay on an already-paid bill = %v, want domain.ErrNotFound", err)
+	}
+}
+
 func containsBill(bills []domain.Bill, id string) bool {
 	for _, b := range bills {
 		if b.ID == id {
