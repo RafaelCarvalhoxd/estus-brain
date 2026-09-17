@@ -3,15 +3,152 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Bill, BillDirection, BillPaymentMethod, BillStatus } from "@/lib/bills";
-import type { Category } from "@/lib/types";
+import type { Category, CreditCard } from "@/lib/types";
 import {
   markBillPaidAction,
   updateBillAction,
   deleteBillAction,
   endSeriesAction,
   resumeSeriesAction,
+  payBillAction,
+  unpayBillAction,
 } from "@/app/financeiro/contas/actions";
+import { Modal } from "./Modal";
 import { IconPencil, IconTrash } from "./icons";
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// PayBillModal is what turns "marcar como pago" into a real expense: the
+// bill's own amount/categoria/forma only seed the fields (the brief calls
+// this out — "é o valor que realmente saiu" — since what the owner
+// confirms here is what actually left the account, not the bill's estimate).
+// Confirming calls payBillAction, which hits POST /api/bills/{id}/pay.
+function PayBillModal({
+  bill,
+  categories,
+  cards,
+  onClose,
+  onPaid,
+}: {
+  bill: Bill;
+  categories: Category[];
+  cards: CreditCard[];
+  onClose: () => void;
+  onPaid: () => void;
+}) {
+  const router = useRouter();
+  const [amount, setAmount] = useState((bill.amount.cents / 100).toFixed(2).replace(".", ","));
+  const [categoryId, setCategoryId] = useState(bill.category_id ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">(bill.payment_method ?? "");
+  const [creditCardId, setCreditCardId] = useState(() => cards[0]?.id ?? "");
+  const [paidOn, setPaidOn] = useState(todayISO());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    setSaving(true);
+    setError(null);
+    const result = await payBillAction(bill.id, {
+      amount,
+      paidOn,
+      categoryId,
+      paymentMethod,
+      creditCardId: paymentMethod === "credito" ? creditCardId : undefined,
+    });
+    setSaving(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+    onPaid();
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <div className="panel" id="pagar-conta">
+        <div className="panel-head">
+          <h2>Confirmar pagamento</h2>
+        </div>
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="p-valor">Valor</label>
+            <input
+              id="p-valor"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
+              disabled={saving}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="p-cat">Categoria</label>
+            <select id="p-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving}>
+              <option value="">Sem categoria</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="p-metodo">Forma de pagamento</label>
+            <select
+              id="p-metodo"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as BillPaymentMethod | "")}
+              disabled={saving}
+            >
+              <option value="">Selecione</option>
+              <option value="debito">Débito</option>
+              <option value="credito">Crédito</option>
+              <option value="pix">Pix</option>
+            </select>
+          </div>
+          {paymentMethod === "credito" && (
+            <div className="field">
+              <label htmlFor="p-cartao">Cartão</label>
+              <select
+                id="p-cartao"
+                value={creditCardId}
+                onChange={(e) => setCreditCardId(e.target.value)}
+                disabled={saving}
+              >
+                {cards.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="field">
+            <label htmlFor="p-data">Data do pagamento</label>
+            <input
+              id="p-data"
+              type="date"
+              value={paidOn}
+              onChange={(e) => setPaidOn(e.target.value)}
+              disabled={saving}
+            />
+          </div>
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        <div className="row-actions">
+          <button className="btn-text" type="button" onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button className="btn-primary" type="button" onClick={confirm} disabled={saving}>
+            {saving ? "Salvando…" : "Confirmar pagamento"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function statusPillClass(status: BillStatus): string {
   if (status === "atrasado") return "pill bad";
@@ -145,15 +282,19 @@ function BillColumn({
   bills,
   direction,
   categories,
+  cards,
 }: {
   bills: Bill[];
   direction: BillDirection;
   categories: Category[];
+  cards: CreditCard[];
 }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [seriesActionId, setSeriesActionId] = useState<string | null>(null);
+  const [payingBill, setPayingBill] = useState<Bill | null>(null);
+  const [unpayingId, setUnpayingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir esta conta? Não dá para desfazer.")) return;
@@ -163,6 +304,17 @@ function BillColumn({
       router.refresh();
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleUnpay(id: string) {
+    if (!confirm("Desfazer o pagamento? O lançamento criado por ele também será apagado.")) return;
+    setUnpayingId(id);
+    try {
+      await unpayBillAction(id);
+      router.refresh();
+    } finally {
+      setUnpayingId(null);
     }
   }
 
@@ -210,14 +362,29 @@ function BillColumn({
               {bill.amount.formatted}
               {bill.amount_estimated && <span className="bill-estimated">· estimado</span>}
             </span>
-            {!bill.paid_at && (
+            {!bill.paid_at && direction === "pagar" && (
+              <button className="btn-outline" type="button" onClick={() => setPayingBill(bill)}>
+                Marcar como pago
+              </button>
+            )}
+            {!bill.paid_at && direction === "receber" && (
               <form action={markBillPaidAction.bind(null, bill.id)}>
                 <button className="btn-outline" type="submit">
-                  {direction === "pagar" ? "Marcar como pago" : "Marcar como recebido"}
+                  Marcar como recebido
                 </button>
               </form>
             )}
             <div className="row-actions">
+              {bill.paid_at && (
+                <button
+                  className="btn-text"
+                  type="button"
+                  disabled={unpayingId === bill.id}
+                  onClick={() => handleUnpay(bill.id)}
+                >
+                  Desfazer pagamento
+                </button>
+              )}
               {bill.recurring && !bill.series_ended && (
                 <button
                   className="btn-text"
@@ -254,6 +421,15 @@ function BillColumn({
           </div>
         ),
       )}
+      {payingBill && (
+        <PayBillModal
+          bill={payingBill}
+          categories={categories}
+          cards={cards}
+          onClose={() => setPayingBill(null)}
+          onPaid={() => setPayingBill(null)}
+        />
+      )}
     </div>
   );
 }
@@ -262,10 +438,12 @@ export function BillsBoard({
   payable,
   receivable,
   categories,
+  cards,
 }: {
   payable: Bill[];
   receivable: Bill[];
   categories: Category[];
+  cards: CreditCard[];
 }) {
   const [statusFilter, setStatusFilter] = useState<"" | BillStatus>("");
 
@@ -296,14 +474,14 @@ export function BillsBoard({
             <h2>A pagar</h2>
             <span>{filteredPayable.length} de {payable.length}</span>
           </div>
-          <BillColumn bills={filteredPayable} direction="pagar" categories={categories} />
+          <BillColumn bills={filteredPayable} direction="pagar" categories={categories} cards={cards} />
         </div>
         <div className="panel">
           <div className="panel-head">
             <h2>A receber</h2>
             <span>{filteredReceivable.length} de {receivable.length}</span>
           </div>
-          <BillColumn bills={filteredReceivable} direction="receber" categories={categories} />
+          <BillColumn bills={filteredReceivable} direction="receber" categories={categories} cards={cards} />
         </div>
       </section>
     </>

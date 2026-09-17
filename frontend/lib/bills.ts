@@ -58,6 +58,18 @@ export interface CreateBillInput {
   payment_method?: BillPaymentMethod;
 }
 
+// PayBillInput is what the owner confirms when settling a payable bill: the
+// amount that actually left the account, not the bill's own (possibly
+// estimated) amount. Mirrors backend/internal/httpapi/dto_bills.go's
+// payBillRequest.
+export interface PayBillInput {
+  paid_on: string;
+  amount_cents: number;
+  category_id: string;
+  payment_method: BillPaymentMethod;
+  credit_card_id?: string;
+}
+
 async function billsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -105,6 +117,23 @@ export function createBill(input: CreateBillInput): Promise<Bill> {
 
 export function markBillPaid(id: string): Promise<Bill> {
   return billsFetch<Bill>(`/api/bills/${id}/paid`, { method: "POST" });
+}
+
+// payBill settles a payable bill and records its expense in the same
+// backend commit (POST /api/bills/{id}/pay) — the receivable path above
+// (markBillPaid) stays untouched, since a receivable never records an
+// expense. unpayBill reverses it (DELETE /api/bills/{id}/paid): the bill
+// goes back to pending and the expense it created is deleted, also in one
+// commit.
+export function payBill(id: string, input: PayBillInput): Promise<Bill> {
+  return billsFetch<Bill>(`/api/bills/${id}/pay`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function unpayBill(id: string): Promise<Bill> {
+  return billsFetch<Bill>(`/api/bills/${id}/paid`, { method: "DELETE" });
 }
 
 export function updateBill(id: string, input: CreateBillInput): Promise<Bill> {

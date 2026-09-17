@@ -1,5 +1,5 @@
 import { listBills, getBillSummary } from "@/lib/bills";
-import { listCategories } from "@/lib/api";
+import { listCategories, listCreditCards } from "@/lib/api";
 import { currentYearMonth } from "@/lib/month";
 import { TopBar } from "@/components/TopBar";
 import { BillsBoard } from "@/components/BillsBoard";
@@ -19,10 +19,11 @@ export default async function BillsPage({
   // (Promise.all, one per direction) would race — both reading "nothing for
   // this month yet" before either write commits, each creating its own
   // occurrence. A single request removes that race entirely.
-  const [bills, summary, categories] = await Promise.all([
+  const [bills, summary, categories, cards] = await Promise.all([
     listBills(undefined, month),
     getBillSummary(),
     listCategories(),
+    listCreditCards(),
   ]);
   const payable = bills.filter((b) => b.direction === "pagar");
   const receivable = bills.filter((b) => b.direction === "receber");
@@ -51,7 +52,7 @@ export default async function BillsPage({
         </div>
       </section>
 
-      <BillsBoard payable={payable} receivable={receivable} categories={categories} />
+      <BillsBoard payable={payable} receivable={receivable} categories={categories} cards={cards} />
     </>
   );
 }

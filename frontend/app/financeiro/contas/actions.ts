@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createBill, markBillPaid, updateBill, deleteBill, endSeries, resumeSeries } from "@/lib/bills";
-import type { BillDirection, BillPaymentMethod } from "@/lib/bills";
+import { createBill, markBillPaid, updateBill, deleteBill, endSeries, resumeSeries, payBill, unpayBill } from "@/lib/bills";
+import type { BillDirection, BillPaymentMethod, PayBillInput } from "@/lib/bills";
 
 export type BillFormState = {
   status: "idle" | "error" | "success";
@@ -108,6 +108,70 @@ export async function createBillAction(
 export async function markBillPaidAction(id: string): Promise<void> {
   await markBillPaid(id);
   revalidatePath("/financeiro/contas");
+}
+
+export type PayBillFields = {
+  amount: string;
+  paidOn: string;
+  categoryId: string;
+  paymentMethod: BillPaymentMethod | "";
+  creditCardId?: string;
+};
+
+// buildPayInput is a plain sync helper, not exported: same reasoning as
+// invalid() in cartoes/actions.ts — a "use server" file may only export
+// async functions, so the body assembly and validation stay private and
+// payBillAction below just calls into it.
+function buildPayInput(fields: PayBillFields): { input?: PayBillInput; error?: string } {
+  const amountCents = parseAmountToCents(fields.amount);
+  if (amountCents === null) return { error: "Valor inválido." };
+  if (!fields.paidOn) return { error: "Selecione a data do pagamento." };
+  if (!fields.categoryId) return { error: "Selecione a categoria." };
+  if (!fields.paymentMethod) return { error: "Selecione a forma de pagamento." };
+  if (fields.paymentMethod === "credito" && !fields.creditCardId) {
+    return { error: "Pagamento no crédito precisa de um cartão." };
+  }
+  return {
+    input: {
+      paid_on: fields.paidOn,
+      amount_cents: amountCents,
+      category_id: fields.categoryId,
+      payment_method: fields.paymentMethod,
+      credit_card_id: fields.paymentMethod === "credito" ? fields.creditCardId : undefined,
+    },
+  };
+}
+
+// payBillAction settles a payable bill and records its expense in the same
+// backend commit (POST /api/bills/{id}/pay), confirmed through the modal in
+// BillsBoard. A receivable bill keeps using markBillPaidAction above,
+// unchanged. Errors from the backend's 422/409 reach the user as a
+// readable sentence instead of the raw fetch error — same treatment as
+// frontend/app/financeiro/cartoes/actions.ts.
+export async function payBillAction(id: string, fields: PayBillFields): Promise<{ error?: string }> {
+  const { input, error } = buildPayInput(fields);
+  if (error) return { error };
+  try {
+    await payBill(id, input!);
+  } catch (err) {
+    return { error: friendlyMessage(err, "Falha ao registrar o pagamento.") };
+  }
+  revalidatePath("/financeiro/contas");
+  revalidatePath("/financeiro");
+  revalidatePath("/financeiro/lancamentos");
+  revalidatePath("/financeiro/categorias");
+  return {};
+}
+
+// unpayBillAction undoes a payment: the bill goes back to pending and the
+// expense it created is deleted, in the same backend commit
+// (DELETE /api/bills/{id}/paid).
+export async function unpayBillAction(id: string): Promise<void> {
+  await unpayBill(id);
+  revalidatePath("/financeiro/contas");
+  revalidatePath("/financeiro");
+  revalidatePath("/financeiro/lancamentos");
+  revalidatePath("/financeiro/categorias");
 }
 
 export type UpdateBillFields = {

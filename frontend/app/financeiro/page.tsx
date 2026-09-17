@@ -44,6 +44,11 @@ export default async function FinanceDashboardPage({
           <p className="tile-sub">gasto no mês</p>
         </div>
         <div className="tile">
+          <p className="tile-label">Gastos fixos</p>
+          <p className="tile-figure tab">{summary.recurring.formatted}</p>
+          <p className="tile-sub">do total do mês</p>
+        </div>
+        <div className="tile">
           <p className="tile-label">Saldo</p>
           <p className="tile-figure tab">{formatSigned(saldo)}</p>
           <p className="tile-sub">
