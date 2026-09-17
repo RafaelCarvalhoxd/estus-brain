@@ -19,7 +19,10 @@ func NewBillHandlers(s *service.BillService) *BillHandlers {
 }
 
 // List handles GET /api/bills, optionally filtered by ?direction=pagar|receber
-// and ?open=1 (only bills not yet paid).
+// and ?open=1 (only bills not yet paid), or scoped to ?month=YYYY-MM — which
+// is how the Contas screen reads a month now that it has navigation. A
+// month-scoped request materializes that month's recurring series first (see
+// BillService.ListByMonth), so opening a month is what makes its bills exist.
 func (h *BillHandlers) List(w http.ResponseWriter, r *http.Request) {
 	var direction *domain.BillDirection
 	if raw := r.URL.Query().Get("direction"); raw != "" {
@@ -30,9 +33,20 @@ func (h *BillHandlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 		direction = &d
 	}
-	onlyOpen := r.URL.Query().Get("open") == "1"
 
-	bills, err := h.bills.List(r.Context(), direction, onlyOpen)
+	var bills []domain.Bill
+	var err error
+	if raw := r.URL.Query().Get("month"); raw != "" {
+		ym, parseErr := parseYearMonth(raw)
+		if parseErr != nil {
+			writeError(w, fmt.Errorf("%w: month must be YYYY-MM", domain.ErrValidation))
+			return
+		}
+		bills, err = h.bills.ListByMonth(r.Context(), ym, direction)
+	} else {
+		onlyOpen := r.URL.Query().Get("open") == "1"
+		bills, err = h.bills.List(r.Context(), direction, onlyOpen)
+	}
 	if err != nil {
 		writeError(w, err)
 		return

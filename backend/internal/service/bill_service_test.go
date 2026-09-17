@@ -283,36 +283,46 @@ func TestMaterializeGivesEachSeriesItsOwnCap(t *testing.T) {
 	}
 }
 
-// TestServiceNeverInventsASeriesID guards the ruling behind Create and
-// Update: the service passes the caller's SeriesID through verbatim and
-// never mints one of its own. An earlier version of this code did mint a
-// series id on the service side and that caused two critical bugs before it
-// was removed — this test is here so nobody re-adds it by accident. Minting
-// belongs to a later task, once the form has the fields (category, payment
-// method) that make a payable recurring bill valid.
+// TestServiceNeverInventsASeriesID now guards the Update side only: Update
+// loads the bill as it stands in the database (via Get) and carries its
+// SeriesID forward untouched, regardless of what NewBillInput says — the
+// wire has no series_id field, so trusting in.SeriesID (always nil from an
+// HTTP request) would silently un-series a bill on every edit, and trusting
+// in.Recurring would let an edit mint a fresh series and split it in two.
+// An earlier version of this code minted a series id from the service and
+// that caused two critical bugs before it was removed; Create is now the
+// one place allowed to mint (see TestServiceCreateMintsASeriesIDWhenRecurring
+// below) — Update must never do either.
 func TestServiceNeverInventsASeriesID(t *testing.T) {
-	f := &fakeBills{}
-	s := serviceWith(f)
 	ctx := context.Background()
 
-	t.Run("update keeps the caller's SeriesID unchanged", func(t *testing.T) {
+	t.Run("update keeps the bill's own SeriesID unchanged, ignoring the request's", func(t *testing.T) {
 		series := "series-1"
+		other := "some-other-series"
+		f := &fakeBills{bills: []domain.Bill{{ID: "b1", SeriesID: &series}}}
+		s := serviceWith(f)
+
 		updated, err := s.Update(ctx, "b1", NewBillInput{
 			Description: "Luz",
 			AmountCents: 25000,
 			DueDate:     time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC),
 			Direction:   domain.BillReceivable,
-			SeriesID:    &series,
+			// A request that names a DIFFERENT series must still be ignored:
+			// series membership is never taken from the wire.
+			SeriesID: &other,
 		})
 		if err != nil {
 			t.Fatalf("update: %v", err)
 		}
 		if updated.SeriesID == nil || *updated.SeriesID != series {
-			t.Fatalf("SeriesID = %v, want unchanged %q", updated.SeriesID, series)
+			t.Fatalf("SeriesID = %v, want unchanged %q (the bill's own, not the request's)", updated.SeriesID, series)
 		}
 	})
 
-	t.Run("update with Recurring but no SeriesID leaves SeriesID nil", func(t *testing.T) {
+	t.Run("update with Recurring but no prior SeriesID leaves SeriesID nil", func(t *testing.T) {
+		f := &fakeBills{bills: []domain.Bill{{ID: "b2"}}}
+		s := serviceWith(f)
+
 		updated, err := s.Update(ctx, "b2", NewBillInput{
 			Description: "Internet",
 			AmountCents: 12000,
@@ -328,19 +338,91 @@ func TestServiceNeverInventsASeriesID(t *testing.T) {
 		}
 	})
 
-	t.Run("create with Recurring but no SeriesID leaves SeriesID nil", func(t *testing.T) {
+	t.Run("update carries PaidAt and TransactionID forward from the database", func(t *testing.T) {
+		paidAt := time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC)
+		txnID := "txn-1"
+		f := &fakeBills{bills: []domain.Bill{{ID: "b3", PaidAt: &paidAt, TransactionID: &txnID}}}
+		s := serviceWith(f)
+
+		updated, err := s.Update(ctx, "b3", NewBillInput{
+			Description: "Aluguel",
+			AmountCents: 150000,
+			DueDate:     time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC),
+			Direction:   domain.BillPayable,
+		})
+		if err != nil {
+			t.Fatalf("update: %v", err)
+		}
+		if updated.PaidAt == nil || !updated.PaidAt.Equal(paidAt) {
+			t.Errorf("PaidAt = %v, want unchanged %v", updated.PaidAt, paidAt)
+		}
+		if updated.TransactionID == nil || *updated.TransactionID != txnID {
+			t.Errorf("TransactionID = %v, want unchanged %q", updated.TransactionID, txnID)
+		}
+	})
+}
+
+// TestServiceCreateMintsASeriesIDWhenRecurring guards the other half of the
+// same ruling: Create (and only Create) mints a fresh series id when the
+// caller marks a bill recurring and doesn't already supply one. This is safe
+// now because the Contas form supplies category and payment method, so
+// domain.Bill.Validate's requirement for a recurring payable bill is met.
+func TestServiceCreateMintsASeriesIDWhenRecurring(t *testing.T) {
+	f := &fakeBills{}
+	cats := fakeCategories{known: map[string]domain.Category{"cat-1": {ID: "cat-1"}}}
+	s := serviceWithPay(f, cats, fakeCards{})
+	ctx := context.Background()
+
+	method := domain.PaymentPix
+	cat := "cat-1"
+	created, err := s.Create(ctx, NewBillInput{
+		Description:   "Luz",
+		AmountCents:   18000,
+		DueDate:       time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC),
+		Direction:     domain.BillPayable,
+		CategoryID:    &cat,
+		PaymentMethod: &method,
+		Recurring:     true,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if created.SeriesID == nil || *created.SeriesID == "" {
+		t.Fatal("SeriesID = nil, want a freshly minted series id")
+	}
+
+	t.Run("create without Recurring leaves SeriesID nil", func(t *testing.T) {
 		created, err := s.Create(ctx, NewBillInput{
-			Description: "Luz",
-			AmountCents: 18000,
+			Description: "Compra avulsa",
+			AmountCents: 5000,
 			DueDate:     time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC),
 			Direction:   domain.BillReceivable,
-			Recurring:   true,
 		})
 		if err != nil {
 			t.Fatalf("create: %v", err)
 		}
 		if created.SeriesID != nil {
-			t.Fatalf("SeriesID = %v, want nil (Recurring alone must not invent a series id)", created.SeriesID)
+			t.Fatalf("SeriesID = %v, want nil (a one-off bill must not get a series)", created.SeriesID)
+		}
+	})
+
+	t.Run("create honors a caller-supplied SeriesID instead of minting a new one", func(t *testing.T) {
+		series := "series-existing"
+		created, err := s.Create(ctx, NewBillInput{
+			Description:   "Luz",
+			AmountCents:   18000,
+			DueDate:       time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC),
+			Direction:     domain.BillPayable,
+			CategoryID:    &cat,
+			PaymentMethod: &method,
+			SeriesID:      &series,
+			Recurring:     true,
+		})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		if created.SeriesID == nil || *created.SeriesID != series {
+			t.Fatalf("SeriesID = %v, want the caller's own %q, not a fresh one", created.SeriesID, series)
 		}
 	})
 }

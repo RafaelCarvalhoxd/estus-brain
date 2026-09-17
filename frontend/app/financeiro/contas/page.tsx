@@ -1,23 +1,35 @@
 import { listBills, getBillSummary } from "@/lib/bills";
 import { listCategories } from "@/lib/api";
+import { currentYearMonth } from "@/lib/month";
+import { TopBar } from "@/components/TopBar";
 import { BillsBoard } from "@/components/BillsBoard";
 import { NewBillModal } from "@/components/NewBillModal";
 import "./bills.css";
 
-export default async function BillsPage() {
-  const [payable, receivable, summary, categories] = await Promise.all([
-    listBills("pagar"),
-    listBills("receber"),
+export default async function BillsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const params = await searchParams;
+  const month = params.month ?? currentYearMonth();
+  // One call for the month, split by direction here instead of two separate
+  // ?direction= requests: GET /api/bills?month= materializes ym's recurring
+  // series as a side effect, and two of those requests firing in parallel
+  // (Promise.all, one per direction) would race — both reading "nothing for
+  // this month yet" before either write commits, each creating its own
+  // occurrence. A single request removes that race entirely.
+  const [bills, summary, categories] = await Promise.all([
+    listBills(undefined, month),
     getBillSummary(),
     listCategories(),
   ]);
+  const payable = bills.filter((b) => b.direction === "pagar");
+  const receivable = bills.filter((b) => b.direction === "receber");
 
   return (
     <>
-      <div className="topbar">
-        <h1 className="page-title">Contas a pagar e a receber</h1>
-        <NewBillModal categories={categories} />
-      </div>
+      <TopBar month={month} basePath="/financeiro/contas" action={<NewBillModal categories={categories} />} />
 
       <section className="kpi-grid">
         <div className="tile">

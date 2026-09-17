@@ -13,6 +13,7 @@ export interface Money {
 
 export type BillDirection = "pagar" | "receber";
 export type BillStatus = "pendente" | "atrasado" | "pago" | "recebido";
+export type BillPaymentMethod = "debito" | "credito" | "pix";
 
 export interface Bill {
   id: string;
@@ -23,6 +24,8 @@ export interface Bill {
   category_id?: string;
   paid_at?: string;
   recurring: boolean;
+  amount_estimated: boolean;
+  payment_method?: BillPaymentMethod;
   status: BillStatus;
 }
 
@@ -39,6 +42,8 @@ export interface CreateBillInput {
   direction: BillDirection;
   category_id?: string;
   recurring?: boolean;
+  amount_estimated?: boolean;
+  payment_method?: BillPaymentMethod;
 }
 
 async function billsFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -53,9 +58,18 @@ async function billsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function listBills(direction?: BillDirection): Promise<Bill[]> {
-  const query = direction ? `?direction=${direction}` : "";
-  return billsFetch<Bill[]>(`/api/bills${query}`, { cache: "no-store" });
+// listBills lists bills, optionally filtered by direction and scoped to a
+// single month (?month=YYYY-MM) — how the Contas screen reads a month now
+// that it has navigation. The backend materializes that month's recurring
+// series before listing it, so a bare fetch is enough; a month-less call
+// (used by the home dashboard's "upcoming" widget) still lists every open
+// bill regardless of when it's due.
+export function listBills(direction?: BillDirection, month?: string): Promise<Bill[]> {
+  const params = new URLSearchParams();
+  if (direction) params.set("direction", direction);
+  if (month) params.set("month", month);
+  const query = params.toString();
+  return billsFetch<Bill[]>(`/api/bills${query ? `?${query}` : ""}`, { cache: "no-store" });
 }
 
 export function getBillSummary(): Promise<BillSummary> {

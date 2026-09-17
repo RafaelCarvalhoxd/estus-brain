@@ -55,13 +55,12 @@ type NewBillInput struct {
 	Direction   domain.BillDirection
 	CategoryID  *string
 	// SeriesID is the series this bill belongs to, if the caller supplied
-	// one. The service never invents a series id of its own — see the note
-	// in Create.
+	// one. Create honors it verbatim when present; Update ignores it
+	// entirely — see the notes on each.
 	SeriesID *string
-	// Recurring currently only round-trips: no wire input sets SeriesID yet,
-	// so this flag doesn't do anything on its own. It exists so a future
-	// task (once the form has category and payment-method fields) has
-	// somewhere to read "the caller wants this bill to start a series" from.
+	// Recurring tells Create "start a new series for this bill" when no
+	// SeriesID was supplied. It has no effect on Update: series membership
+	// only ever changes at creation.
 	Recurring       bool
 	AmountEstimated bool
 	PaymentMethod   *domain.PaymentMethod
@@ -76,20 +75,25 @@ type BillSummary struct {
 }
 
 func (s *BillService) Create(ctx context.Context, in NewBillInput) (domain.Bill, error) {
-	// The service never mints a series id: it only ever writes SeriesID when
-	// the caller explicitly supplied one. Generating one here for
-	// in.Recurring==true would make every recurring payable bill require a
-	// category and payment method (domain.Bill.Validate) before either the
-	// assistant tool or the Contas form has a field to collect the payment
-	// method — that arrives with the task that adds those fields, which is
-	// also the task that should decide where series-id generation happens.
+	// Create is the only place that mints a series id, and only when the
+	// caller marked the bill recurring and didn't already hand one in (the
+	// assistant tool, unlike the Contas form, may one day want to attach a
+	// new bill to an existing series by passing SeriesID directly). A
+	// recurring PAYABLE bill with no category or payment method still fails
+	// bill.Validate below with a 422 — the Contas form supplies both, which
+	// is what makes minting safe to turn on here.
+	seriesID := in.SeriesID
+	if in.Recurring && seriesID == nil {
+		fresh := domain.NewID()
+		seriesID = &fresh
+	}
 	bill := domain.Bill{
 		Description:     in.Description,
 		AmountCents:     in.AmountCents,
 		DueDate:         in.DueDate,
 		Direction:       in.Direction,
 		CategoryID:      in.CategoryID,
-		SeriesID:        in.SeriesID,
+		SeriesID:        seriesID,
 		AmountEstimated: in.AmountEstimated,
 		PaymentMethod:   in.PaymentMethod,
 	}
@@ -112,6 +116,23 @@ func (s *BillService) List(ctx context.Context, direction *domain.BillDirection,
 	bills, err := s.bills.List(ctx, direction, onlyOpen)
 	if err != nil {
 		return nil, fmt.Errorf("list bills: %w", err)
+	}
+	return bills, nil
+}
+
+// ListByMonth is how the Contas screen reads a month: it materializes ym
+// first (creating whatever occurrences a recurring series is missing up to
+// and including ym) and only then lists it, so opening a month is what
+// makes its recurring bills exist. Materialize is idempotent, so calling it
+// on every view — including navigating back to a month already seen — never
+// creates a duplicate.
+func (s *BillService) ListByMonth(ctx context.Context, ym domain.YearMonth, direction *domain.BillDirection) ([]domain.Bill, error) {
+	if _, err := s.Materialize(ctx, ym); err != nil {
+		return nil, fmt.Errorf("materialize %v before listing: %w", ym, err)
+	}
+	bills, err := s.bills.ListByMonth(ctx, ym, direction)
+	if err != nil {
+		return nil, fmt.Errorf("list bills by month: %w", err)
 	}
 	return bills, nil
 }
@@ -195,10 +216,18 @@ func (s *BillService) Unpay(ctx context.Context, id string) (domain.Bill, error)
 }
 
 func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (domain.Bill, error) {
-	// Same rule as Create: never invent a series id here. An edit that only
-	// corrects this month's amount must not silently split the bill into a
-	// new series — it must keep whatever SeriesID the caller passed in
-	// (typically the occurrence's own, unchanged) or none at all.
+	// Update never mints a series id, and — unlike Create — it never even
+	// reads in.SeriesID: the wire has no series_id field, so an edit form
+	// that resubmits "recurring: true" carries no SeriesID at all, and
+	// trusting that absence would silently pull the bill out of its series
+	// on every save. Series membership, whether it's paid, and which
+	// transaction it settled into are loaded from the bill as it stands in
+	// the database and carried forward untouched; the client cannot alter
+	// any of the three, by accident or otherwise.
+	current, err := s.bills.Get(ctx, id)
+	if err != nil {
+		return domain.Bill{}, err
+	}
 	bill := domain.Bill{
 		ID:              id,
 		Description:     in.Description,
@@ -206,7 +235,9 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 		DueDate:         in.DueDate,
 		Direction:       in.Direction,
 		CategoryID:      in.CategoryID,
-		SeriesID:        in.SeriesID,
+		SeriesID:        current.SeriesID,
+		PaidAt:          current.PaidAt,
+		TransactionID:   current.TransactionID,
 		AmountEstimated: in.AmountEstimated,
 		PaymentMethod:   in.PaymentMethod,
 	}

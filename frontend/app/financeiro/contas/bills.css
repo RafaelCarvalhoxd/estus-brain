@@ -33,6 +33,11 @@
   font-size: 13.5px;
   font-weight: 650;
 }
+.bill-estimated {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  margin-left: 6px;
+}
 
 .bill-row-editing {
   display: block;
@@ -41,6 +46,7 @@
 .bill-edit-grid {
   display: grid;
   grid-template-columns: 1.4fr 0.8fr 1fr 1fr;
+  grid-auto-columns: 1fr;
   gap: 10px;
   align-items: center;
 }

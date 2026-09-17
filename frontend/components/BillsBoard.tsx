@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Bill, BillDirection, BillStatus } from "@/lib/bills";
+import type { Bill, BillDirection, BillPaymentMethod, BillStatus } from "@/lib/bills";
 import type { Category } from "@/lib/types";
 import { markBillPaidAction, updateBillAction, deleteBillAction } from "@/app/financeiro/contas/actions";
 import { IconPencil, IconTrash } from "./icons";
@@ -37,9 +37,13 @@ function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Cat
   const [amount, setAmount] = useState((bill.amount.cents / 100).toFixed(2).replace(".", ","));
   const [dueDate, setDueDate] = useState(bill.due_date);
   const [categoryId, setCategoryId] = useState(bill.category_id ?? "");
-  const [recurring, setRecurring] = useState(bill.recurring);
+  const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">(bill.payment_method ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Uma conta só entra ou sai de uma série na criação (BillService.Update
+  // nunca muda SeriesID) — bill.recurring aqui é só leitura, não um toggle.
+  const needsSeriesFields = bill.recurring && bill.direction === "pagar";
 
   async function save() {
     setSaving(true);
@@ -50,7 +54,8 @@ function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Cat
       due_date: dueDate,
       direction: bill.direction,
       category_id: categoryId || undefined,
-      recurring,
+      recurring: bill.recurring,
+      payment_method: paymentMethod || undefined,
     });
     setSaving(false);
     if (result.error) {
@@ -97,15 +102,24 @@ function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Cat
             </option>
           ))}
         </select>
-        <label className="bill-edit-recurring">
-          <input
-            type="checkbox"
-            checked={recurring}
-            onChange={(e) => setRecurring(e.target.checked)}
+        {bill.recurring && (
+          <select
+            className="txn-edit-input"
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as BillPaymentMethod | "")}
             disabled={saving}
-          />
-          Repetir todo mês
-        </label>
+          >
+            <option value="">Forma de pagamento</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+            <option value="pix">Pix</option>
+          </select>
+        )}
+        {bill.recurring && (
+          <span className="bill-edit-recurring">
+            Repete todo mês{needsSeriesFields ? " — precisa de categoria e forma de pagamento" : ""}
+          </span>
+        )}
       </div>
       {error && <p className="form-error">{error}</p>}
       <div className="row-actions">
@@ -163,7 +177,10 @@ function BillColumn({
               </div>
             </div>
             <span className={statusPillClass(bill.status)}>{statusLabel(bill.status)}</span>
-            <span className="bill-amt tab">{bill.amount.formatted}</span>
+            <span className="bill-amt tab">
+              {bill.amount.formatted}
+              {bill.amount_estimated && <span className="bill-estimated">· estimado</span>}
+            </span>
             {!bill.paid_at && (
               <form action={markBillPaidAction.bind(null, bill.id)}>
                 <button className="btn-outline" type="submit">
