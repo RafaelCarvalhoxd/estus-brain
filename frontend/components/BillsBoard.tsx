@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Bill, BillDirection, BillPaymentMethod, BillStatus } from "@/lib/bills";
 import type { Category } from "@/lib/types";
-import { markBillPaidAction, updateBillAction, deleteBillAction } from "@/app/financeiro/contas/actions";
+import {
+  markBillPaidAction,
+  updateBillAction,
+  deleteBillAction,
+  endSeriesAction,
+  resumeSeriesAction,
+} from "@/app/financeiro/contas/actions";
 import { IconPencil, IconTrash } from "./icons";
 
 function statusPillClass(status: BillStatus): string {
@@ -56,6 +62,7 @@ function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Cat
       category_id: categoryId || undefined,
       recurring: bill.recurring,
       payment_method: paymentMethod || undefined,
+      amount_varies: bill.amount_varies,
     });
     setSaving(false);
     if (result.error) {
@@ -146,6 +153,7 @@ function BillColumn({
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [seriesActionId, setSeriesActionId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir esta conta? Não dá para desfazer.")) return;
@@ -155,6 +163,26 @@ function BillColumn({
       router.refresh();
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleEndSeries(id: string) {
+    setSeriesActionId(id);
+    try {
+      await endSeriesAction(id);
+      router.refresh();
+    } finally {
+      setSeriesActionId(null);
+    }
+  }
+
+  async function handleResumeSeries(id: string) {
+    setSeriesActionId(id);
+    try {
+      await resumeSeriesAction(id);
+      router.refresh();
+    } finally {
+      setSeriesActionId(null);
     }
   }
 
@@ -174,6 +202,7 @@ function BillColumn({
               <div className="bill-meta">
                 Vence em {formatDueDate(bill.due_date)}
                 {bill.recurring ? " · recorrente" : ""}
+                {bill.recurring && bill.series_ended ? " · Repetição encerrada" : ""}
               </div>
             </div>
             <span className={statusPillClass(bill.status)}>{statusLabel(bill.status)}</span>
@@ -189,6 +218,26 @@ function BillColumn({
               </form>
             )}
             <div className="row-actions">
+              {bill.recurring && !bill.series_ended && (
+                <button
+                  className="btn-text"
+                  type="button"
+                  disabled={seriesActionId === bill.id}
+                  onClick={() => handleEndSeries(bill.id)}
+                >
+                  Encerrar repetição
+                </button>
+              )}
+              {bill.recurring && bill.series_ended && (
+                <button
+                  className="btn-text"
+                  type="button"
+                  disabled={seriesActionId === bill.id}
+                  onClick={() => handleResumeSeries(bill.id)}
+                >
+                  Retomar repetição
+                </button>
+              )}
               <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditingId(bill.id)}>
                 <IconPencil />
               </button>

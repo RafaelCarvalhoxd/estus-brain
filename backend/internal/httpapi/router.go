@@ -58,6 +58,8 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("POST /api/bills/{id}/paid", b.MarkPaid)
 		mux.HandleFunc("POST /api/bills/{id}/pay", b.Pay)
 		mux.HandleFunc("DELETE /api/bills/{id}/paid", b.Unpay)
+		mux.HandleFunc("POST /api/bills/{id}/end-series", b.EndSeries)
+		mux.HandleFunc("DELETE /api/bills/{id}/end-series", b.ResumeSeries)
 		mux.HandleFunc("PUT /api/bills/{id}", b.Update)
 		mux.HandleFunc("DELETE /api/bills/{id}", b.Delete)
 	}

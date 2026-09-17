@@ -24,7 +24,18 @@ export interface Bill {
   category_id?: string;
   paid_at?: string;
   recurring: boolean;
+  // amount_estimated is per OCCURRENCE: this bill's own amount was carried
+  // over and not yet confirmed. Paying or editing it clears this — it says
+  // nothing about whether the series itself varies (see amount_varies).
   amount_estimated: boolean;
+  // amount_varies is per SERIES: whether the amount is expected to change
+  // every month. It survives this occurrence being paid or corrected, and is
+  // what seeds the next occurrence's own amount_estimated.
+  amount_varies: boolean;
+  // series_ended means the owner used "Encerrar repetição": Materialize will
+  // not grow this series any further, though every occurrence already born
+  // stays exactly as it is.
+  series_ended: boolean;
   payment_method?: BillPaymentMethod;
   status: BillStatus;
 }
@@ -43,6 +54,7 @@ export interface CreateBillInput {
   category_id?: string;
   recurring?: boolean;
   amount_estimated?: boolean;
+  amount_varies?: boolean;
   payment_method?: BillPaymentMethod;
 }
 
@@ -104,4 +116,15 @@ export function updateBill(id: string, input: CreateBillInput): Promise<Bill> {
 
 export function deleteBill(id: string): Promise<void> {
   return billsFetch<void>(`/api/bills/${id}`, { method: "DELETE" });
+}
+
+// endSeries stops a recurring bill's series from growing new occurrences
+// (Materialize skips it), without touching any occurrence already born.
+// resumeSeries undoes it, so the next month opened picks the series back up.
+export function endSeries(id: string): Promise<Bill> {
+  return billsFetch<Bill>(`/api/bills/${id}/end-series`, { method: "POST" });
+}
+
+export function resumeSeries(id: string): Promise<Bill> {
+  return billsFetch<Bill>(`/api/bills/${id}/end-series`, { method: "DELETE" });
 }

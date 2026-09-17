@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createBill, markBillPaid, updateBill, deleteBill } from "@/lib/bills";
+import { createBill, markBillPaid, updateBill, deleteBill, endSeries, resumeSeries } from "@/lib/bills";
 import type { BillDirection, BillPaymentMethod } from "@/lib/bills";
 
 export type BillFormState = {
@@ -65,7 +65,7 @@ export async function createBillAction(
   const direction = String(formData.get("direction") ?? "") as BillDirection;
   const categoryId = String(formData.get("category_id") ?? "") || undefined;
   const recurring = formData.get("recurring") === "1";
-  const amountEstimated = formData.get("amount_estimated") === "1";
+  const amountVaries = formData.get("amount_varies") === "1";
   const paymentMethod = (String(formData.get("payment_method") ?? "") || undefined) as
     | BillPaymentMethod
     | undefined;
@@ -87,7 +87,14 @@ export async function createBillAction(
       direction,
       category_id: categoryId,
       recurring,
-      amount_estimated: amountEstimated,
+      amount_varies: amountVaries,
+      // The first occurrence of a series that varies starts life as a guess
+      // too — there is no previous occurrence to carry amount_estimated from,
+      // so it is seeded from the same switch as amount_varies here, once.
+      // Every later occurrence instead gets it from BillService.Materialize
+      // (seeded from amount_varies, not from whatever this occurrence's own
+      // amount_estimated has become after being paid or corrected).
+      amount_estimated: amountVaries,
       payment_method: paymentMethod,
     });
   } catch (err) {
@@ -115,6 +122,12 @@ export type UpdateBillFields = {
   // the same way on both create and update.
   recurring: boolean;
   payment_method?: BillPaymentMethod;
+  // amount_varies is likewise read-only here — the edit row has no switch
+  // for it — and must always be resent as the bill's own current value.
+  // BillService.Update takes it verbatim from the request (unlike
+  // SeriesID/PaidAt/TransactionID/SeriesEnded), so omitting it would reach
+  // the backend as false and silently clear a series that does vary.
+  amount_varies: boolean;
 };
 
 export async function updateBillAction(id: string, fields: UpdateBillFields): Promise<{ error?: string }> {
@@ -134,6 +147,7 @@ export async function updateBillAction(id: string, fields: UpdateBillFields): Pr
       category_id: fields.category_id,
       recurring: fields.recurring,
       payment_method: fields.payment_method,
+      amount_varies: fields.amount_varies,
     });
   } catch (err) {
     return { error: friendlyMessage(err, "Falha ao salvar.") };
@@ -144,5 +158,19 @@ export async function updateBillAction(id: string, fields: UpdateBillFields): Pr
 
 export async function deleteBillAction(id: string): Promise<void> {
   await deleteBill(id);
+  revalidatePath("/financeiro/contas");
+}
+
+// endSeriesAction / resumeSeriesAction: dedicated, explicit way to cancel or
+// restart a recurring bill, replacing the old (unimplementable once
+// Materialize runs on every month view) idea that deleting the last
+// occurrence "ends" a series.
+export async function endSeriesAction(id: string): Promise<void> {
+  await endSeries(id);
+  revalidatePath("/financeiro/contas");
+}
+
+export async function resumeSeriesAction(id: string): Promise<void> {
+  await resumeSeries(id);
   revalidatePath("/financeiro/contas");
 }

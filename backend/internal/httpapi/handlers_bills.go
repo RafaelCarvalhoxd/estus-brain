@@ -195,3 +195,26 @@ func (h *BillHandlers) Unpay(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
 }
+
+// EndSeries handles POST /api/bills/{id}/end-series: stops a recurring
+// bill's series from growing new occurrences, without deleting or altering
+// anything already materialized.
+func (h *BillHandlers) EndSeries(w http.ResponseWriter, r *http.Request) {
+	bill, err := h.bills.EndSeries(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
+}
+
+// ResumeSeries handles DELETE /api/bills/{id}/end-series: undoes EndSeries,
+// so the next month opened picks the series back up from where it left off.
+func (h *BillHandlers) ResumeSeries(w http.ResponseWriter, r *http.Request) {
+	bill, err := h.bills.ResumeSeries(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toBillDTO(bill, time.Now()))
+}

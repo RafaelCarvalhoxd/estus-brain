@@ -37,9 +37,28 @@ type Bill struct {
 	// means a one-off. There is no template row: the mould for the next month
 	// is simply the latest occurrence.
 	SeriesID *string
-	// AmountEstimated says the amount was carried over from the previous
-	// month and not yet confirmed — "the power bill is usually R$180", not
-	// "the power bill came to R$180".
+	// SeriesEnded marks that the owner explicitly stopped this series from
+	// growing new occurrences — set only by BillService.EndSeries /
+	// ResumeSeries, never by a plain edit. Materialize skips a series whose
+	// latest occurrence has this set. It carries no meaning about deleting a
+	// row: deleting an occurrence is a plain delete, nothing more — a
+	// dedicated flag is what replaced the old (unimplementable, once
+	// Materialize runs on every month view) rule that "deleting the last
+	// occurrence ends the series."
+	SeriesEnded bool
+	// AmountVaries says THIS SERIES' amount is expected to change every
+	// month — a property of the series, not of one occurrence. It is copied
+	// forward unchanged by NextOccurrence and seeds each new occurrence's
+	// AmountEstimated, so a series whose amount fluctuates keeps starting
+	// each new month as a guess even after an occurrence has been paid or
+	// corrected (which only ever clears that occurrence's own
+	// AmountEstimated, never AmountVaries).
+	AmountVaries bool
+	// AmountEstimated says THIS OCCURRENCE's amount was carried over and not
+	// yet confirmed — "the power bill is usually R$180", not "the power bill
+	// came to R$180". Paying or editing the amount clears it; it says
+	// nothing about whether future occurrences will also be guesses — that
+	// is what AmountVaries is for.
 	AmountEstimated bool
 	// PaymentMethod is the default used when settling this bill, so paying it
 	// is one click instead of a form.
@@ -93,10 +112,15 @@ func (b Bill) Validate() error {
 func (b Bill) Recurring() bool { return b.SeriesID != nil }
 
 // NextOccurrence is the bill that continues b's series in the month after
-// b's own. It copies everything that describes the obligation and drops
-// everything that describes this month's settlement, so the new occurrence
-// starts pending. estimated marks the carried-over amount as a guess, which
-// is what a series whose value changes every month needs.
+// b's own. It copies everything that describes the obligation — including
+// AmountVaries, a property of the series carried forward via the plain
+// struct copy below, not of one occurrence — and drops everything that
+// describes this month's settlement, so the new occurrence starts pending.
+// estimated marks the carried-over amount as a guess, which is what a series
+// whose value changes every month needs; callers should pass the series' own
+// AmountVaries here, not the outgoing occurrence's AmountEstimated (which
+// paying or editing may have already cleared, independent of whether the
+// series still varies).
 func (b Bill) NextOccurrence(estimated bool) Bill {
 	next := b
 	next.ID = newID()

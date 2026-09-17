@@ -156,6 +156,23 @@ func TestNextOccurrenceMarksTheAmountAsEstimatedWhenAsked(t *testing.T) {
 	}
 }
 
+// AmountVaries is a series property, not an occurrence one: it must survive
+// the copy into the next occurrence unchanged, regardless of what estimated
+// is passed (that argument only sets AmountEstimated).
+func TestNextOccurrenceCarriesAmountVariesForward(t *testing.T) {
+	from := billOn(2026, time.September, 10)
+	from.AmountVaries = true
+	if next := from.NextOccurrence(false); !next.AmountVaries {
+		t.Error("amount_varies deveria continuar true na próxima ocorrência")
+	}
+
+	fixed := billOn(2026, time.September, 10)
+	fixed.AmountVaries = false
+	if next := fixed.NextOccurrence(true); next.AmountVaries {
+		t.Error("amount_varies deveria continuar false na próxima ocorrência")
+	}
+}
+
 func TestRecurringIsHavingASeries(t *testing.T) {
 	if !billOn(2026, time.September, 10).Recurring() {
 		t.Error("conta com série deve ser recorrente")

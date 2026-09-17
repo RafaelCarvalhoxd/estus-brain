@@ -17,6 +17,8 @@ type billDTO struct {
 	PaidAt          *string               `json:"paid_at,omitempty"`
 	Recurring       bool                  `json:"recurring"`
 	AmountEstimated bool                  `json:"amount_estimated"`
+	AmountVaries    bool                  `json:"amount_varies"`
+	SeriesEnded     bool                  `json:"series_ended"`
 	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
 	Status          string                `json:"status"`
 }
@@ -31,6 +33,8 @@ func toBillDTO(b domain.Bill, now time.Time) billDTO {
 		CategoryID:      b.CategoryID,
 		Recurring:       b.Recurring(),
 		AmountEstimated: b.AmountEstimated,
+		AmountVaries:    b.AmountVaries,
+		SeriesEnded:     b.SeriesEnded,
 		PaymentMethod:   b.PaymentMethod,
 		Status:          b.Status(now),
 	}
@@ -63,6 +67,7 @@ type createBillRequest struct {
 	CategoryID      *string               `json:"category_id,omitempty"`
 	Recurring       bool                  `json:"recurring,omitempty"`
 	AmountEstimated bool                  `json:"amount_estimated,omitempty"`
+	AmountVaries    bool                  `json:"amount_varies,omitempty"`
 	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
 }
 
@@ -79,6 +84,7 @@ func (r createBillRequest) toInput() (service.NewBillInput, error) {
 		CategoryID:      r.CategoryID,
 		Recurring:       r.Recurring,
 		AmountEstimated: r.AmountEstimated,
+		AmountVaries:    r.AmountVaries,
 		PaymentMethod:   r.PaymentMethod,
 	}, nil
 }

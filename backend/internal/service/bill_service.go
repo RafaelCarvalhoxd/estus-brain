@@ -21,6 +21,7 @@ type billStore interface {
 	Pay(ctx context.Context, id string, paidAt time.Time, expense domain.Transaction) (domain.Bill, error)
 	Unpay(ctx context.Context, id string) (domain.Bill, error)
 	Update(ctx context.Context, b domain.Bill) (domain.Bill, error)
+	SetSeriesEnded(ctx context.Context, id string, ended bool) (domain.Bill, error)
 	Delete(ctx context.Context, id string) error
 	ReceivedTotalForMonth(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
 	OpenTotals(ctx context.Context) (domain.Cents, domain.Cents, int, error)
@@ -61,9 +62,24 @@ type NewBillInput struct {
 	// Recurring tells Create "start a new series for this bill" when no
 	// SeriesID was supplied. It has no effect on Update: series membership
 	// only ever changes at creation.
-	Recurring       bool
+	Recurring bool
+	// AmountEstimated says THIS occurrence's amount is not yet confirmed.
+	// Create seeds a new series' first occurrence from AmountVaries (there is
+	// no previous occurrence to carry it from); Update takes it verbatim from
+	// the request, so an edit that supplies a corrected amount and simply
+	// omits this field — as the Contas edit row does — clears it, the same
+	// way paying a bill does.
 	AmountEstimated bool
-	PaymentMethod   *domain.PaymentMethod
+	// AmountVaries says THIS SERIES' amount changes every month — see the
+	// field of the same name on domain.Bill for why it must stay distinct
+	// from AmountEstimated. Both Create and Update take it from the request:
+	// unlike SeriesID/PaidAt/TransactionID/SeriesEnded, it is an ordinary
+	// editable property, not one only a dedicated endpoint may change — the
+	// caller (frontend) is responsible for resending the bill's current
+	// value on every edit, the same way it already does for CategoryID and
+	// PaymentMethod.
+	AmountVaries  bool
+	PaymentMethod *domain.PaymentMethod
 }
 
 // BillSummary is the "em aberto" snapshot the /contas page's stat tiles are
@@ -95,6 +111,7 @@ func (s *BillService) Create(ctx context.Context, in NewBillInput) (domain.Bill,
 		CategoryID:      in.CategoryID,
 		SeriesID:        seriesID,
 		AmountEstimated: in.AmountEstimated,
+		AmountVaries:    in.AmountVaries,
 		PaymentMethod:   in.PaymentMethod,
 	}
 	if err := bill.Validate(); err != nil {
@@ -220,10 +237,11 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 	// reads in.SeriesID: the wire has no series_id field, so an edit form
 	// that resubmits "recurring: true" carries no SeriesID at all, and
 	// trusting that absence would silently pull the bill out of its series
-	// on every save. Series membership, whether it's paid, and which
-	// transaction it settled into are loaded from the bill as it stands in
-	// the database and carried forward untouched; the client cannot alter
-	// any of the three, by accident or otherwise.
+	// on every save. Series membership, whether it's paid, which transaction
+	// it settled into, and whether the series has been ended are loaded from
+	// the bill as it stands in the database and carried forward untouched;
+	// the client cannot alter any of the four, by accident or otherwise —
+	// ending or resuming a series is EndSeries/ResumeSeries's job alone.
 	current, err := s.bills.Get(ctx, id)
 	if err != nil {
 		return domain.Bill{}, err
@@ -238,7 +256,9 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 		SeriesID:        current.SeriesID,
 		PaidAt:          current.PaidAt,
 		TransactionID:   current.TransactionID,
+		SeriesEnded:     current.SeriesEnded,
 		AmountEstimated: in.AmountEstimated,
+		AmountVaries:    in.AmountVaries,
 		PaymentMethod:   in.PaymentMethod,
 	}
 	if err := bill.Validate(); err != nil {
@@ -258,6 +278,35 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 
 func (s *BillService) Delete(ctx context.Context, id string) error {
 	return s.bills.Delete(ctx, id)
+}
+
+// EndSeries stops a series from growing new occurrences: Materialize skips
+// any series whose latest occurrence has SeriesEnded set. It touches no
+// history — every occurrence already materialized is untouched, and
+// deleting one is a plain delete again, not a signal Materialize would
+// undo the next time the month is opened.
+func (s *BillService) EndSeries(ctx context.Context, id string) (domain.Bill, error) {
+	bill, err := s.bills.Get(ctx, id)
+	if err != nil {
+		return domain.Bill{}, err
+	}
+	if !bill.Recurring() {
+		return domain.Bill{}, fmt.Errorf("%w: only a recurring bill's series can be ended", domain.ErrValidation)
+	}
+	return s.bills.SetSeriesEnded(ctx, id, true)
+}
+
+// ResumeSeries undoes EndSeries: the next materialization picks the series
+// back up from wherever its latest occurrence left off.
+func (s *BillService) ResumeSeries(ctx context.Context, id string) (domain.Bill, error) {
+	bill, err := s.bills.Get(ctx, id)
+	if err != nil {
+		return domain.Bill{}, err
+	}
+	if !bill.Recurring() {
+		return domain.Bill{}, fmt.Errorf("%w: only a recurring bill's series can be resumed", domain.ErrValidation)
+	}
+	return s.bills.SetSeriesEnded(ctx, id, false)
 }
 
 func (s *BillService) Summary(ctx context.Context) (BillSummary, error) {
@@ -285,9 +334,13 @@ const materializeCap = 24
 // Materialize creates the missing occurrences of every active series up to
 // and including ym, oldest first, each copied from the one before it, and
 // returns the total it created across all series. It is idempotent: a month
-// a series already has an occurrence in is left alone. Each series gets its
-// own budget of materializeCap new occurrences — see the cap's doc comment
-// for why the budget is not shared across series.
+// a series already has an occurrence in is left alone. A series whose latest
+// occurrence has SeriesEnded set is skipped entirely — that is how the owner
+// cancels a recurring bill, instead of the deleted-last-occurrence rule this
+// replaced (which Materialize itself made unworkable: deleting the latest
+// occurrence and reopening the same month would just recreate it). Each
+// series gets its own budget of materializeCap new occurrences — see the
+// cap's doc comment for why the budget is not shared across series.
 //
 // This is a write driven by a read, on purpose: the app runs on a laptop
 // that is off for days at a time, so a scheduler on the first of the month
@@ -299,6 +352,9 @@ func (s *BillService) Materialize(ctx context.Context, ym domain.YearMonth) (int
 	}
 	total := 0
 	for _, last := range latest {
+		if last.SeriesEnded {
+			continue
+		}
 		current := last
 		createdForSeries := 0
 		for createdForSeries < materializeCap {
@@ -306,7 +362,12 @@ func (s *BillService) Materialize(ctx context.Context, ym domain.YearMonth) (int
 			if !currentMonth.Before(ym) {
 				break
 			}
-			next := current.NextOccurrence(current.AmountEstimated)
+			// The new occurrence's AmountEstimated is seeded from the
+			// SERIES' own AmountVaries, not the outgoing occurrence's own
+			// AmountEstimated — that would already be false once an
+			// occurrence is paid or corrected, which says nothing about
+			// whether the series itself still varies month to month.
+			next := current.NextOccurrence(current.AmountVaries)
 			saved, err := s.bills.Create(ctx, next)
 			if err != nil {
 				return total, err

@@ -89,6 +89,16 @@ func (f *fakeBills) Unpay(context.Context, string) (domain.Bill, error) {
 	return domain.Bill{}, nil
 }
 
+func (f *fakeBills) SetSeriesEnded(_ context.Context, id string, ended bool) (domain.Bill, error) {
+	for i := range f.bills {
+		if f.bills[i].ID == id {
+			f.bills[i].SeriesEnded = ended
+			return f.bills[i], nil
+		}
+	}
+	return domain.Bill{}, domain.ErrNotFound
+}
+
 // fakeCategories and fakeCards stand in for *postgres.CategoryRepo and
 // *postgres.CreditCardRepo (via categoryStore/cardStore) so
 // BillService.Pay's category and credit-card lookups can be tested without
@@ -280,6 +290,144 @@ func TestMaterializeGivesEachSeriesItsOwnCap(t *testing.T) {
 		if got.Before(target) {
 			t.Errorf("%s only reached %v (want %v); has %d occurrences — starved by a shared cap", series, got, target, count)
 		}
+	}
+}
+
+// TestMaterializeSkipsASeriesWhoseLatestOccurrenceIsEnded guards the fix for
+// the critical defect in the original spec: "deleting the last occurrence of
+// a series ends the series" is unimplementable once Materialize runs on
+// every month view (a fresh occurrence would just reappear on the very next
+// GET). SeriesEnded, set only via EndSeries, is the explicit replacement.
+func TestMaterializeSkipsASeriesWhoseLatestOccurrenceIsEnded(t *testing.T) {
+	ended := seriesBill("b1", 2026, time.September, 10, 18000)
+	ended.SeriesEnded = true
+	f := &fakeBills{bills: []domain.Bill{ended}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	n, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 11})
+	if err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("criou %d contas para uma série encerrada, want 0", n)
+	}
+	november, _ := f.ListByMonth(ctx, domain.YearMonth{Year: 2026, Month: 11}, nil)
+	if len(november) != 0 {
+		t.Errorf("novembro tem %d contas, want 0 (série encerrada em setembro)", len(november))
+	}
+}
+
+// TestMaterializeResumesAfterASeriesIsUnended guards the mirror of the test
+// above: clearing SeriesEnded (ResumeSeries) must let the series grow new
+// occurrences again from wherever it left off.
+func TestMaterializeResumesAfterASeriesIsUnended(t *testing.T) {
+	ended := seriesBill("b1", 2026, time.September, 10, 18000)
+	ended.SeriesEnded = true
+	f := &fakeBills{bills: []domain.Bill{ended}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	if _, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 11}); err != nil {
+		t.Fatalf("materialize (ended): %v", err)
+	}
+	if _, err := s.ResumeSeries(ctx, "b1"); err != nil {
+		t.Fatalf("resume series: %v", err)
+	}
+	n, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 11})
+	if err != nil {
+		t.Fatalf("materialize (resumed): %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("criou %d contas ao retomar, want 2 (outubro e novembro)", n)
+	}
+	for _, month := range []time.Month{time.October, time.November} {
+		got, _ := f.ListByMonth(ctx, domain.YearMonth{Year: 2026, Month: int(month)}, nil)
+		if len(got) != 1 {
+			t.Errorf("%s tem %d contas, want 1 depois de retomar a série", month, len(got))
+		}
+	}
+}
+
+// TestEndSeriesRefusesAOneOffBill and its ResumeSeries mirror guard that
+// these dedicated endpoints only ever act on an actual series — a one-off
+// bill has no series to end or resume.
+func TestEndSeriesRefusesAOneOffBill(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{{ID: "b1"}}}
+	s := serviceWith(f)
+
+	if _, err := s.EndSeries(context.Background(), "b1"); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("EndSeries numa conta avulsa = %v, want domain.ErrValidation", err)
+	}
+	if _, err := s.ResumeSeries(context.Background(), "b1"); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("ResumeSeries numa conta avulsa = %v, want domain.ErrValidation", err)
+	}
+}
+
+// TestMaterializeSeedsNextOccurrenceEstimatedFromAmountVaries guards
+// Important 1: a series whose amount varies must keep marking new
+// occurrences as estimated even after one of them was paid (which clears
+// only that occurrence's own AmountEstimated, never the series' AmountVaries)
+// — collapsing the two into one column made the marker say the opposite of
+// the truth the very next month.
+func TestMaterializeSeedsNextOccurrenceEstimatedFromAmountVaries(t *testing.T) {
+	paidAt := time.Date(2026, time.September, 12, 0, 0, 0, 0, time.UTC)
+	paidSeptember := seriesBill("b1", 2026, time.September, 10, 18000)
+	paidSeptember.AmountVaries = true
+	// Mirrors what BillRepo.Pay does to the row: it clears AmountEstimated
+	// and nothing else — AmountVaries is untouched.
+	paidSeptember.AmountEstimated = false
+	paidSeptember.PaidAt = &paidAt
+
+	f := &fakeBills{bills: []domain.Bill{paidSeptember}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	if _, err := s.Materialize(ctx, domain.YearMonth{Year: 2026, Month: 10}); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	october, _ := f.ListByMonth(ctx, domain.YearMonth{Year: 2026, Month: 10}, nil)
+	if len(october) != 1 {
+		t.Fatalf("outubro tem %d contas, want 1", len(october))
+	}
+	if !october[0].AmountEstimated {
+		t.Error("outubro deveria nascer estimada: a série varia (amount_varies), mesmo setembro já paga não devendo importar")
+	}
+	if !october[0].AmountVaries {
+		t.Error("amount_varies deveria continuar true em outubro")
+	}
+}
+
+// TestListByMonthMaterializesBeforeListing guards the behaviour the whole
+// point of Task 5 depends on: without ListByMonth calling Materialize first,
+// "repetir todo mês" repeats nothing. Deleting the Materialize call, or
+// moving it after the list read, must fail this test.
+func TestListByMonthMaterializesBeforeListing(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{seriesBill("b1", 2026, time.September, 10, 18000)}}
+	s := serviceWith(f)
+
+	got, err := s.ListByMonth(context.Background(), domain.YearMonth{Year: 2026, Month: 10}, nil)
+	if err != nil {
+		t.Fatalf("list by month: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("outubro tem %d contas, want 1 (Materialize deveria ter rodado antes de listar)", len(got))
+	}
+}
+
+// TestListDoesNotMaterialize guards the other half: the plain List path (no
+// month), which the home dashboard uses to show upcoming bills, must never
+// write anything — browsing the home page is not something that should
+// mutate the bills table.
+func TestListDoesNotMaterialize(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{seriesBill("b1", 2026, time.September, 10, 18000)}}
+	s := serviceWith(f)
+
+	if _, err := s.List(context.Background(), nil, false); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(f.bills) != 1 {
+		t.Fatalf("List gravou %d contas a mais; want nenhuma (List não deve materializar)", len(f.bills)-1)
 	}
 }
 

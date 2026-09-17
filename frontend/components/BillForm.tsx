@@ -11,7 +11,7 @@ export function BillForm({ categories, onSuccess }: { categories: Category[]; on
   const [state, formAction, pending] = useActionState(createBillAction, initialState);
   const [direction, setDirection] = useState<BillDirection>("pagar");
   const [recurring, setRecurring] = useState(false);
-  const [amountEstimated, setAmountEstimated] = useState(false);
+  const [amountVaries, setAmountVaries] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">("");
 
   // A conta que se repete só vira gasto sozinha quando quitada se souber a
@@ -88,20 +88,20 @@ export function BillForm({ categories, onSuccess }: { categories: Category[]; on
         {recurring && (
           <>
             <div className="field toggle-row">
-              <label style={{ margin: 0 }} htmlFor="b-estimated">
+              <label style={{ margin: 0 }} htmlFor="b-varies">
                 O valor muda todo mês
               </label>
-              <input type="hidden" name="amount_estimated" value={amountEstimated ? "1" : ""} />
+              <input type="hidden" name="amount_varies" value={amountVaries ? "1" : ""} />
               <button
-                id="b-estimated"
+                id="b-varies"
                 type="button"
-                className={`switch ${amountEstimated ? "on" : ""}`}
+                className={`switch ${amountVaries ? "on" : ""}`}
                 role="switch"
-                aria-checked={amountEstimated}
-                onClick={() => setAmountEstimated((v) => !v)}
+                aria-checked={amountVaries}
+                onClick={() => setAmountVaries((v) => !v)}
               />
             </div>
-            {amountEstimated && (
+            {amountVaries && (
               <p className="helper">
                 A conta do mês seguinte nasce com o valor deste mês, para você corrigir quando ela chegar.
               </p>
