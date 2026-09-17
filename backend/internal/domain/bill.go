@@ -33,8 +33,21 @@ type Bill struct {
 	Direction   BillDirection
 	CategoryID  *string
 	PaidAt      *time.Time
-	Recurring   bool
-	CreatedAt   time.Time
+	// SeriesID links the occurrences of one monthly bill across months; nil
+	// means a one-off. There is no template row: the mould for the next month
+	// is simply the latest occurrence.
+	SeriesID *string
+	// AmountEstimated says the amount was carried over from the previous
+	// month and not yet confirmed — "the power bill is usually R$180", not
+	// "the power bill came to R$180".
+	AmountEstimated bool
+	// PaymentMethod is the default used when settling this bill, so paying it
+	// is one click instead of a form.
+	PaymentMethod *PaymentMethod
+	// TransactionID is the expense this bill created when it was settled, so
+	// undoing the payment removes exactly that one.
+	TransactionID *string
+	CreatedAt     time.Time
 }
 
 // Status is derived from PaidAt and DueDate rather than stored, so a bill
@@ -65,5 +78,42 @@ func (b Bill) Validate() error {
 	if !b.Direction.Valid() {
 		return fmt.Errorf("%w: invalid direction %q", ErrValidation, b.Direction)
 	}
+	if b.Recurring() && b.Direction == BillPayable {
+		if b.CategoryID == nil || *b.CategoryID == "" {
+			return fmt.Errorf("%w: a recurring bill needs a category, because settling it records an expense", ErrValidation)
+		}
+		if b.PaymentMethod == nil || !b.PaymentMethod.Valid() {
+			return fmt.Errorf("%w: a recurring bill needs a payment method, because settling it records an expense", ErrValidation)
+		}
+	}
 	return nil
+}
+
+// Recurring reports whether this bill is one occurrence of a monthly series.
+func (b Bill) Recurring() bool { return b.SeriesID != nil }
+
+// NextOccurrence is the bill that continues b's series in the month after
+// b's own. It copies everything that describes the obligation and drops
+// everything that describes this month's settlement, so the new occurrence
+// starts pending. estimated marks the carried-over amount as a guess, which
+// is what a series whose value changes every month needs.
+func (b Bill) NextOccurrence(estimated bool) Bill {
+	next := b
+	next.ID = newID()
+	next.PaidAt = nil
+	next.CreatedAt = time.Time{}
+	next.AmountEstimated = estimated
+	next.DueDate = nextMonthSameDay(b.DueDate)
+	return next
+}
+
+// nextMonthSameDay is the same day of the following month, clamped to that
+// month's last day. A bill due on the 31st must land on the 30th of a
+// 30-day month, never roll into the month after — that would silently move
+// the expense into a different budget month.
+func nextMonthSameDay(d time.Time) time.Time {
+	year, month, day := d.Date()
+	firstOfNext := time.Date(year, month+1, 1, 0, 0, 0, 0, d.Location())
+	lastDay := firstOfNext.AddDate(0, 1, -1).Day()
+	return time.Date(firstOfNext.Year(), firstOfNext.Month(), min(day, lastDay), 0, 0, 0, 0, d.Location())
 }
