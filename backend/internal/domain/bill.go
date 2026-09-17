@@ -101,6 +101,7 @@ func (b Bill) NextOccurrence(estimated bool) Bill {
 	next := b
 	next.ID = newID()
 	next.PaidAt = nil
+	next.TransactionID = nil
 	next.CreatedAt = time.Time{}
 	next.AmountEstimated = estimated
 	next.DueDate = nextMonthSameDay(b.DueDate)

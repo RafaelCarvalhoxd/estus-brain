@@ -105,6 +105,7 @@ func TestNextOccurrenceClampsToTheLastDayOfAShorterMonth(t *testing.T) {
 		{"31 de outubro vira 30 de novembro", billOn(2026, time.October, 31), time.Date(2026, time.November, 30, 0, 0, 0, 0, time.UTC)},
 		{"31 de janeiro vira 28 de fevereiro", billOn(2027, time.January, 31), time.Date(2027, time.February, 28, 0, 0, 0, 0, time.UTC)},
 		{"31 de dezembro vira 31 de janeiro", billOn(2026, time.December, 31), time.Date(2027, time.January, 31, 0, 0, 0, 0, time.UTC)},
+		{"31 de janeiro de 2028 vira 29 de fevereiro", billOn(2028, time.January, 31), time.Date(2028, time.February, 29, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -117,8 +118,10 @@ func TestNextOccurrenceClampsToTheLastDayOfAShorterMonth(t *testing.T) {
 
 func TestNextOccurrenceCarriesTheSeriesAndClearsTheSettlement(t *testing.T) {
 	paid := time.Date(2026, time.September, 9, 0, 0, 0, 0, time.UTC)
+	txn := "txn-september"
 	from := billOn(2026, time.September, 10)
 	from.PaidAt = &paid
+	from.TransactionID = &txn
 	next := from.NextOccurrence(false)
 
 	if next.SeriesID == nil || *next.SeriesID != *from.SeriesID {
@@ -129,6 +132,9 @@ func TestNextOccurrenceCarriesTheSeriesAndClearsTheSettlement(t *testing.T) {
 	}
 	if next.PaidAt != nil {
 		t.Error("a ocorrência nova nasce pendente, não paga")
+	}
+	if next.TransactionID != nil {
+		t.Error("a ocorrência nova não pode herdar o lançamento da anterior — desfazer o pagamento dela apagaria o lançamento do mês passado")
 	}
 	if next.AmountCents != from.AmountCents || next.Description != from.Description {
 		t.Errorf("valor/descrição não vieram junto: %+v", next)
