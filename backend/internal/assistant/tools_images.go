@@ -89,21 +89,17 @@ func (r *Registry) addImages() {
 	})
 }
 
-// generateImage tries the OpenAI key configured in Settings first — the
-// general-purpose, photorealistic option — falling back to the Mac's own
-// Image Playground only when no key is set. It doesn't ask which chat engine
-// is talking: Apple's own tool-calling loop runs the tool through the same
-// HTTP endpoint every other caller uses (see /api/assistant/tools), with no
-// way to tell them apart, so the tool picks the best backend it has instead
-// of the one "asking".
+// generateImage uses the OpenAI key configured in Settings — the only
+// backend this app generates images with. Apple's on-device Image
+// Playground was tried and pulled back out: ImageCreator only runs with a
+// real foreground app, which took over the Mac's Dock and stayed unreliable
+// even then (confirmed live, not assumed) — not worth the trade-off.
 func generateImage(ctx context.Context, d Deps, prompt string) (data []byte, contentType string, err error) {
-	if key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY")); key != "" {
-		return generateImageOpenAI(ctx, key, prompt)
+	key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY"))
+	if key == "" {
+		return nil, "", invalid("configure a API key da OpenAI em Configurações para gerar imagens")
 	}
-	if d.AppleBridge != nil {
-		return generateImageApple(ctx, d.AppleBridge, prompt)
-	}
-	return nil, "", invalid("nenhum motor com geração de imagem configurado — configure a API key da OpenAI em Configurações, ou use um Mac com Apple Intelligence")
+	return generateImageOpenAI(ctx, key, prompt)
 }
 
 func generateImageOpenAI(ctx context.Context, key, prompt string) ([]byte, string, error) {
@@ -192,35 +188,6 @@ func editImageOpenAI(ctx context.Context, key string, imageData []byte, imageNam
 	data, err := base64.StdEncoding.DecodeString(out.Data[0].B64JSON)
 	if err != nil {
 		return nil, "", fmt.Errorf("decodificar imagem editada: %w", err)
-	}
-	return data, "image/png", nil
-}
-
-// generateImageApple asks the Swift helper's /generate-image route, which
-// starts the bridge on demand the same way a chat message would (see
-// AppleBridge.ensure). Image Playground only draws in a few illustrated
-// styles, never a photo — see apple-bridge's own doc comment on the route.
-func generateImageApple(ctx context.Context, bridge *AppleBridge, prompt string) ([]byte, string, error) {
-	h, err := bridge.ensure(ctx)
-	if err != nil {
-		return nil, "", fmt.Errorf("ponte do Apple Intelligence: %w", err)
-	}
-	if !h.Available {
-		return nil, "", fmt.Errorf("Apple Intelligence indisponível: %s", h.Reason)
-	}
-	var res struct {
-		ImageBase64 string `json:"image_base64"`
-		Error       string `json:"error"`
-	}
-	if err := postJSON(ctx, bridge.url+"/generate-image", nil, map[string]any{"prompt": prompt}, &res); err != nil {
-		return nil, "", fmt.Errorf("gerar imagem no Apple Intelligence: %w", err)
-	}
-	if res.Error != "" {
-		return nil, "", fmt.Errorf("gerar imagem no Apple Intelligence: %s", res.Error)
-	}
-	data, err := base64.StdEncoding.DecodeString(res.ImageBase64)
-	if err != nil {
-		return nil, "", fmt.Errorf("decodificar imagem do Apple Intelligence: %w", err)
 	}
 	return data, "image/png", nil
 }

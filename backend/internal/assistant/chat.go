@@ -609,18 +609,14 @@ func quote(s string) string {
 	return string(b)
 }
 
-// imageCapableProviders are the only engines generate_image is offered to.
-// apple is here even though Capabilities.SupportsImageGen is false on its
-// Status (Image Playground doesn't actually work in this process — see
-// Images.swift) because the tool itself tries OpenAI first regardless of
-// which engine asked (generateImage in tools_images.go): a chat with Apple
-// can still come back with a real picture when an OpenAI key is configured,
-// so there is no reason to withhold the tool from it. A provider not listed
-// here still can't intelligently decide to call the tool even if it somehow
-// reached it (Claude Code and Codex get every tool via MCP with no per-tool
-// filtering, same as any other tool) — this only governs what's offered to
-// the providers that pick tools through toolsFor.
-var imageCapableProviders = map[string]bool{"openai": true, "apple": true}
+// imageCapableProviders are the only engines generate_image is offered to —
+// kept in step with Capabilities.SupportsImageGen in each provider's own
+// Status, which is what the settings screen shows instead. A provider not
+// listed here still can't intelligently decide to call the tool even if it
+// somehow reached it (Claude Code and Codex get every tool via MCP with no
+// per-tool filtering, same as any other tool) — this only governs what's
+// offered to the providers that pick tools through toolsFor.
+var imageCapableProviders = map[string]bool{"openai": true}
 
 // toolsFor picks the tools an engine is given: all of them (minus
 // generate_image for a provider that can't draw), or for small on-device

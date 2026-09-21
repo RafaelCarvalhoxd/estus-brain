@@ -21,12 +21,9 @@ func (p *appleProvider) ID() string { return "apple" }
 func (p *appleProvider) Status(ctx context.Context) ProviderStatus {
 	st := ProviderStatus{
 		ID: p.ID(), Name: "Apple Intelligence", Kind: "local", Model: "on-device",
-		// Not SupportsImageGen: apple-bridge has a /generate-image route
-		// (Images.swift) using Image Playground, but ImageCreator refuses to
-		// run in a plain background process — confirmed live, not assumed.
-		// generate_image still tries it as a last resort when no OpenAI key
-		// is set, and fails with a clear reason; this flag just doesn't
-		// promise something that doesn't work today.
+		// Not SupportsImageGen: Image Playground was tried (making this
+		// process a real foreground app) and pulled back out — unreliable
+		// even working, and it took over the Mac's Dock the whole time.
 		Capabilities: Capabilities{SupportsVoice: true},
 	}
 	h, err := p.chat.bridge.ensure(ctx)

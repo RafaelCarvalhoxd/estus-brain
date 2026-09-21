@@ -166,7 +166,6 @@ func run() error {
 		Location:       location,
 		AssistantRepo:  assistantRepo,
 		VaultKey:       chatCfg.VaultKey,
-		AppleBridge:    appleBridge,
 	})
 	chat := assistant.NewChat(tools, assistantRepo, chatCfg, appleBridge)
 	defer chat.Close()

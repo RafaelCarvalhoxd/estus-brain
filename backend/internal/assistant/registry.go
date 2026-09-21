@@ -64,10 +64,6 @@ type Deps struct {
 	// Chat.apiKey reads with, but the registry is built before Chat exists.
 	AssistantRepo *postgres.AssistantRepo
 	VaultKey      *[32]byte
-	// AppleBridge lets generate_image fall back to on-device Image Playground
-	// when no OpenAI key is configured. Shared with Chat, which the registry
-	// is built before — see NewAppleBridge.
-	AppleBridge *AppleBridge
 }
 
 type Registry struct {

@@ -12,9 +12,7 @@ enum Routes {
             return await Speech.transcribe(request.body, filename: request.headers["x-filename"] ?? "")
         case ("POST", "/speak"):
             return await Speech.speak(request.body)
-        case ("POST", "/generate-image"):
-            return await Images.generate(request.body)
-        case (_, "/health"), (_, "/chat"), (_, "/transcribe"), (_, "/speak"), (_, "/generate-image"):
+        case (_, "/health"), (_, "/chat"), (_, "/transcribe"), (_, "/speak"):
             return .error(405, "method not allowed")
         default:
             return .error(404, "not found")

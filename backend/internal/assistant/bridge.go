@@ -98,12 +98,7 @@ func (b *AppleBridge) ensure(ctx context.Context) (appleHealth, error) {
 		}()
 		slog.Info("apple intelligence bridge started", "pid", cmd.Process.Pid)
 	}
-	// 20s, not 5: the process now relaunches itself inside a wrapper .app
-	// (AppBundleRelauncher, apple-bridge — ImageCreator needs a real
-	// foreground app), and LaunchServices registering that bundle for the
-	// first time costs several real seconds, confirmed live. Cached after
-	// that first run, so this only matters once per machine.
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if h, err := b.health(ctx); err == nil {
 			return h, nil
