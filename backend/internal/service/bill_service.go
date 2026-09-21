@@ -80,6 +80,9 @@ type NewBillInput struct {
 	// PaymentMethod.
 	AmountVaries  bool
 	PaymentMethod *domain.PaymentMethod
+	// CreditCardID is the card this bill settles on when PaymentMethod is
+	// crédito — see domain.Bill.CreditCardID.
+	CreditCardID *string
 }
 
 // BillSummary is the "em aberto" snapshot the /contas page's stat tiles are
@@ -113,6 +116,7 @@ func (s *BillService) Create(ctx context.Context, in NewBillInput) (domain.Bill,
 		AmountEstimated: in.AmountEstimated,
 		AmountVaries:    in.AmountVaries,
 		PaymentMethod:   in.PaymentMethod,
+		CreditCardID:    in.CreditCardID,
 	}
 	if err := bill.Validate(); err != nil {
 		return domain.Bill{}, err
@@ -120,6 +124,11 @@ func (s *BillService) Create(ctx context.Context, in NewBillInput) (domain.Bill,
 	if in.CategoryID != nil {
 		if _, err := s.categories.Get(ctx, *in.CategoryID); err != nil {
 			return domain.Bill{}, fmt.Errorf("category %s: %w", *in.CategoryID, err)
+		}
+	}
+	if in.CreditCardID != nil {
+		if _, err := s.cards.Get(ctx, *in.CreditCardID); err != nil {
+			return domain.Bill{}, fmt.Errorf("credit card %s: %w", *in.CreditCardID, err)
 		}
 	}
 	created, err := s.bills.Create(ctx, bill)
@@ -274,6 +283,7 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 		AmountEstimated: in.AmountEstimated,
 		AmountVaries:    in.AmountVaries,
 		PaymentMethod:   in.PaymentMethod,
+		CreditCardID:    in.CreditCardID,
 	}
 	if err := bill.Validate(); err != nil {
 		return domain.Bill{}, err
@@ -281,6 +291,11 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 	if in.CategoryID != nil {
 		if _, err := s.categories.Get(ctx, *in.CategoryID); err != nil {
 			return domain.Bill{}, fmt.Errorf("category %s: %w", *in.CategoryID, err)
+		}
+	}
+	if in.CreditCardID != nil {
+		if _, err := s.cards.Get(ctx, *in.CreditCardID); err != nil {
+			return domain.Bill{}, fmt.Errorf("credit card %s: %w", *in.CreditCardID, err)
 		}
 	}
 	updated, err := s.bills.Update(ctx, bill)

@@ -63,6 +63,9 @@ type Bill struct {
 	// PaymentMethod is the default used when settling this bill, so paying it
 	// is one click instead of a form.
 	PaymentMethod *PaymentMethod
+	// CreditCardID is the card this bill settles on when PaymentMethod is
+	// crédito — stored the same way, so paying doesn't ask again every month.
+	CreditCardID *string
 	// TransactionID is the expense this bill created when it was settled, so
 	// undoing the payment removes exactly that one.
 	TransactionID *string
@@ -103,6 +106,9 @@ func (b Bill) Validate() error {
 		}
 		if b.PaymentMethod == nil || !b.PaymentMethod.Valid() {
 			return fmt.Errorf("%w: a recurring bill needs a payment method, because settling it records an expense", ErrValidation)
+		}
+		if *b.PaymentMethod == PaymentCredit && (b.CreditCardID == nil || *b.CreditCardID == "") {
+			return fmt.Errorf("%w: a recurring bill paid by credit needs a card", ErrValidation)
 		}
 	}
 	return nil

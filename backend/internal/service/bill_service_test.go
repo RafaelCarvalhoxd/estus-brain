@@ -694,6 +694,35 @@ func TestServiceCreateMintsASeriesIDWhenRecurring(t *testing.T) {
 	})
 }
 
+// TestServiceCreateRejectsAnUnknownCreditCard guards the card-existence check
+// added alongside category's: a recurring bill saved with credito needs a
+// real card, the same way it needs a real category, so a stale or
+// hand-crafted id from the client can't slip through and only fail later,
+// silently, the first time the bill is paid.
+func TestServiceCreateRejectsAnUnknownCreditCard(t *testing.T) {
+	f := &fakeBills{}
+	cats := fakeCategories{known: map[string]domain.Category{"cat-1": {ID: "cat-1"}}}
+	s := serviceWithPay(f, cats, fakeCards{})
+	ctx := context.Background()
+
+	method := domain.PaymentCredit
+	cat := "cat-1"
+	card := "no-such-card"
+	_, err := s.Create(ctx, NewBillInput{
+		Description:   "Netflix",
+		AmountCents:   4000,
+		DueDate:       time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC),
+		Direction:     domain.BillPayable,
+		CategoryID:    &cat,
+		PaymentMethod: &method,
+		CreditCardID:  &card,
+		Recurring:     true,
+	})
+	if err == nil {
+		t.Fatal("create com cartão inexistente = nil, want erro")
+	}
+}
+
 // TestMarkPaidRefusesAPayableBill guards Finding 1 of the whole-branch
 // review: MarkPaid used to have no direction check at all, so
 // POST /api/bills/{id}/paid on a payable bill (and the assistant's

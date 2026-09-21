@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { Category } from "@/lib/types";
+import type { Category, CreditCard } from "@/lib/types";
 import { Modal } from "./Modal";
 import { BillForm } from "./BillForm";
 import { IconPlus } from "./icons";
 
-export function NewBillModal({ categories }: { categories: Category[] }) {
+export function NewBillModal({ categories, cards }: { categories: Category[]; cards: CreditCard[] }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -15,7 +15,7 @@ export function NewBillModal({ categories }: { categories: Category[] }) {
         Nova conta
       </button>
       <Modal open={open} onClose={() => setOpen(false)}>
-        <BillForm categories={categories} onSuccess={() => setOpen(false)} />
+        <BillForm categories={categories} cards={cards} onSuccess={() => setOpen(false)} />
       </Modal>
     </>
   );

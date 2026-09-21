@@ -2,17 +2,26 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { createBillAction, type BillFormState } from "@/app/financeiro/contas/actions";
-import type { Category } from "@/lib/types";
+import type { Category, CreditCard } from "@/lib/types";
 import type { BillDirection, BillPaymentMethod } from "@/lib/bills";
 
 const initialState: BillFormState = { status: "idle" };
 
-export function BillForm({ categories, onSuccess }: { categories: Category[]; onSuccess?: () => void }) {
+export function BillForm({
+  categories,
+  cards,
+  onSuccess,
+}: {
+  categories: Category[];
+  cards: CreditCard[];
+  onSuccess?: () => void;
+}) {
   const [state, formAction, pending] = useActionState(createBillAction, initialState);
   const [direction, setDirection] = useState<BillDirection>("pagar");
   const [recurring, setRecurring] = useState(false);
   const [amountVaries, setAmountVaries] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">("");
+  const [creditCardId, setCreditCardId] = useState(() => cards[0]?.id ?? "");
 
   // A conta que se repete só vira gasto sozinha quando quitada se souber a
   // categoria e a forma de pagamento; sem isso o backend recusa com 422.
@@ -121,6 +130,25 @@ export function BillForm({ categories, onSuccess }: { categories: Category[]; on
                 <option value="pix">Pix</option>
               </select>
             </div>
+
+            {paymentMethod === "credito" && (
+              <div className="field">
+                <label htmlFor="b-cartao">Cartão</label>
+                <select
+                  id="b-cartao"
+                  name="credit_card_id"
+                  value={creditCardId}
+                  onChange={(e) => setCreditCardId(e.target.value)}
+                  required
+                >
+                  {cards.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </>
         )}
 

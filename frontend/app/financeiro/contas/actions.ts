@@ -35,6 +35,15 @@ function seriesRequirementError(
   return null;
 }
 
+// creditCardRequirementError mirrors buildPayInput's own check: a bill whose
+// payment method is crédito needs a card to settle on, the same way Pay does.
+function creditCardRequirementError(paymentMethod: string | undefined, creditCardId: string | undefined): string | null {
+  if (paymentMethod === "credito" && !creditCardId) {
+    return "Conta no crédito precisa de um cartão.";
+  }
+  return null;
+}
+
 // isValidationError/isConflict recognize the 422/409 apiFetch throws, so the
 // UI shows a readable Portuguese sentence instead of the raw
 // "estus-vault api ... -> 422: ..." fetch error — same pattern as
@@ -69,6 +78,7 @@ export async function createBillAction(
   const paymentMethod = (String(formData.get("payment_method") ?? "") || undefined) as
     | BillPaymentMethod
     | undefined;
+  const creditCardId = String(formData.get("credit_card_id") ?? "") || undefined;
 
   if (!description) return { status: "error", message: "Descrição é obrigatória." };
   if (amountCents === null) return { status: "error", message: "Valor inválido." };
@@ -78,6 +88,8 @@ export async function createBillAction(
   }
   const seriesError = seriesRequirementError(recurring, direction, categoryId, paymentMethod);
   if (seriesError) return { status: "error", message: seriesError };
+  const cardError = creditCardRequirementError(paymentMethod, creditCardId);
+  if (cardError) return { status: "error", message: cardError };
 
   try {
     await createBill({
@@ -96,6 +108,7 @@ export async function createBillAction(
       // amount_estimated has become after being paid or corrected).
       amount_estimated: amountVaries,
       payment_method: paymentMethod,
+      credit_card_id: paymentMethod === "credito" ? creditCardId : undefined,
     });
   } catch (err) {
     return { status: "error", message: friendlyMessage(err, "Falha ao salvar.") };
@@ -195,6 +208,7 @@ export type UpdateBillFields = {
   // the same way on both create and update.
   recurring: boolean;
   payment_method?: BillPaymentMethod;
+  credit_card_id?: string;
   // amount_varies is likewise read-only here — the edit row has no switch
   // for it — and must always be resent as the bill's own current value.
   // BillService.Update takes it verbatim from the request (unlike
@@ -210,6 +224,8 @@ export async function updateBillAction(id: string, fields: UpdateBillFields): Pr
   if (!fields.due_date) return { error: "Selecione o vencimento." };
   const seriesError = seriesRequirementError(fields.recurring, fields.direction, fields.category_id, fields.payment_method);
   if (seriesError) return { error: seriesError };
+  const cardError = creditCardRequirementError(fields.payment_method, fields.credit_card_id);
+  if (cardError) return { error: cardError };
 
   try {
     await updateBill(id, {
@@ -220,6 +236,7 @@ export async function updateBillAction(id: string, fields: UpdateBillFields): Pr
       category_id: fields.category_id,
       recurring: fields.recurring,
       payment_method: fields.payment_method,
+      credit_card_id: fields.payment_method === "credito" ? fields.credit_card_id : undefined,
       amount_varies: fields.amount_varies,
     });
   } catch (err) {

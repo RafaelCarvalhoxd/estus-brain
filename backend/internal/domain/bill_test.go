@@ -211,3 +211,26 @@ func TestValidateRequiresCategoryAndMethodOnAPayableSeries(t *testing.T) {
 		t.Errorf("conta avulsa sem categoria/forma = %v, want nil", err)
 	}
 }
+
+// Só o crédito precisa de cartão: débito e pix quitam sem um.
+func TestValidateRequiresCreditCardWhenAPayableSeriesUsesCredit(t *testing.T) {
+	credit := PaymentCredit
+	noCard := billOn(2026, time.September, 10)
+	noCard.PaymentMethod = &credit
+	if err := noCard.Validate(); !errors.Is(err, ErrValidation) {
+		t.Errorf("série a pagar no crédito sem cartão = %v, want ErrValidation", err)
+	}
+
+	card := "card-1"
+	withCard := billOn(2026, time.September, 10)
+	withCard.PaymentMethod = &credit
+	withCard.CreditCardID = &card
+	if err := withCard.Validate(); err != nil {
+		t.Errorf("série a pagar no crédito com cartão = %v, want nil", err)
+	}
+
+	pix := billOn(2026, time.September, 10) // PaymentPix, from billOn
+	if err := pix.Validate(); err != nil {
+		t.Errorf("série a pagar no pix sem cartão = %v, want nil", err)
+	}
+}

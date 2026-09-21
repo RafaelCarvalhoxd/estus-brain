@@ -39,7 +39,10 @@ function PayBillModal({
   const [amount, setAmount] = useState((bill.amount.cents / 100).toFixed(2).replace(".", ","));
   const [categoryId, setCategoryId] = useState(bill.category_id ?? "");
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">(bill.payment_method ?? "");
-  const [creditCardId, setCreditCardId] = useState(() => cards[0]?.id ?? "");
+  // A conta recorrente já pode ter um cartão salvo (a mesma que se paga todo
+  // mês); só cai no primeiro da lista quando ela ainda não tem um — por
+  // exemplo, a primeira vez que essa conta é paga no crédito.
+  const [creditCardId, setCreditCardId] = useState(() => bill.credit_card_id ?? cards[0]?.id ?? "");
   // "hoje" é sobre onde o dono mora, não sobre o fuso do servidor/browser —
   // dayKeyIn(TZ) (frontend/lib/week.ts) já resolve isso; new Date().toISOString()
   // devolveria o dia em UTC, que vira "amanhã" das 21h às 23h59 em
@@ -187,13 +190,24 @@ function formatDueDate(dueDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
-function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Category[]; onDone: () => void }) {
+function EditBillRow({
+  bill,
+  categories,
+  cards,
+  onDone,
+}: {
+  bill: Bill;
+  categories: Category[];
+  cards: CreditCard[];
+  onDone: () => void;
+}) {
   const router = useRouter();
   const [description, setDescription] = useState(bill.description);
   const [amount, setAmount] = useState((bill.amount.cents / 100).toFixed(2).replace(".", ","));
   const [dueDate, setDueDate] = useState(bill.due_date);
   const [categoryId, setCategoryId] = useState(bill.category_id ?? "");
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">(bill.payment_method ?? "");
+  const [creditCardId, setCreditCardId] = useState(() => bill.credit_card_id ?? cards[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -212,6 +226,7 @@ function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Cat
       category_id: categoryId || undefined,
       recurring: bill.recurring,
       payment_method: paymentMethod || undefined,
+      credit_card_id: paymentMethod === "credito" ? creditCardId : undefined,
       amount_varies: bill.amount_varies,
     });
     setSaving(false);
@@ -270,6 +285,20 @@ function EditBillRow({ bill, categories, onDone }: { bill: Bill; categories: Cat
             <option value="debito">Débito</option>
             <option value="credito">Crédito</option>
             <option value="pix">Pix</option>
+          </select>
+        )}
+        {bill.recurring && paymentMethod === "credito" && (
+          <select
+            className="txn-edit-input"
+            value={creditCardId}
+            onChange={(e) => setCreditCardId(e.target.value)}
+            disabled={saving}
+          >
+            {cards.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
         )}
         {bill.recurring && (
@@ -377,7 +406,7 @@ function BillColumn({
     <div>
       {bills.map((bill) =>
         editingId === bill.id ? (
-          <EditBillRow key={bill.id} bill={bill} categories={categories} onDone={() => setEditingId(null)} />
+          <EditBillRow key={bill.id} bill={bill} categories={categories} cards={cards} onDone={() => setEditingId(null)} />
         ) : (
           <div className="bill-row" key={bill.id}>
             <div className="bill-main">

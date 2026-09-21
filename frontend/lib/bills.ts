@@ -37,6 +37,7 @@ export interface Bill {
   // stays exactly as it is.
   series_ended: boolean;
   payment_method?: BillPaymentMethod;
+  credit_card_id?: string;
   status: BillStatus;
 }
 
@@ -56,6 +57,7 @@ export interface CreateBillInput {
   amount_estimated?: boolean;
   amount_varies?: boolean;
   payment_method?: BillPaymentMethod;
+  credit_card_id?: string;
 }
 
 // PayBillInput is what the owner confirms when settling a payable bill: the

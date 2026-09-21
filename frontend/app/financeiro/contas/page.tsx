@@ -30,7 +30,11 @@ export default async function BillsPage({
 
   return (
     <>
-      <TopBar month={month} basePath="/financeiro/contas" action={<NewBillModal categories={categories} />} />
+      <TopBar
+        month={month}
+        basePath="/financeiro/contas"
+        action={<NewBillModal categories={categories} cards={cards} />}
+      />
 
       <section className="kpi-grid">
         <div className="tile">

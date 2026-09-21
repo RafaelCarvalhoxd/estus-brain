@@ -20,13 +20,13 @@ func (r *BillRepo) Create(ctx context.Context, b domain.Bill) (domain.Bill, erro
 		insert into bills (
 			id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id,
-			series_ended, amount_varies
+			series_ended, amount_varies, credit_card_id
 		)
-		values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		returning id, created_at`,
 		b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID, b.PaidAt,
 		b.SeriesID, b.AmountEstimated, b.PaymentMethod, b.TransactionID,
-		b.SeriesEnded, b.AmountVaries,
+		b.SeriesEnded, b.AmountVaries, b.CreditCardID,
 	).Scan(&b.ID, &b.CreatedAt)
 	if err != nil {
 		return domain.Bill{}, fmt.Errorf("create bill: %w", err)
@@ -41,11 +41,11 @@ func (r *BillRepo) Get(ctx context.Context, id string) (domain.Bill, error) {
 	err := r.db.Pool.QueryRow(ctx, `
 		select id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies
+			series_ended, amount_varies, credit_card_id
 		from bills where id = $1`, id,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -59,7 +59,7 @@ func (r *BillRepo) List(ctx context.Context, direction *domain.BillDirection, on
 	query := `
 		select id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies
+			series_ended, amount_varies, credit_card_id
 		from bills
 		where ($1::text is null or direction = $1)
 		and (not $2 or paid_at is null)
@@ -94,7 +94,7 @@ func (r *BillRepo) ListByMonth(ctx context.Context, ym domain.YearMonth, directi
 	rows, err := r.db.Pool.Query(ctx, `
 		select id, description, amount_cents, due_date, direction, category_id,
 			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies
+			series_ended, amount_varies, credit_card_id
 		from bills
 		where due_date >= $1 and due_date < $2
 			and ($3::text is null or direction = $3)
@@ -114,7 +114,7 @@ func (r *BillRepo) LatestPerSeries(ctx context.Context) ([]domain.Bill, error) {
 		select distinct on (series_id)
 			id, description, amount_cents, due_date, direction, category_id,
 			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies
+			series_ended, amount_varies, credit_card_id
 		from bills
 		where series_id is not null
 		order by series_id, due_date desc`)
@@ -133,7 +133,7 @@ func scanBills(rows pgx.Rows) ([]domain.Bill, error) {
 		var b domain.Bill
 		if err := rows.Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 			&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-			&b.SeriesEnded, &b.AmountVaries); err != nil {
+			&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID); err != nil {
 			return nil, fmt.Errorf("scan bill: %w", err)
 		}
 		out = append(out, b)
@@ -148,11 +148,11 @@ func (r *BillRepo) MarkPaid(ctx context.Context, id string, paidAt time.Time) (d
 		where id = $1
 		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies`,
+			series_ended, amount_varies, credit_card_id`,
 		id, paidAt,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -199,11 +199,11 @@ func (r *BillRepo) Pay(ctx context.Context, id string, paidAt time.Time, expense
 		where id = $1 and paid_at is null
 		returning id, description, amount_cents, due_date, direction, category_id,
 			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies`,
+			series_ended, amount_varies, credit_card_id`,
 		id, paidAt, int64(expense.AmountCents), expense.ID,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID,
 		&b.PaidAt, &b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -267,17 +267,17 @@ func (r *BillRepo) Update(ctx context.Context, b domain.Bill) (domain.Bill, erro
 			description = $2, amount_cents = $3, due_date = $4,
 			direction = $5, category_id = $6, series_id = $7,
 			amount_estimated = $8, payment_method = $9,
-			amount_varies = $10, series_ended = $11
+			amount_varies = $10, series_ended = $11, credit_card_id = $12
 		where id = $1
 		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies`,
+			series_ended, amount_varies, credit_card_id`,
 		b.ID, b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID,
 		b.SeriesID, b.AmountEstimated, b.PaymentMethod,
-		b.AmountVaries, b.SeriesEnded,
+		b.AmountVaries, b.SeriesEnded, b.CreditCardID,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}

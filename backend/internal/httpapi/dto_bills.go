@@ -20,6 +20,7 @@ type billDTO struct {
 	AmountVaries    bool                  `json:"amount_varies"`
 	SeriesEnded     bool                  `json:"series_ended"`
 	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
+	CreditCardID    *string               `json:"credit_card_id,omitempty"`
 	Status          string                `json:"status"`
 }
 
@@ -36,6 +37,7 @@ func toBillDTO(b domain.Bill, now time.Time) billDTO {
 		AmountVaries:    b.AmountVaries,
 		SeriesEnded:     b.SeriesEnded,
 		PaymentMethod:   b.PaymentMethod,
+		CreditCardID:    b.CreditCardID,
 		Status:          b.Status(now),
 	}
 	if b.PaidAt != nil {
@@ -75,6 +77,7 @@ type createBillRequest struct {
 	AmountEstimated bool                  `json:"amount_estimated,omitempty"`
 	AmountVaries    bool                  `json:"amount_varies,omitempty"`
 	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
+	CreditCardID    *string               `json:"credit_card_id,omitempty"`
 }
 
 func (r createBillRequest) toInput() (service.NewBillInput, error) {
@@ -92,6 +95,7 @@ func (r createBillRequest) toInput() (service.NewBillInput, error) {
 		AmountEstimated: r.AmountEstimated,
 		AmountVaries:    r.AmountVaries,
 		PaymentMethod:   r.PaymentMethod,
+		CreditCardID:    r.CreditCardID,
 	}, nil
 }
 
