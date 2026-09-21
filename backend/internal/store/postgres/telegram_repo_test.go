@@ -94,22 +94,6 @@ func TestTelegramRepo(t *testing.T) {
 		t.Fatal("expected an error for an unknown report kind")
 	}
 
-	online := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
-	if err := repo.SetOnlineAt(ctx, online); err != nil {
-		t.Fatalf("set online at: %v", err)
-	}
-	got, _ = repo.Settings(ctx)
-	if got.LastOnlineAt == nil || !got.LastOnlineAt.Equal(online) {
-		t.Fatalf("last online = %v, want %v", got.LastOnlineAt, online)
-	}
-	// It has its own setter so a settings change never rolls it back.
-	if err := repo.SaveSettings(ctx, got); err != nil {
-		t.Fatalf("save: %v", err)
-	}
-	if got, _ = repo.Settings(ctx); got.LastOnlineAt == nil || !got.LastOnlineAt.Equal(online) {
-		t.Fatalf("SaveSettings changed last_online_at to %v", got.LastOnlineAt)
-	}
-
 	ref := "ref-" + time.Now().Format(time.RFC3339Nano)
 	defer repo.UnmarkSent(ctx, "test", ref)
 	if fresh, err := repo.MarkSent(ctx, "test", ref); err != nil || !fresh {

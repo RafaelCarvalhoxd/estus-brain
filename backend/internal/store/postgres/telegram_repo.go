@@ -26,9 +26,6 @@ type TelegramSettings struct {
 	EventsMinutesBefore int
 	LastMorningOn       *time.Time
 	LastEveningOn       *time.Time
-	// LastOnlineAt is when the bot last polled successfully; nil until it
-	// ever has. It is what the "conectado" notice measures the absence from.
-	LastOnlineAt *time.Time
 }
 
 type TelegramRepo struct{ db *DB }
@@ -40,13 +37,11 @@ func (r *TelegramRepo) Settings(ctx context.Context) (TelegramSettings, error) {
 	err := r.db.Pool.QueryRow(ctx, `
 		select token_secret, bot_username, chat_id, owner_name, pairing_code, pairing_expires_at,
 			update_offset, conversation_id, morning_enabled, morning_time, evening_enabled, evening_time,
-			reminders_enabled, events_enabled, events_minutes_before, last_morning_on, last_evening_on,
-			last_online_at
+			reminders_enabled, events_enabled, events_minutes_before, last_morning_on, last_evening_on
 		from telegram_settings where id = 1`).Scan(
 		&s.TokenSecret, &s.BotUsername, &s.ChatID, &s.OwnerName, &s.PairingCode, &s.PairingExpiresAt,
 		&s.UpdateOffset, &s.ConversationID, &s.MorningEnabled, &s.MorningTime, &s.EveningEnabled, &s.EveningTime,
-		&s.RemindersEnabled, &s.EventsEnabled, &s.EventsMinutesBefore, &s.LastMorningOn, &s.LastEveningOn,
-		&s.LastOnlineAt)
+		&s.RemindersEnabled, &s.EventsEnabled, &s.EventsMinutesBefore, &s.LastMorningOn, &s.LastEveningOn)
 	if err != nil {
 		return TelegramSettings{}, fmt.Errorf("telegram settings: %w", err)
 	}
@@ -90,15 +85,6 @@ func (r *TelegramRepo) saveSettings(ctx context.Context, s TelegramSettings, res
 func (r *TelegramRepo) SetOffset(ctx context.Context, offset int64) error {
 	if _, err := r.db.Pool.Exec(ctx, `update telegram_settings set update_offset = $1 where id = 1`, offset); err != nil {
 		return fmt.Errorf("save telegram offset: %w", err)
-	}
-	return nil
-}
-
-// SetOnlineAt records that the bot was answering at t. Like the offset, it
-// has its own setter so the poller never overwrites a settings change.
-func (r *TelegramRepo) SetOnlineAt(ctx context.Context, t time.Time) error {
-	if _, err := r.db.Pool.Exec(ctx, `update telegram_settings set last_online_at = $1 where id = 1`, t); err != nil {
-		return fmt.Errorf("save telegram last online: %w", err)
 	}
 	return nil
 }

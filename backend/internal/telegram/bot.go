@@ -41,7 +41,6 @@ type Store interface {
 	// SaveSettingsNewBot also sets the update offset back to 0, in the same write.
 	SaveSettingsNewBot(ctx context.Context, s postgres.TelegramSettings) error
 	SetOffset(ctx context.Context, offset int64) error
-	SetOnlineAt(ctx context.Context, t time.Time) error
 	SetReportDay(ctx context.Context, kind string, day *time.Time) error
 	MarkSent(ctx context.Context, kind, ref string) (bool, error)
 	UnmarkSent(ctx context.Context, kind, ref string) error
@@ -121,7 +120,6 @@ type Bot struct {
 	cancelPoll  context.CancelFunc
 	generation  uint64      // bumped by every reload, so a poll can tell it's stale
 	offset      int64       // the next update id, also kept here in case saving it fails
-	online      bool        // the owner has been told the bot is answering
 	pending     *menuAction // the ready-made action waiting for answers
 
 	apiMu    sync.Mutex

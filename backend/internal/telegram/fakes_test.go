@@ -191,7 +191,6 @@ func (f *fakeStore) SaveSettings(ctx context.Context, s postgres.TelegramSetting
 		return err
 	}
 	s.UpdateOffset, s.LastMorningOn, s.LastEveningOn = f.s.UpdateOffset, f.s.LastMorningOn, f.s.LastEveningOn
-	s.LastOnlineAt = f.s.LastOnlineAt
 	f.s = s
 	return nil
 }
@@ -203,7 +202,6 @@ func (f *fakeStore) SaveSettingsNewBot(ctx context.Context, s postgres.TelegramS
 		return err
 	}
 	s.LastMorningOn, s.LastEveningOn = f.s.LastMorningOn, f.s.LastEveningOn
-	s.LastOnlineAt = f.s.LastOnlineAt
 	s.UpdateOffset = 0
 	f.s = s
 	return nil
@@ -219,16 +217,6 @@ func (f *fakeStore) SetOffset(ctx context.Context, offset int64) error {
 		return f.offsetErr
 	}
 	f.s.UpdateOffset = offset
-	return nil
-}
-
-func (f *fakeStore) SetOnlineAt(ctx context.Context, t time.Time) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	f.s.LastOnlineAt = &t
 	return nil
 }
 

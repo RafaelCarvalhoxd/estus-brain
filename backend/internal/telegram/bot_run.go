@@ -24,30 +24,6 @@ func (b *Bot) Run(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
-	b.sayGoodbye(ctx)
-}
-
-// sayGoodbye tells the owner the bot is going down, on the way out of Run.
-// It runs after ctx is already canceled, so it borrows a few seconds of its
-// own — a clean shutdown is the one moment the bot can still reach Telegram
-// to say it is leaving.
-func (b *Bot) sayGoodbye(ctx context.Context) {
-	if !b.goOffline() {
-		return
-	}
-	sendCtx, cancel := saveContext(ctx)
-	defer cancel()
-	s, err := b.cfg.Store.Settings(sendCtx)
-	if err != nil || s.ChatID == nil {
-		return
-	}
-	token, _ := b.token(s)
-	if token == "" {
-		return
-	}
-	if err := b.sendHTML(sendCtx, b.client(token), *s.ChatID, disconnectedNotice("Desligando."), nil); err != nil {
-		slog.Warn("telegram: say goodbye", "error", err)
-	}
 }
 
 func (b *Bot) pollLoop(ctx context.Context) {
@@ -101,7 +77,6 @@ func (b *Bot) pollLoop(ctx context.Context) {
 			message, delay := pollFailure(err, backoff)
 			slog.Warn("telegram: poll", "error", err)
 			b.setStatus("error", message)
-			b.noteOffline(ctx, api, s, message)
 			b.wait(ctx, delay)
 			if message == msgOffline {
 				backoff = min(backoff*2, time.Minute)
@@ -110,7 +85,6 @@ func (b *Bot) pollLoop(ctx context.Context) {
 		}
 		backoff = time.Second
 		b.pollSucceeded(s, generation)
-		b.noteOnline(ctx, api, s)
 		for _, u := range updates {
 			if !b.takeUpdate(ctx, generation, u.UpdateID+1) {
 				break // the settings changed: the next poll reads the rest
@@ -119,37 +93,6 @@ func (b *Bot) pollLoop(ctx context.Context) {
 			// an answer short.
 			b.handle(ctx, api, u)
 		}
-	}
-}
-
-// noteOnline records that the bot is answering and, the first time after a
-// silence, tells the owner — with how long it was away, read from s, which
-// still holds the last online time from before this poll.
-func (b *Bot) noteOnline(ctx context.Context, api API, s postgres.TelegramSettings) {
-	now := b.now()
-	fresh := b.goOnline()
-	if err := b.cfg.Store.SetOnlineAt(ctx, now); err != nil {
-		slog.Warn("telegram: save last online", "error", err)
-	}
-	if !fresh || s.ChatID == nil {
-		return
-	}
-	if err := b.sendHTML(ctx, api, *s.ChatID, connectedNotice(s.LastOnlineAt, now), nil); err != nil {
-		slog.Warn("telegram: say hello", "error", err)
-	}
-}
-
-// noteOffline tells the owner the bot stopped answering, once per outage.
-// The send usually fails — the poll failed because Telegram is out of reach,
-// and so is this message — which is exactly why the notice on the way back
-// says how long the silence lasted. It still gets through for an outage that
-// isn't the network's fault, such as a second Estus stealing the bot.
-func (b *Bot) noteOffline(ctx context.Context, api API, s postgres.TelegramSettings, reason string) {
-	if !b.goOffline() || s.ChatID == nil {
-		return
-	}
-	if err := b.sendHTML(ctx, api, *s.ChatID, disconnectedNotice(reason), nil); err != nil {
-		slog.Debug("telegram: could not announce the disconnection", "error", err)
 	}
 }
 
