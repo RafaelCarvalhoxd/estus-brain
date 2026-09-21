@@ -88,6 +88,11 @@ function EditRow({
   );
 }
 
+function subtotal(items: Transaction[]): string {
+  const cents = items.reduce((sum, t) => sum + t.amount.cents, 0);
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 export function TransactionsList({
   transactions,
   categories,
@@ -119,6 +124,9 @@ export function TransactionsList({
     return categories.filter((c) => ids.has(c.id));
   }, [transactions, categories]);
 
+  const fixed = useMemo(() => filtered.filter((t) => t.is_recurring), [filtered]);
+  const variable = useMemo(() => filtered.filter((t) => !t.is_recurring), [filtered]);
+
   async function handleDelete(id: string) {
     if (!confirm("Excluir este lançamento? Não dá para desfazer.")) return;
     setDeletingId(id);
@@ -133,6 +141,58 @@ export function TransactionsList({
     } finally {
       setDeletingId(null);
     }
+  }
+
+  function renderRow(t: Transaction) {
+    if (editingId === t.id) {
+      return <EditRow key={t.id} transaction={t} categories={categories} onDone={() => setEditingId(null)} />;
+    }
+    return (
+      <div className="txn" key={t.id}>
+        <span className="txn-dot" style={{ background: t.category_color }} />
+        <div className="txn-main">
+          <div className="txn-title">
+            {t.description}
+            {t.installment_total && t.installment_total > 1
+              ? ` — parcela ${t.installment_number}/${t.installment_total}`
+              : ""}
+          </div>
+          <div className="txn-meta">{meta(t)}</div>
+          {deleteError?.id === t.id && <p className="form-error">{deleteError.message}</p>}
+        </div>
+        <div className="txn-amt">
+          <div className="txn-value tab">{t.amount.formatted}</div>
+          {t.payment_method === "credito" && <span className="badge">fatura {formatYearMonthShort(month)}</span>}
+        </div>
+        <div className="row-actions">
+          <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditingId(t.id)}>
+            <IconPencil />
+          </button>
+          <button
+            className="icon-btn bad"
+            type="button"
+            aria-label="Excluir"
+            disabled={deletingId === t.id}
+            onClick={() => handleDelete(t.id)}
+          >
+            <IconTrash />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSection(title: string, items: Transaction[]) {
+    if (items.length === 0) return null;
+    return (
+      <div className="txn-section">
+        <div className="txn-section-head">
+          <h3>{title}</h3>
+          <span className="tab">{subtotal(items)}</span>
+        </div>
+        {items.map(renderRow)}
+      </div>
+    );
   }
 
   return (
@@ -168,45 +228,10 @@ export function TransactionsList({
       ) : filtered.length === 0 ? (
         <p className="empty-note">Nenhum lançamento bate com esse filtro.</p>
       ) : (
-        filtered.map((t) =>
-          editingId === t.id ? (
-            <EditRow key={t.id} transaction={t} categories={categories} onDone={() => setEditingId(null)} />
-          ) : (
-            <div className="txn" key={t.id}>
-              <span className="txn-dot" style={{ background: t.category_color }} />
-              <div className="txn-main">
-                <div className="txn-title">
-                  {t.description}
-                  {t.installment_total && t.installment_total > 1
-                    ? ` — parcela ${t.installment_number}/${t.installment_total}`
-                    : ""}
-                </div>
-                <div className="txn-meta">{meta(t)}</div>
-                {deleteError?.id === t.id && <p className="form-error">{deleteError.message}</p>}
-              </div>
-              <div className="txn-amt">
-                <div className="txn-value tab">{t.amount.formatted}</div>
-                {t.payment_method === "credito" && (
-                  <span className="badge">fatura {formatYearMonthShort(month)}</span>
-                )}
-              </div>
-              <div className="row-actions">
-                <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditingId(t.id)}>
-                  <IconPencil />
-                </button>
-                <button
-                  className="icon-btn bad"
-                  type="button"
-                  aria-label="Excluir"
-                  disabled={deletingId === t.id}
-                  onClick={() => handleDelete(t.id)}
-                >
-                  <IconTrash />
-                </button>
-              </div>
-            </div>
-          ),
-        )
+        <>
+          {renderSection("Fixos", fixed)}
+          {renderSection("Variáveis", variable)}
+        </>
       )}
     </div>
   );

@@ -320,6 +320,7 @@ func (r *Registry) addFinance() {
 				"mes_anterior":    money(sum.PreviousMonthCents),
 				"variacao":        money(sum.TotalCents - sum.PreviousMonthCents),
 				"fixos":           money(sum.RecurringCents),
+				"variaveis":       money(sum.VariableCents),
 				"por_categoria":   cats,
 				"num_lancamentos": len(sum.Transactions),
 			}, nil

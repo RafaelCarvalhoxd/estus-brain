@@ -67,6 +67,7 @@ export interface MonthSummary {
   total: Money;
   previous_month: Money;
   recurring: Money;
+  variable: Money;
   open_installments: Money;
   open_invoice: Money;
   categories: CategorySlice[];

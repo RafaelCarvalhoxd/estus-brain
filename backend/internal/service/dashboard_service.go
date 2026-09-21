@@ -49,6 +49,7 @@ type MonthSummary struct {
 	TotalCents           domain.Cents
 	PreviousMonthCents   domain.Cents
 	RecurringCents       domain.Cents
+	VariableCents        domain.Cents
 	OpenInstallmentCents domain.Cents
 	OpenInvoiceCents     domain.Cents
 	Categories           []CategorySlice
@@ -118,6 +119,7 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 		TotalCents:           total,
 		PreviousMonthCents:   previousTotal,
 		RecurringCents:       recurring,
+		VariableCents:        total - recurring,
 		OpenInstallmentCents: openInstallments,
 		OpenInvoiceCents:     openInvoice,
 		Categories:           categories,
