@@ -137,6 +137,7 @@ func run() error {
 		AppleBridgeBin: getenv("APPLE_BRIDGE_BIN", "../apple-bridge/.build/release/estus-apple-bridge"),
 		AppleBridgeURL: getenv("APPLE_BRIDGE_URL", "http://127.0.0.1:8765"),
 		Voice:          getenv("ASSISTANT_VOICE", "Luciana"),
+		Documents:      documentServiceOrNil(documentService, documentErr),
 	}
 	if key, err := domain.LoadEncryptionKeyFromEnv(); err == nil {
 		chatCfg.VaultKey = &key
@@ -169,7 +170,7 @@ func run() error {
 	})
 	chat := assistant.NewChat(tools, assistantRepo, chatCfg, appleBridge)
 	defer chat.Close()
-	assistantHandlers := httpapi.NewAssistantHandlers(tools, chat)
+	assistantHandlers := httpapi.NewAssistantHandlers(tools, chat, documentServiceOrNil(documentService, documentErr))
 	mcpHandler := tools.MCPHandler(func() []string { return []string{mcpToken} })
 	slog.Info("assistant ready", "tools", len(tools.Tools()), "mcp", "/mcp")
 

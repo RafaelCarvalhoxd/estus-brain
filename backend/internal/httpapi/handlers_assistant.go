@@ -3,22 +3,60 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rafael/estus-vault/backend/internal/assistant"
 	"github.com/rafael/estus-vault/backend/internal/domain"
+	"github.com/rafael/estus-vault/backend/internal/service"
 )
 
 type AssistantHandlers struct {
-	tools *assistant.Registry
-	chat  *assistant.Chat
+	tools     *assistant.Registry
+	chat      *assistant.Chat
+	documents *service.DocumentService
 }
 
-func NewAssistantHandlers(tools *assistant.Registry, chat *assistant.Chat) *AssistantHandlers {
-	return &AssistantHandlers{tools: tools, chat: chat}
+func NewAssistantHandlers(tools *assistant.Registry, chat *assistant.Chat, documents *service.DocumentService) *AssistantHandlers {
+	return &AssistantHandlers{tools: tools, chat: chat, documents: documents}
+}
+
+// UploadAttachment stores a chat attachment the same way Documentos does
+// (it's the same storage) and hands back the id Chat.Send's AttachmentID
+// expects — the composer's clip button posts here before sending the
+// message that references it.
+func (h *AssistantHandlers) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	if h.documents == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "módulo de documentos indisponível"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, domain.MaxDocumentBytes+(1<<20))
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		writeError(w, fmt.Errorf("%w: upload inválido", domain.ErrValidation))
+		return
+	}
+	defer func() {
+		if r.MultipartForm != nil {
+			r.MultipartForm.RemoveAll()
+		}
+	}()
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: nenhum arquivo enviado", domain.ErrValidation))
+		return
+	}
+	defer file.Close()
+	name := strings.TrimSpace(header.Filename)
+	doc, err := h.documents.Save(r.Context(), nil, name, header.Header.Get("Content-Type"), file)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"document_id": doc.ID, "name": doc.Name, "content_type": doc.ContentType})
 }
 
 func (h *AssistantHandlers) ListTools(w http.ResponseWriter, r *http.Request) {

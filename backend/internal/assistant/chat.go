@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
+	"github.com/rafael/estus-vault/backend/internal/service"
 	"github.com/rafael/estus-vault/backend/internal/store/postgres"
 )
 
@@ -56,6 +57,11 @@ type ChatRequest struct {
 	Module    string
 	SessionID string
 	Model     string
+	// Attachment carries an image a vision-capable provider can send as real
+	// pixels — see visionCapableProviders. Anything else the person attached
+	// is already folded into Message as text by Chat.Send, so most providers
+	// never need to know this field exists.
+	Attachment *Attachment
 }
 
 type ChatOutcome struct {
@@ -111,6 +117,9 @@ type ChatConfig struct {
 	AppleBridgeURL string
 	// Voice is the macOS voice that reads answers aloud, e.g. "Luciana".
 	Voice string
+	// Documents resolves a chat attachment (see SendRequest.AttachmentID) —
+	// the same storage generate_image and documents_write already use.
+	Documents *service.DocumentService
 }
 
 type Chat struct {
@@ -375,6 +384,9 @@ type SendRequest struct {
 	Message        string `json:"message"`
 	Module         string `json:"module"`
 	Provider       string `json:"provider"`
+	// AttachmentID is a document already uploaded (POST /api/assistant/attachments)
+	// that this message refers to — an image, PDF, spreadsheet or text file.
+	AttachmentID string `json:"attachment_id"`
 	// Title names a conversation Send creates; empty uses the message's start.
 	Title string `json:"-"`
 	// SentAt is when the person actually wrote the message, for a channel
@@ -408,6 +420,14 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 		return fmt.Errorf("%w: motores que usam o login da sua assinatura ficam desligados no modo multiusuário; escolha outro motor", domain.ErrValidation)
 	}
 
+	var attachment *Attachment
+	if req.AttachmentID != "" {
+		attachment, err = resolveAttachment(ctx, c.cfg.Documents, req.AttachmentID, providerID)
+		if err != nil {
+			return fmt.Errorf("anexo: %w", err)
+		}
+	}
+
 	var conv postgres.Conversation
 	if req.ConversationID != "" {
 		conv, err = c.repo.GetConversation(ctx, req.ConversationID)
@@ -427,7 +447,13 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	if err != nil {
 		return err
 	}
-	if _, err := c.repo.AddMessage(ctx, postgres.ConversationMessage{ConversationID: conv.ID, Role: "user", Content: message}); err != nil {
+	var userData json.RawMessage
+	if attachment != nil {
+		userData, _ = json.Marshal(map[string]any{"attachment": map[string]string{
+			"document_id": req.AttachmentID, "name": attachment.Name, "content_type": attachment.ContentType,
+		}})
+	}
+	if _, err := c.repo.AddMessage(ctx, postgres.ConversationMessage{ConversationID: conv.ID, Role: "user", Content: message, Data: userData}); err != nil {
 		return err
 	}
 
@@ -461,6 +487,17 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	if n := len(chatReq.History); n > 0 && chatReq.History[n-1].Role == "user" {
 		chatReq.Message = chatReq.History[n-1].Content + "\n\n" + chatReq.Message
 		chatReq.History = chatReq.History[:n-1]
+	}
+	// A vision-capable engine gets the image itself on ChatRequest.Attachment
+	// (each such provider builds its own content blocks from it); every other
+	// attachment is already text by now, so it's just more of the message —
+	// no provider needs to know it came from a file.
+	if attachment != nil {
+		if attachment.ImageBase64 != "" {
+			chatReq.Attachment = attachment
+		} else if attachment.Text != "" {
+			chatReq.Message = fmt.Sprintf("[Anexo: %s]\n%s\n\n%s", attachment.Name, attachment.Text, chatReq.Message)
+		}
 	}
 
 	outcome, chatErr := provider.Chat(ctx, chatReq, emit)

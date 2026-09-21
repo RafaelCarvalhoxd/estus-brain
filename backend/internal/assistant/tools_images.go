@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -40,6 +44,47 @@ func (r *Registry) addImages() {
 				return nil, fmt.Errorf("salvar imagem gerada: %w", err)
 			}
 			return map[string]any{"document_id": doc.ID, "descricao": prompt}, nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "edit_image", Title: "Editar imagem", Module: "geral",
+		Description: "Edita uma imagem já anexada na conversa ou salva em Documentos, a partir de um pedido em texto (ex.: remover o fundo, mudar a cor, adicionar algo). Exige a API key da OpenAI configurada.",
+		Input: object(map[string]any{
+			"document_id": str("Id da imagem a editar"),
+			"prompt":      str("O que mudar na imagem"),
+		}, "document_id", "prompt"),
+		run: typed(func(ctx context.Context, in struct {
+			DocumentID string `json:"document_id"`
+			Prompt     string `json:"prompt"`
+		}) (any, error) {
+			prompt := strings.TrimSpace(in.Prompt)
+			if prompt == "" {
+				return nil, invalid("descreva o que mudar")
+			}
+			doc, file, err := d.Documents.Open(ctx, in.DocumentID)
+			if err != nil {
+				return nil, err
+			}
+			imgData, err := io.ReadAll(io.LimitReader(file, maxAttachmentBytes))
+			file.Close()
+			if err != nil {
+				return nil, fmt.Errorf("ler imagem: %w", err)
+			}
+			key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY"))
+			if key == "" {
+				return nil, invalid("configure a API key da OpenAI em Configurações para editar imagens")
+			}
+			out, contentType, err := editImageOpenAI(ctx, key, imgData, doc.Name, prompt)
+			if err != nil {
+				return nil, err
+			}
+			name := fmt.Sprintf("Imagem editada %s.png", time.Now().Format("2006-01-02 15-04-05"))
+			newDoc, err := d.Documents.Save(ctx, nil, name, contentType, bytes.NewReader(out))
+			if err != nil {
+				return nil, fmt.Errorf("salvar imagem editada: %w", err)
+			}
+			return map[string]any{"document_id": newDoc.ID, "descricao": prompt}, nil
 		}),
 	})
 }
@@ -80,6 +125,73 @@ func generateImageOpenAI(ctx context.Context, key, prompt string) ([]byte, strin
 	data, err := base64.StdEncoding.DecodeString(res.Data[0].B64JSON)
 	if err != nil {
 		return nil, "", fmt.Errorf("decodificar imagem da OpenAI: %w", err)
+	}
+	return data, "image/png", nil
+}
+
+// editImageOpenAI hits OpenAI's separate images/edits endpoint — distinct
+// from images/generations, and multipart (it takes the source image as a
+// file part) rather than JSON, so it doesn't go through postJSON.
+func editImageOpenAI(ctx context.Context, key string, imageData []byte, imageName, prompt string) ([]byte, string, error) {
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	if err := w.WriteField("model", "gpt-image-1"); err != nil {
+		return nil, "", err
+	}
+	if err := w.WriteField("prompt", prompt); err != nil {
+		return nil, "", err
+	}
+	part, err := w.CreateFormFile("image", imageName)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := part.Write(imageData); err != nil {
+		return nil, "", err
+	}
+	if err := w.Close(); err != nil {
+		return nil, "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/images/edits", &body)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+key)
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("editar imagem na OpenAI: %w", err)
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 8<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	if res.StatusCode >= 300 {
+		var e struct {
+			Error json.RawMessage `json:"error"`
+		}
+		_ = json.Unmarshal(raw, &e)
+		msg := string(e.Error)
+		if msg == "" {
+			msg = truncate(string(raw), 300)
+		}
+		return nil, "", &apiError{Host: "api.openai.com", Status: res.StatusCode, Message: msg}
+	}
+	var out struct {
+		Data []struct {
+			B64JSON string `json:"b64_json"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, "", err
+	}
+	if len(out.Data) == 0 || out.Data[0].B64JSON == "" {
+		return nil, "", fmt.Errorf("editar imagem na OpenAI: resposta sem imagem")
+	}
+	data, err := base64.StdEncoding.DecodeString(out.Data[0].B64JSON)
+	if err != nil {
+		return nil, "", fmt.Errorf("decodificar imagem editada: %w", err)
 	}
 	return data, "image/png", nil
 }

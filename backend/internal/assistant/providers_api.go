@@ -76,6 +76,34 @@ func hostOf(url string) string {
 	return s
 }
 
+// userContentAnthropic is req.Message alone, or — when an attachment carried
+// real image bytes (see resolveAttachment) — Anthropic's block form: an
+// image block plus a text block, which is the only shape its API accepts
+// once a message has more than plain text.
+func userContentAnthropic(req ChatRequest) any {
+	if req.Attachment == nil || req.Attachment.ImageBase64 == "" {
+		return req.Message
+	}
+	type block = map[string]any
+	return []block{
+		{"type": "image", "source": block{"type": "base64", "media_type": req.Attachment.ImageMediaType, "data": req.Attachment.ImageBase64}},
+		{"type": "text", "text": req.Message},
+	}
+}
+
+// userContentOpenAI is OpenAI's equivalent of userContentAnthropic: a data
+// URL in an image_url block instead of a separate media-type field.
+func userContentOpenAI(req ChatRequest) any {
+	if req.Attachment == nil || req.Attachment.ImageBase64 == "" {
+		return req.Message
+	}
+	type block = map[string]any
+	return []block{
+		{"type": "text", "text": req.Message},
+		{"type": "image_url", "image_url": block{"url": fmt.Sprintf("data:%s;base64,%s", req.Attachment.ImageMediaType, req.Attachment.ImageBase64)}},
+	}
+}
+
 // ---------------------------------------------------------------- Anthropic
 
 type anthropicProvider struct{ chat *Chat }
@@ -115,7 +143,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, req ChatRequest, emit func
 	for _, m := range req.History {
 		messages = append(messages, block{"role": m.Role, "content": m.Content})
 	}
-	messages = append(messages, block{"role": "user", "content": req.Message})
+	messages = append(messages, block{"role": "user", "content": userContentAnthropic(req)})
 
 	var out ChatOutcome
 	var texts []string
@@ -178,7 +206,7 @@ func (c *Chat) openAIChat(ctx context.Context, providerID string, req ChatReques
 	for _, m := range req.History {
 		messages = append(messages, msg{"role": m.Role, "content": m.Content})
 	}
-	messages = append(messages, msg{"role": "user", "content": req.Message})
+	messages = append(messages, msg{"role": "user", "content": userContentOpenAI(req)})
 
 	var out ChatOutcome
 	var texts []string

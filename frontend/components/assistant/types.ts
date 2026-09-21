@@ -37,12 +37,20 @@ export type CardData =
   | { kind: "done"; title: string; lines: string[] }
   | { kind: "image"; url: string; alt: string };
 
+/** A file attached to a message — set client-side when sending, or read
+ * back from a stored message's `data.attachment` on history reload. */
+export interface ChatAttachment {
+  name: string;
+  content_type: string;
+}
+
 export interface ChatItem {
   id: string;
   role: "user" | "assistant";
   text: string;
   tools: ToolRun[];
   card?: CardData;
+  attachment?: ChatAttachment;
   /** A form waiting to be filled, for the flow with this id. */
   formFlow?: string;
   formPrefill?: Record<string, string>;

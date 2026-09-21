@@ -1,8 +1,14 @@
 package assistant
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"strings"
+
+	"github.com/go-pdf/fpdf"
+	"github.com/xuri/excelize/v2"
 )
 
 func (r *Registry) addFiles() {
@@ -51,6 +57,75 @@ func (r *Registry) addFiles() {
 					}
 				}
 				return map[string]any{"documentos": out}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_read", Title: "Ler documento", Module: "documentos", ReadOnly: true,
+			Description: "Lê o conteúdo de um documento pelo id — texto direto, texto extraído de um PDF, ou as linhas de uma planilha. Use o id de um anexo da conversa ou de documents_search.",
+			Input:       object(map[string]any{"document_id": str("Id do documento")}, "document_id"),
+			run: typed(func(ctx context.Context, in struct {
+				DocumentID string `json:"document_id"`
+			}) (any, error) {
+				doc, file, err := d.Documents.Open(ctx, in.DocumentID)
+				if err != nil {
+					return nil, err
+				}
+				defer file.Close()
+				data, err := io.ReadAll(io.LimitReader(file, maxAttachmentBytes))
+				if err != nil {
+					return nil, fmt.Errorf("ler documento: %w", err)
+				}
+				return map[string]any{"nome": doc.Name, "conteudo": describeDocument(doc, data)}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_write", Title: "Criar arquivo", Module: "documentos",
+			Description: "Cria um arquivo em Documentos a partir de texto que você escreveu — .txt e .pdf a partir de 'content', .xlsx a partir de 'rows' (uma lista de linhas, cada linha uma lista de células). Use para gerar um relatório, reescrever um texto anexado, ou devolver uma planilha alterada.",
+			Input: object(map[string]any{
+				"name":    str("Nome do arquivo, sem extensão"),
+				"format":  enum("Formato de saída", "txt", "pdf", "xlsx"),
+				"content": str("Texto do arquivo — obrigatório para txt e pdf, ignorado para xlsx"),
+				"rows":    array("Linhas da planilha — só para xlsx", array("célula", str("valor da célula"))),
+			}, "name", "format"),
+			run: typed(func(ctx context.Context, in struct {
+				Name    string     `json:"name"`
+				Format  string     `json:"format"`
+				Content string     `json:"content"`
+				Rows    [][]string `json:"rows"`
+			}) (any, error) {
+				name := strings.TrimSpace(in.Name)
+				if name == "" {
+					return nil, invalid("nome é obrigatório")
+				}
+				var (data []byte
+					contentType, ext string
+					err              error
+				)
+				switch in.Format {
+				case "txt":
+					data, contentType, ext = []byte(in.Content), "text/plain", ".txt"
+				case "pdf":
+					data, err = renderPDF(in.Content)
+					contentType, ext = "application/pdf", ".pdf"
+				case "xlsx":
+					data, err = renderXLSX(in.Rows)
+					contentType, ext = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"
+				default:
+					return nil, invalid("format precisa ser txt, pdf ou xlsx")
+				}
+				if err != nil {
+					return nil, fmt.Errorf("gerar arquivo: %w", err)
+				}
+				if !strings.HasSuffix(strings.ToLower(name), ext) {
+					name += ext
+				}
+				doc, err := d.Documents.Save(ctx, nil, name, contentType, bytes.NewReader(data))
+				if err != nil {
+					return nil, fmt.Errorf("salvar arquivo: %w", err)
+				}
+				return map[string]any{"document_id": doc.ID, "nome": doc.Name}, nil
 			}),
 		})
 	}
@@ -119,4 +194,47 @@ func (r *Registry) addOverview() {
 			return out, nil
 		}),
 	})
+}
+
+// renderPDF lays text out as simple paragraphs, one per line of content —
+// enough for a report or a rewritten document, not a layout tool. cp1252
+// covers the accents Portuguese needs without embedding a font.
+func renderPDF(content string) ([]byte, error) {
+	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(20, 20, 20)
+	pdf.AddPage()
+	pdf.SetFont("Arial", "", 12)
+	tr := pdf.UnicodeTranslatorFromDescriptor("")
+	for _, line := range strings.Split(content, "\n") {
+		pdf.MultiCell(0, 6, tr(line), "", "", false)
+	}
+	if err := pdf.Error(); err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func renderXLSX(rows [][]string) ([]byte, error) {
+	f := excelize.NewFile()
+	defer f.Close()
+	for r, row := range rows {
+		for c, cell := range row {
+			colName, err := excelize.ColumnNumberToName(c + 1)
+			if err != nil {
+				return nil, err
+			}
+			if err := f.SetCellValue("Sheet1", fmt.Sprintf("%s%d", colName, r+1), cell); err != nil {
+				return nil, err
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := f.Write(&buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

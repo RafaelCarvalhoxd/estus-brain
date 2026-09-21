@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any -- tool results are the backend's loose JSON, read field by field */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import type { AssistantSettings, CardData, ChatItem, ConversationSummary, ModuleKey, ToolRun } from "./types";
 import { FLOWS, MODULES, expensePrefill, flowById, matchFlows, type Flow, type FlowField, type OptionSource } from "./flows";
 import { Markdown } from "./Markdown";
@@ -55,13 +55,16 @@ const TOOL_LABELS: Record<string, string> = {
   boards_list: "Consultou quadros",
   overview_today: "Montou o resumo do dia",
   generate_image: "Gerou uma imagem",
+  edit_image: "Editou uma imagem",
+  documents_read: "Leu um documento",
+  documents_write: "Criou um arquivo",
 };
 
 /** Turns a finished generate_image call into the card the bubble renders —
  * null for every other tool, or if the result doesn't look like one
  * (an error, or a shape from before this ran). */
 function imageCardFrom(e: { tool?: string; result?: unknown }): CardData | null {
-  if (e.tool !== "generate_image" || !e.result || typeof e.result !== "object") return null;
+  if ((e.tool !== "generate_image" && e.tool !== "edit_image") || !e.result || typeof e.result !== "object") return null;
   const r = e.result as { document_id?: unknown; descricao?: unknown };
   if (typeof r.document_id !== "string") return null;
   return { kind: "image", url: `/api/documents/${r.document_id}/download`, alt: typeof r.descricao === "string" ? r.descricao : "Imagem gerada" };
@@ -97,16 +100,31 @@ async function loadOptions(source: OptionSource): Promise<{ value: string; label
 }
 
 function itemsFromStored(messages: { id: string; role: "user" | "assistant"; content: string; data: any; provider: string }[]): ChatItem[] {
-  return messages.map((m) => ({
-    id: m.id,
-    role: m.role,
-    text: m.content,
-    card: m.data?.card as CardData | undefined,
-    tools: ((m.data?.tool_calls as any[]) ?? []).map((t) => ({ id: t.id, name: t.name, args: t.args, result: t.result, error: t.error, done: true })),
-    error: m.data?.error || undefined,
-    errorDetail: m.data?.error_detail || undefined,
-    provider: m.provider,
-  }));
+  return messages.map((m) => {
+    const tools = ((m.data?.tool_calls as any[]) ?? []).map((t) => ({ id: t.id, name: t.name, args: t.args, result: t.result, error: t.error, done: true }));
+    // generate_image/edit_image's card isn't stored separately (chat.go only
+    // saves tool_calls) — rebuild it the same way the live stream does, so
+    // reloading history doesn't lose the picture.
+    let imageCard: CardData | undefined;
+    for (const t of tools) {
+      const card = imageCardFrom({ tool: t.name, result: t.result });
+      if (card) {
+        imageCard = card;
+        break;
+      }
+    }
+    return {
+      id: m.id,
+      role: m.role,
+      text: m.content,
+      card: (m.data?.card as CardData | undefined) ?? imageCard,
+      tools,
+      attachment: m.data?.attachment ? { name: m.data.attachment.name, content_type: m.data.attachment.content_type } : undefined,
+      error: m.data?.error || undefined,
+      errorDetail: m.data?.error_detail || undefined,
+      provider: m.provider,
+    };
+  });
 }
 
 export function ChatApp({
@@ -129,6 +147,10 @@ export function ChatApp({
   const abortRef = useRef<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachment, setAttachment] = useState<{ id: string; name: string; content_type: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   const loadSettings = useCallback(async () => {
     const res = await fetch("/api/assistant/settings", { cache: "no-store" });
@@ -226,13 +248,41 @@ export function ChatApp({
     void runFlow(flow, values, rows, userText);
   };
 
+  // ---- attachments
+
+  const onFileChosen = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // lets picking the same file twice fire onChange again
+    if (!file) return;
+    setAttachError(null);
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      const res = await fetch("/api/assistant/attachments", { method: "POST", body: form });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setAttachError(body?.error ?? "Não consegui anexar o arquivo.");
+        return;
+      }
+      const doc = (await res.json()) as { document_id: string; name: string; content_type: string };
+      setAttachment({ id: doc.document_id, name: doc.name, content_type: doc.content_type });
+    } catch {
+      setAttachError("Não consegui enviar o arquivo. Confira sua conexão.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // ---- AI
 
   const sendToAI = async (text: string, voice = false): Promise<Reply> => {
     const assistantId = uid();
+    const sentAttachment = attachment;
+    setAttachment(null);
     setItems((prev) => [
       ...prev,
-      { id: uid(), role: "user", text, tools: [], voice },
+      { id: uid(), role: "user", text, tools: [], voice, attachment: sentAttachment ?? undefined },
       { id: assistantId, role: "assistant", text: "", tools: [], pending: true, provider: settings?.provider },
     ]);
     setBusy(true);
@@ -250,7 +300,12 @@ export function ChatApp({
       const res = await fetch("/api/assistant/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: conversationIdRef.current ?? "", message: text, module: module === "geral" ? "" : module }),
+        body: JSON.stringify({
+          conversation_id: conversationIdRef.current ?? "",
+          message: text,
+          module: module === "geral" ? "" : module,
+          attachment_id: sentAttachment?.id ?? "",
+        }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -345,11 +400,13 @@ export function ChatApp({
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     const text = input.trim();
-    if (!text || busy) return;
+    // A lone attachment is a valid message when there's an engine to read
+    // it — the flows path (no engine) has nothing to do with a bare file.
+    if ((!text && !(engine && attachment)) || busy) return;
     setInput("");
     setVoiceNotice(null);
     stopSpeaking();
-    void sendText(text, false);
+    void sendText(text || "Veja o anexo.", false);
   };
 
   // ---- voice
@@ -569,6 +626,25 @@ export function ChatApp({
           </div>
         )}
 
+        {(attachment || uploading || attachError) && (
+          <div className="cx-attach-bar">
+            {uploading ? (
+              <span>Enviando arquivo…</span>
+            ) : attachError ? (
+              <span className="cx-attach-error">{attachError}</span>
+            ) : (
+              attachment && (
+                <span className="cx-attach-chip">
+                  📎 {attachment.name}
+                  <button type="button" aria-label="Remover anexo" onClick={() => setAttachment(null)}>
+                    ×
+                  </button>
+                </span>
+              )
+            )}
+          </div>
+        )}
+
         <form className="cx-composer" onSubmit={submit}>
           <div className="cx-engine">
             <button type="button" className={`cx-engine-btn${engine ? " is-ai" : ""}`} onClick={() => setEngineMenu((v) => !v)} aria-expanded={engineMenu}>
@@ -593,6 +669,27 @@ export function ChatApp({
               </div>
             )}
           </div>
+          {engine && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                hidden
+                onChange={(e) => void onFileChosen(e)}
+                aria-hidden="true"
+                tabIndex={-1}
+              />
+              <button
+                type="button"
+                className="cx-attach"
+                aria-label="Anexar arquivo"
+                disabled={busy || uploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📎
+              </button>
+            </>
+          )}
           {voiceOn && (
             <button
               type="button"
@@ -631,7 +728,7 @@ export function ChatApp({
               ■
             </button>
           ) : (
-            <button type="submit" className="cx-send" aria-label="Enviar" disabled={busy || !input.trim()}>
+            <button type="submit" className="cx-send" aria-label="Enviar" disabled={busy || (!input.trim() && !(engine && attachment))}>
               ↑
             </button>
           )}
@@ -664,6 +761,7 @@ function Bubble({
     return (
       <div className="cx-msg is-user">
         <div className="cx-bubble">
+          {item.attachment && <span className="cx-attach-tag">📎 {item.attachment.name}</span>}
           {item.voice && (
             <span className="cx-voice-tag" title="Enviado por voz">
               🎙️{" "}

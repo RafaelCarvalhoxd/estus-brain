@@ -1046,3 +1046,57 @@ label.es-engine {
   font-size: 12px;
   opacity: 0.8;
 }
+
+/* attachments */
+.cx-attach {
+  height: 36px;
+  min-width: 36px;
+  flex: none;
+  padding: 0 8px;
+  border-radius: 11px;
+  border: 1px solid var(--hairline-strong);
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  cursor: pointer;
+}
+.cx-attach:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.cx-attach-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 14px -2px;
+  padding: 0 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.cx-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+}
+.cx-attach-chip button {
+  border: none;
+  background: none;
+  color: var(--ink-mute);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+}
+.cx-attach-error {
+  color: var(--bad);
+}
+.cx-attach-tag {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
