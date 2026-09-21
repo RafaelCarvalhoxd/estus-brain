@@ -1057,12 +1057,25 @@ label.es-engine {
   border: 1px solid var(--hairline-strong);
   background: transparent;
   color: var(--ink);
-  font-size: 15px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .cx-attach:disabled {
   opacity: 0.4;
   cursor: default;
+}
+.cx-attach svg,
+.cx-mic svg {
+  width: 16px;
+  height: 16px;
+}
+.cx-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 .cx-attach-bar {
   display: flex;
@@ -1082,21 +1095,40 @@ label.es-engine {
   background: var(--surface-2);
   border: 1px solid var(--hairline);
 }
+.cx-attach-chip svg {
+  width: 13px;
+  height: 13px;
+}
 .cx-attach-chip button {
+  display: inline-flex;
   border: none;
   background: none;
   color: var(--ink-mute);
-  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   padding: 2px;
+}
+.cx-attach-chip button svg {
+  width: 12px;
+  height: 12px;
 }
 .cx-attach-error {
   color: var(--bad);
 }
 .cx-attach-tag {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   opacity: 0.85;
   margin-bottom: 4px;
+}
+.cx-attach-tag svg {
+  width: 12px;
+  height: 12px;
+}
+.cx-voice-tag svg {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
 }

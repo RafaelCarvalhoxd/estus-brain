@@ -290,6 +290,36 @@ export function IconHabit() {
   );
 }
 
+// Anexo: um clipe de papel — o mesmo símbolo universal de anexar arquivo.
+export function IconPaperclip() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8.5 12.5V7a3.5 3.5 0 0 1 7 0v9a5.5 5.5 0 0 1-11 0V8.5" />
+    </svg>
+  );
+}
+
+// Voz: um microfone — falar com o chat em vez de digitar.
+export function IconMic() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+      <line x1="12" y1="17.5" x2="12" y2="21" />
+      <line x1="8.5" y1="21" x2="15.5" y2="21" />
+    </svg>
+  );
+}
+
+// Voz gravando: um quadrado — o botão que interrompe a gravação em andamento.
+export function IconStop() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
 // Conversa: a speech bubble with a spark — talking to the brain.
 export function IconChat() {
   return (

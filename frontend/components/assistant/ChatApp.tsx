@@ -7,7 +7,7 @@ import { FLOWS, MODULES, expensePrefill, flowById, matchFlows, type Flow, type F
 import { Markdown } from "./Markdown";
 import { EngineSettings } from "./EngineSettings";
 import { useVoiceRecorder } from "./useVoiceRecorder";
-import { IconPlus, IconTrash } from "../icons";
+import { IconClose, IconMic, IconPaperclip, IconPlus, IconStop, IconTrash } from "../icons";
 
 // The chat: pick a module, tap a ready-made question or fill a short form,
 // and the answer comes back as a sentence and a card — no AI needed. With an
@@ -635,9 +635,10 @@ export function ChatApp({
             ) : (
               attachment && (
                 <span className="cx-attach-chip">
-                  📎 {attachment.name}
+                  <IconPaperclip />
+                  {attachment.name}
                   <button type="button" aria-label="Remover anexo" onClick={() => setAttachment(null)}>
-                    ×
+                    <IconClose />
                   </button>
                 </span>
               )
@@ -686,7 +687,7 @@ export function ChatApp({
                 disabled={busy || uploading}
                 onClick={() => fileInputRef.current?.click()}
               >
-                📎
+                <IconPaperclip />
               </button>
             </>
           )}
@@ -706,7 +707,15 @@ export function ChatApp({
                 void recorder.start();
               }}
             >
-              {recorder.state === "recording" ? `● ${recorder.elapsed}s` : recorder.state === "processing" ? "…" : "🎙️"}
+              {recorder.state === "recording" ? (
+                <>
+                  <IconStop /> {recorder.elapsed}s
+                </>
+              ) : recorder.state === "processing" ? (
+                "…"
+              ) : (
+                <IconMic />
+              )}
             </button>
           )}
           <textarea
@@ -761,10 +770,14 @@ function Bubble({
     return (
       <div className="cx-msg is-user">
         <div className="cx-bubble">
-          {item.attachment && <span className="cx-attach-tag">📎 {item.attachment.name}</span>}
+          {item.attachment && (
+            <span className="cx-attach-tag">
+              <IconPaperclip /> {item.attachment.name}
+            </span>
+          )}
           {item.voice && (
             <span className="cx-voice-tag" title="Enviado por voz">
-              🎙️{" "}
+              <IconMic />
             </span>
           )}
           {item.text}

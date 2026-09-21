@@ -190,6 +190,19 @@ enum Routes {
         if let e = error as? LanguageModelSession.ToolCallError {
             return (500, "Falha ao executar a ferramenta \(e.tool.name): \(e.underlyingError.localizedDescription)")
         }
+        // Some GenerationError failures don't survive the `as?` cast above —
+        // seen live with prompts describing a person unflatteringly, where
+        // the bridged NSError's own description still names the type
+        // ("FoundationModels.LanguageModelSession.GenerationError error -1")
+        // while the typed switch above never matches. This is almost always
+        // the content guardrail rejecting the prompt, not a real crash.
+        // "recusou" is what Go's describeError (explain.go) already matches
+        // to the same friendly guardrail message .guardrailViolation gets
+        // above — reusing that instead of writing new copy here.
+        let raw = String(describing: error)
+        if raw.contains("GenerationError") {
+            return (422, "O Apple Intelligence recusou esse pedido, provavelmente pelas proteções de segurança do modelo local. Reformule o pedido de outro jeito, ou use outro motor.")
+        }
         return (500, "Erro inesperado: \(error.localizedDescription)")
     }
 }
