@@ -17,7 +17,7 @@ func (r *Registry) addFiles() {
 	if d.Documents != nil {
 		r.add(Tool{
 			Name: "documents_search", Title: "Buscar documentos", Module: "documentos", ReadOnly: true,
-			Description: "Procura arquivos guardados em Documentos pelo nome, em todas as pastas.",
+			Description: "Procura arquivos guardados em Documentos pelo nome, em todas as pastas. Traz o id de cada um, para usar em documents_read ou edit_image.",
 			Input:       object(map[string]any{"query": str("Parte do nome do arquivo")}, "query"),
 			run: typed(func(ctx context.Context, in struct {
 				Query string `json:"query"`
@@ -33,6 +33,7 @@ func (r *Registry) addFiles() {
 					ids = append(ids, &f.ID)
 				}
 				type row struct {
+					ID     string `json:"id"`
 					Name   string `json:"arquivo"`
 					Folder string `json:"pasta"`
 					Size   int64  `json:"bytes"`
@@ -53,7 +54,7 @@ func (r *Registry) addFiles() {
 						if id != nil {
 							folder = names[*id]
 						}
-						out = append(out, row{doc.Name, folder, doc.SizeBytes, doc.CreatedAt.In(r.deps.Location).Format(dayLayout)})
+						out = append(out, row{doc.ID, doc.Name, folder, doc.SizeBytes, doc.CreatedAt.In(r.deps.Location).Format(dayLayout)})
 					}
 				}
 				return map[string]any{"documentos": out}, nil
@@ -86,9 +87,14 @@ func (r *Registry) addFiles() {
 			Input: object(map[string]any{
 				"name":    str("Nome do arquivo, sem extensão"),
 				"format":  enum("Formato de saída", "txt", "pdf", "xlsx"),
-				"content": str("Texto do arquivo — obrigatório para txt e pdf, ignorado para xlsx"),
+				"content": str("Texto do arquivo, já escrito por você — para xlsx, mande uma string vazia"),
 				"rows":    array("Linhas da planilha — só para xlsx", array("célula", str("valor da célula"))),
-			}, "name", "format"),
+				// content marked required (not just required for txt/pdf): a
+				// schema that only requires it conditionally let a small
+				// model (confirmed live with Apple Intelligence) omit it
+				// every time, hit "file is empty" from Document.Validate,
+				// and retry identically instead of correcting.
+			}, "name", "format", "content"),
 			run: typed(func(ctx context.Context, in struct {
 				Name    string     `json:"name"`
 				Format  string     `json:"format"`
@@ -105,8 +111,14 @@ func (r *Registry) addFiles() {
 				)
 				switch in.Format {
 				case "txt":
+					if strings.TrimSpace(in.Content) == "" {
+						return nil, invalid("content é obrigatório para txt")
+					}
 					data, contentType, ext = []byte(in.Content), "text/plain", ".txt"
 				case "pdf":
+					if strings.TrimSpace(in.Content) == "" {
+						return nil, invalid("content é obrigatório para pdf")
+					}
 					data, err = renderPDF(in.Content)
 					contentType, ext = "application/pdf", ".pdf"
 				case "xlsx":
