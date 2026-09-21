@@ -42,7 +42,24 @@ func (p *appleProvider) Status(ctx context.Context) ProviderStatus {
 	return st
 }
 
+// Chat retries once, restarting the bridge process first, when the first
+// attempt fails outright (as opposed to /health reporting the model itself
+// unavailable). Confirmed live: the on-device runtime can wedge into
+// answering a GenerationError for every request — including a bare "oi",
+// nothing to do with content — until the process is restarted; a request
+// that really is refused by the content guardrail fails the same way both
+// times, so retrying never hides a real refusal, only wastes one round trip
+// telling it apart from a wedged process.
 func (p *appleProvider) Chat(ctx context.Context, req ChatRequest, emit func(Event)) (ChatOutcome, error) {
+	out, err := p.attempt(ctx, req, emit)
+	if err == nil {
+		return out, nil
+	}
+	p.chat.bridge.stop()
+	return p.attempt(ctx, req, emit)
+}
+
+func (p *appleProvider) attempt(ctx context.Context, req ChatRequest, emit func(Event)) (ChatOutcome, error) {
 	h, err := p.chat.bridge.ensure(ctx)
 	if err != nil {
 		return ChatOutcome{}, err

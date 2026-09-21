@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -82,6 +83,9 @@ func (b *AppleBridge) ensure(ctx context.Context) (appleHealth, error) {
 			port = b.url[i+1:]
 		}
 		cmd.Env = append(os.Environ(), "APPLE_BRIDGE_PORT="+port)
+		if logFile, err := os.OpenFile(filepath.Join(filepath.Dir(b.bin), "apple-bridge.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+			cmd.Stdout, cmd.Stderr = logFile, logFile
+		}
 		if err := cmd.Start(); err != nil {
 			return appleHealth{}, err
 		}
@@ -94,7 +98,12 @@ func (b *AppleBridge) ensure(ctx context.Context) (appleHealth, error) {
 		}()
 		slog.Info("apple intelligence bridge started", "pid", cmd.Process.Pid)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	// 20s, not 5: the process now relaunches itself inside a wrapper .app
+	// (AppBundleRelauncher, apple-bridge — ImageCreator needs a real
+	// foreground app), and LaunchServices registering that bundle for the
+	// first time costs several real seconds, confirmed live. Cached after
+	// that first run, so this only matters once per machine.
+	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
 		if h, err := b.health(ctx); err == nil {
 			return h, nil
