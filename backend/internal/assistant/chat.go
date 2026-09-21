@@ -80,6 +80,20 @@ type ProviderStatus struct {
 	HasKey    bool     `json:"has_key,omitempty"`
 	Model     string   `json:"model"`
 	Models    []string `json:"models,omitempty"`
+	// Capabilities describe what this engine's own model can do, regardless
+	// of whether Estus has wired the feature up yet — a fact for the
+	// settings screen to show ("Claude não gera imagem"), not a switch.
+	Capabilities Capabilities `json:"capabilities"`
+}
+
+// Capabilities is what one engine's own model can do. SupportsImageGen is
+// the only one Estus actually wires to a tool today (generate_image, gated
+// by it in toolsFor); SupportsVision and SupportsVoice are informational,
+// ahead of file upload wiring them to something real.
+type Capabilities struct {
+	SupportsImageGen bool `json:"supports_image_gen"`
+	SupportsVision   bool `json:"supports_vision"`
+	SupportsVoice    bool `json:"supports_voice"`
 }
 
 // ---------------------------------------------------------------- chat
@@ -106,13 +120,15 @@ type Chat struct {
 	providers map[string]Provider
 	order     []string
 	mu        sync.Mutex
-	bridge    *appleBridge
+	bridge    *AppleBridge
 	voice     *Voice
 }
 
-func NewChat(tools *Registry, repo *postgres.AssistantRepo, cfg ChatConfig) *Chat {
-	c := &Chat{tools: tools, repo: repo, cfg: cfg, providers: map[string]Provider{}}
-	c.bridge = &appleBridge{bin: cfg.AppleBridgeBin, url: cfg.AppleBridgeURL}
+// NewChat takes bridge rather than building its own: the generate_image tool
+// (registered on tools before Chat exists) needs the very same instance, or
+// two processes would race for the same port.
+func NewChat(tools *Registry, repo *postgres.AssistantRepo, cfg ChatConfig, bridge *AppleBridge) *Chat {
+	c := &Chat{tools: tools, repo: repo, cfg: cfg, providers: map[string]Provider{}, bridge: bridge}
 	c.voice = newVoice(c.bridge, cfg.Voice)
 	for _, p := range []Provider{
 		&claudeCodeProvider{chat: c},
@@ -252,12 +268,18 @@ func (c *Chat) UpdateSettings(ctx context.Context, u SettingsUpdate) error {
 
 // apiKey returns a stored key (decrypted) or the env fallback.
 func (c *Chat) apiKey(ctx context.Context, provider, envValue string) string {
-	s, err := c.repo.Settings(ctx)
-	if err == nil && c.cfg.VaultKey != nil {
+	return apiKeyFrom(ctx, c.repo, c.cfg.VaultKey, provider, envValue)
+}
+
+// apiKeyFrom is apiKey's logic as a free function: generate_image needs it
+// too, from the registry, which is built before any Chat exists.
+func apiKeyFrom(ctx context.Context, repo *postgres.AssistantRepo, vaultKey *[32]byte, provider, envValue string) string {
+	s, err := repo.Settings(ctx)
+	if err == nil && vaultKey != nil {
 		if blob, ok := s.Secrets[provider]; ok {
 			raw, err := base64.StdEncoding.DecodeString(blob)
 			if err == nil && len(raw) > 12 {
-				if key, err := domain.DecryptPassword(*c.cfg.VaultKey, raw[12:], raw[:12]); err == nil {
+				if key, err := domain.DecryptPassword(*vaultKey, raw[12:], raw[:12]); err == nil {
 					return key
 				}
 			}
@@ -550,11 +572,26 @@ func quote(s string) string {
 	return string(b)
 }
 
-// toolsFor picks the tools an engine is given: all of them, or for small
-// on-device models only the selected module's plus the day overview.
-func (c *Chat) toolsFor(module, message string, small bool) []Tool {
+// imageCapableProviders are the only engines generate_image is offered to.
+// apple is here even though Capabilities.SupportsImageGen is false on its
+// Status (Image Playground doesn't actually work in this process — see
+// Images.swift) because the tool itself tries OpenAI first regardless of
+// which engine asked (generateImage in tools_images.go): a chat with Apple
+// can still come back with a real picture when an OpenAI key is configured,
+// so there is no reason to withhold the tool from it. A provider not listed
+// here still can't intelligently decide to call the tool even if it somehow
+// reached it (Claude Code and Codex get every tool via MCP with no per-tool
+// filtering, same as any other tool) — this only governs what's offered to
+// the providers that pick tools through toolsFor.
+var imageCapableProviders = map[string]bool{"openai": true, "apple": true}
+
+// toolsFor picks the tools an engine is given: all of them (minus
+// generate_image for a provider that can't draw), or for small on-device
+// models only the selected module's plus the day overview.
+func (c *Chat) toolsFor(providerID, module, message string, small bool) []Tool {
+	all := c.tools.Tools()
 	if !small {
-		return c.tools.Tools()
+		return filterImageTool(all, providerID)
 	}
 	// A module chosen on screen is a stronger signal than anything in the
 	// text. Without one, the message itself decides — see routing.go, which
@@ -566,5 +603,18 @@ func (c *Chat) toolsFor(module, message string, small bool) []Tool {
 	} else {
 		mods = modulesFor(message)
 	}
-	return c.tools.Tools(mods...)
+	return filterImageTool(c.tools.Tools(mods...), providerID)
+}
+
+func filterImageTool(tools []Tool, providerID string) []Tool {
+	if imageCapableProviders[providerID] {
+		return tools
+	}
+	out := make([]Tool, 0, len(tools))
+	for _, t := range tools {
+		if t.Name != "generate_image" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

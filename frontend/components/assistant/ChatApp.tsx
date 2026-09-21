@@ -54,7 +54,18 @@ const TOOL_LABELS: Record<string, string> = {
   documents_search: "Buscou documentos",
   boards_list: "Consultou quadros",
   overview_today: "Montou o resumo do dia",
+  generate_image: "Gerou uma imagem",
 };
+
+/** Turns a finished generate_image call into the card the bubble renders —
+ * null for every other tool, or if the result doesn't look like one
+ * (an error, or a shape from before this ran). */
+function imageCardFrom(e: { tool?: string; result?: unknown }): CardData | null {
+  if (e.tool !== "generate_image" || !e.result || typeof e.result !== "object") return null;
+  const r = e.result as { document_id?: unknown; descricao?: unknown };
+  if (typeof r.document_id !== "string") return null;
+  return { kind: "image", url: `/api/documents/${r.document_id}/download`, alt: typeof r.descricao === "string" ? r.descricao : "Imagem gerada" };
+}
 
 async function callTool(name: string, args: Record<string, unknown>): Promise<any> {
   const res = await fetch(`/api/assistant/tools/${name}`, {
@@ -276,6 +287,7 @@ export function ChatApp({
             } else if (e.type === "tool_result") {
               update(assistantId, (it) => ({
                 tools: it.tools.map((t) => (t.id === e.tool_id ? { ...t, result: e.result, error: e.error, done: true } : t)),
+                card: imageCardFrom(e) ?? it.card,
               }));
             } else if (e.type === "error") {
               fail(e.error ?? "Não deu certo.", e.detail);
@@ -768,6 +780,13 @@ function Card({ card }: { card: CardData }) {
             <span key={l}>{l}</span>
           ))}
         </div>
+      </div>
+    );
+  }
+  if (card.kind === "image") {
+    return (
+      <div className="cx-card cx-image">
+        <img src={card.url} alt={card.alt} loading="lazy" />
       </div>
     );
   }

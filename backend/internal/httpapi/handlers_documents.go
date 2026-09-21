@@ -153,7 +153,15 @@ func (h *DocumentHandlers) Content(w http.ResponseWriter, r *http.Request) {
 	// Quotes and backslashes are the only characters that can break out of
 	// the quoted-string form of this header.
 	escaped := strings.NewReplacer(`"`, "", `\`, "").Replace(doc.Name)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", escaped))
+	// An image renders inline in an <img> tag (the chat bubble for
+	// generate_image's result) — "attachment" would make the browser offer
+	// to save it instead of showing it. Everything else keeps downloading:
+	// the browser has no built-in viewer for most of what's in Documentos.
+	disposition := "attachment"
+	if strings.HasPrefix(doc.ContentType, "image/") {
+		disposition = "inline"
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("%s; filename=%q", disposition, escaped))
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := io.Copy(w, file); err != nil {

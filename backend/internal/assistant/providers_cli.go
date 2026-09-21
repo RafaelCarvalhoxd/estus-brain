@@ -122,7 +122,10 @@ func (p *claudeCodeProvider) ID() string { return "claude_code" }
 
 func (p *claudeCodeProvider) Status(ctx context.Context) ProviderStatus {
 	s, _ := p.chat.repo.Settings(ctx)
-	st := ProviderStatus{ID: p.ID(), Name: "Claude (sua conta)", Kind: "login", Model: p.chat.model(s, p.ID()), Models: []string{"sonnet", "opus", "haiku"}}
+	st := ProviderStatus{
+		ID: p.ID(), Name: "Claude (sua conta)", Kind: "login", Model: p.chat.model(s, p.ID()), Models: []string{"sonnet", "opus", "haiku"},
+		Capabilities: Capabilities{SupportsVision: true},
+	}
 	if p.chat.cfg.MultiUser {
 		st.Detail = "Desligado no modo multiusuário"
 		return st
@@ -313,7 +316,11 @@ func (p *codexProvider) ID() string { return "codex" }
 
 func (p *codexProvider) Status(ctx context.Context) ProviderStatus {
 	s, _ := p.chat.repo.Settings(ctx)
-	st := ProviderStatus{ID: p.ID(), Name: "GPT (sua conta ChatGPT)", Kind: "login", Model: p.chat.model(s, p.ID())}
+	st := ProviderStatus{
+		ID: p.ID(), Name: "GPT (sua conta ChatGPT)", Kind: "login", Model: p.chat.model(s, p.ID()),
+		// image_generation is in codexDisabled below: Codex has it, we turn it off.
+		Capabilities: Capabilities{SupportsVision: true},
+	}
 	if p.chat.cfg.MultiUser {
 		st.Detail = "Desligado no modo multiusuário"
 		return st

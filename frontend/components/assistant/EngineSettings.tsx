@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AssistantSettings, ProviderStatus } from "./types";
+import type { AssistantSettings, Capabilities, ProviderStatus } from "./types";
 import { IconClose } from "../icons";
 import { TelegramSettings } from "./TelegramSettings";
 
@@ -10,6 +10,24 @@ import { TelegramSettings } from "./TelegramSettings";
 // outside (MCP).
 
 const KIND_LABEL = { login: "Sua conta", api: "API key", local: "Local" } as const;
+
+// Shows only what's missing — an engine with everything gets no line at all,
+// so the list stays useful instead of repeating "✓ tudo" on every row.
+function CapabilityGaps({ capabilities: c }: { capabilities: Capabilities }) {
+  const gaps = [
+    !c.supports_image_gen && "Não gera imagem",
+    !c.supports_vision && "Não vê imagem",
+    !c.supports_voice && "Sem chat de voz",
+  ].filter(Boolean) as string[];
+  if (gaps.length === 0) return null;
+  return (
+    <span className="es-engine-gaps">
+      {gaps.map((g) => (
+        <em key={g}>{g}</em>
+      ))}
+    </span>
+  );
+}
 
 function Copy({ text, label = "Copiar" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -221,6 +239,7 @@ function EngineRow({
             {p.name} <em>{KIND_LABEL[p.kind]}</em>
           </b>
           <span className={p.available ? "is-ok" : ""}>{p.detail}</span>
+          <CapabilityGaps capabilities={p.capabilities} />
         </div>
       </label>
       <div className="es-engine-config">

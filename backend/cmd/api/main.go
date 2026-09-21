@@ -124,24 +124,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("ASSISTANT_TZ: %w", err)
 	}
-	tools := assistant.New(assistant.Deps{
-		Categories:     categoryRepo,
-		Cards:          cardRepo,
-		Transactions:   transactionService,
-		TransactionLog: transactionRepo,
-		Dashboard:      dashboardService,
-		Bills:          billService,
-		Notes:          noteService,
-		NoteCategories: noteCategoryService,
-		Reminders:      reminderService,
-		Events:         eventService,
-		Habits:         habitService,
-		Training:       trainingService,
-		Diet:           dietService,
-		Documents:      documentServiceOrNil(documentService, documentErr),
-		Boards:         boardService,
-		Location:       location,
-	})
 	mcpToken, err := assistant.LoadOrCreateToken(cfg.AssistantDir, cfg.MCPToken)
 	if err != nil {
 		return fmt.Errorf("assistant token: %w", err)
@@ -159,7 +141,33 @@ func run() error {
 	if key, err := domain.LoadEncryptionKeyFromEnv(); err == nil {
 		chatCfg.VaultKey = &key
 	}
-	chat := assistant.NewChat(tools, postgres.NewAssistantRepo(db), chatCfg)
+	// Built ahead of the tool registry: generate_image (registered inside
+	// assistant.New below) reads the same stored OpenAI key and falls back to
+	// the same Apple bridge instance that Chat uses for text and voice.
+	assistantRepo := postgres.NewAssistantRepo(db)
+	appleBridge := assistant.NewAppleBridge(chatCfg.AppleBridgeBin, chatCfg.AppleBridgeURL)
+	tools := assistant.New(assistant.Deps{
+		Categories:     categoryRepo,
+		Cards:          cardRepo,
+		Transactions:   transactionService,
+		TransactionLog: transactionRepo,
+		Dashboard:      dashboardService,
+		Bills:          billService,
+		Notes:          noteService,
+		NoteCategories: noteCategoryService,
+		Reminders:      reminderService,
+		Events:         eventService,
+		Habits:         habitService,
+		Training:       trainingService,
+		Diet:           dietService,
+		Documents:      documentServiceOrNil(documentService, documentErr),
+		Boards:         boardService,
+		Location:       location,
+		AssistantRepo:  assistantRepo,
+		VaultKey:       chatCfg.VaultKey,
+		AppleBridge:    appleBridge,
+	})
+	chat := assistant.NewChat(tools, assistantRepo, chatCfg, appleBridge)
 	defer chat.Close()
 	assistantHandlers := httpapi.NewAssistantHandlers(tools, chat)
 	mcpHandler := tools.MCPHandler(func() []string { return []string{mcpToken} })

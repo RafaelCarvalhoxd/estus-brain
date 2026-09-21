@@ -25,7 +25,7 @@ func fakeBridge(t *testing.T, handler http.HandlerFunc) *Voice {
 		handler(w, r)
 	}))
 	t.Cleanup(srv.Close)
-	return newVoice(&appleBridge{bin: "/nonexistent/estus-apple-bridge", url: srv.URL}, "Luciana")
+	return newVoice(&AppleBridge{bin: "/nonexistent/estus-apple-bridge", url: srv.URL}, "Luciana")
 }
 
 func TestVoiceTranscribe(t *testing.T) {
@@ -123,14 +123,14 @@ func TestStatusProbesOncePerBridgeProcess(t *testing.T) {
 // Whatever goes wrong starting the bridge, the chat must not show a raw Go
 // error (here: exec refusing to run a directory).
 func TestStatusHidesRawErrors(t *testing.T) {
-	v := newVoice(&appleBridge{bin: t.TempDir(), url: "http://127.0.0.1:1"}, "Luciana")
+	v := newVoice(&AppleBridge{bin: t.TempDir(), url: "http://127.0.0.1:1"}, "Luciana")
 	if s := v.Status(context.Background()); s.Available || s.Detail != "Voz indisponível: a ponte do Apple não respondeu a tempo." {
 		t.Fatalf("Status = %+v", s)
 	}
 }
 
 func TestVoiceWithoutABridge(t *testing.T) {
-	v := newVoice(&appleBridge{bin: "/nonexistent/estus-apple-bridge", url: "http://127.0.0.1:1"}, "")
+	v := newVoice(&AppleBridge{bin: "/nonexistent/estus-apple-bridge", url: "http://127.0.0.1:1"}, "")
 	if s := v.Status(context.Background()); s.Available || !strings.Contains(s.Detail, "não compilada") {
 		t.Fatalf("Status = %+v", s)
 	}

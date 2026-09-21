@@ -34,7 +34,8 @@ export type CardData =
       action?: { label: string; tool: string; confirm?: string; args: Record<string, unknown>[] };
     }
   | { kind: "list"; title?: string; items: { title: string; subtitle?: string; meta?: string; done?: boolean }[]; empty?: string }
-  | { kind: "done"; title: string; lines: string[] };
+  | { kind: "done"; title: string; lines: string[] }
+  | { kind: "image"; url: string; alt: string };
 
 export interface ChatItem {
   id: string;
@@ -70,6 +71,15 @@ export interface ConversationSummary {
   updated_at: string;
 }
 
+/** What this engine's own model can do — a fact for the settings screen,
+ * not a switch. Only supports_image_gen is wired to anything today
+ * (generate_image); the other two are informational, ahead of file upload. */
+export interface Capabilities {
+  supports_image_gen: boolean;
+  supports_vision: boolean;
+  supports_voice: boolean;
+}
+
 export interface ProviderStatus {
   id: string;
   name: string;
@@ -80,6 +90,7 @@ export interface ProviderStatus {
   has_key?: boolean;
   model: string;
   models?: string[];
+  capabilities: Capabilities;
 }
 
 export interface AssistantSettings {

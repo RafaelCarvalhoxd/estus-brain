@@ -19,7 +19,16 @@ type appleProvider struct {
 func (p *appleProvider) ID() string { return "apple" }
 
 func (p *appleProvider) Status(ctx context.Context) ProviderStatus {
-	st := ProviderStatus{ID: p.ID(), Name: "Apple Intelligence", Kind: "local", Model: "on-device"}
+	st := ProviderStatus{
+		ID: p.ID(), Name: "Apple Intelligence", Kind: "local", Model: "on-device",
+		// Not SupportsImageGen: apple-bridge has a /generate-image route
+		// (Images.swift) using Image Playground, but ImageCreator refuses to
+		// run in a plain background process — confirmed live, not assumed.
+		// generate_image still tries it as a last resort when no OpenAI key
+		// is set, and fails with a clear reason; this flag just doesn't
+		// promise something that doesn't work today.
+		Capabilities: Capabilities{SupportsVoice: true},
+	}
 	h, err := p.chat.bridge.ensure(ctx)
 	switch {
 	case err != nil:
@@ -47,7 +56,7 @@ func (p *appleProvider) Chat(ctx context.Context, req ChatRequest, emit func(Eve
 		Parameters  Schema `json:"parameters"`
 	}
 	var tools []tool
-	for _, t := range p.chat.toolsFor(req.Module, req.Message, true) {
+	for _, t := range p.chat.toolsFor(p.ID(), req.Module, req.Message, true) {
 		tools = append(tools, tool{t.Name, t.Description, t.Input})
 	}
 	messages := append([]Message{}, req.History...)

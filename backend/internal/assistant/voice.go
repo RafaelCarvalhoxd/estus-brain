@@ -45,7 +45,7 @@ type VoiceStatus struct {
 }
 
 type Voice struct {
-	bridge *appleBridge
+	bridge *AppleBridge
 	name   string
 	client *http.Client
 
@@ -55,7 +55,7 @@ type Voice struct {
 	probeErr  error
 }
 
-func newVoice(bridge *appleBridge, name string) *Voice {
+func newVoice(bridge *AppleBridge, name string) *Voice {
 	if strings.TrimSpace(name) == "" {
 		name = "Luciana"
 	}

@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-// appleBridge is the Swift helper in apple-bridge/, started on demand. It
+// AppleBridge is the Swift helper in apple-bridge/, started on demand. It
 // serves both the Apple Intelligence engine and the Mac's speech.
-type appleBridge struct {
+type AppleBridge struct {
 	bin string
 	url string
 
@@ -29,6 +29,13 @@ type appleBridge struct {
 	gen uint64
 }
 
+// NewAppleBridge builds a handle to the Swift helper at bin, reachable once
+// started at url. It is exported so main can build it once and hand the same
+// instance to both the tool registry (generate_image) and Chat (text, voice).
+func NewAppleBridge(bin, url string) *AppleBridge {
+	return &AppleBridge{bin: bin, url: url}
+}
+
 // bridgeError is a failure written for the owner, in pt-BR. Everything else the
 // bridge can hit is a raw Go error and must not reach the screen.
 type bridgeError string
@@ -40,7 +47,7 @@ type appleHealth struct {
 	Reason    string `json:"reason"`
 }
 
-func (b *appleBridge) health(ctx context.Context) (appleHealth, error) {
+func (b *AppleBridge) health(ctx context.Context) (appleHealth, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.url+"/health", nil)
 	if err != nil {
 		return appleHealth{}, err
@@ -56,7 +63,7 @@ func (b *appleBridge) health(ctx context.Context) (appleHealth, error) {
 }
 
 // ensure starts the helper if it isn't answering and its binary exists.
-func (b *appleBridge) ensure(ctx context.Context) (appleHealth, error) {
+func (b *AppleBridge) ensure(ctx context.Context) (appleHealth, error) {
 	if h, err := b.health(ctx); err == nil {
 		return h, nil
 	}
@@ -99,7 +106,7 @@ func (b *appleBridge) ensure(ctx context.Context) (appleHealth, error) {
 
 // running reports whether the process we started is still alive. Callers hold
 // b.mu; only the goroutine in ensure touches proc.ProcessState.
-func (b *appleBridge) running() bool {
+func (b *AppleBridge) running() bool {
 	if b.proc == nil || b.done == nil {
 		return false
 	}
@@ -112,13 +119,13 @@ func (b *appleBridge) running() bool {
 }
 
 // generation identifies the bridge process currently running.
-func (b *appleBridge) generation() uint64 {
+func (b *AppleBridge) generation() uint64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.gen
 }
 
-func (b *appleBridge) stop() {
+func (b *AppleBridge) stop() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.running() && b.proc.Process != nil {

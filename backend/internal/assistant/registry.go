@@ -59,6 +59,15 @@ type Deps struct {
 	// Location is the owner's time zone: "today", "this month" and bare
 	// dates and times in tool input are read in it.
 	Location *time.Location
+	// AssistantRepo and VaultKey let generate_image read the same stored
+	// OpenAI key the chat settings screen writes — the same pair
+	// Chat.apiKey reads with, but the registry is built before Chat exists.
+	AssistantRepo *postgres.AssistantRepo
+	VaultKey      *[32]byte
+	// AppleBridge lets generate_image fall back to on-device Image Playground
+	// when no OpenAI key is configured. Shared with Chat, which the registry
+	// is built before — see NewAppleBridge.
+	AppleBridge *AppleBridge
 }
 
 type Registry struct {
@@ -83,6 +92,7 @@ func New(deps Deps) *Registry {
 	r.addHabits()
 	r.addHealth()
 	r.addFiles()
+	r.addImages()
 	r.addOverview()
 	sort.SliceStable(r.tools, func(i, j int) bool { return r.tools[i].Module < r.tools[j].Module })
 	return r

@@ -406,6 +406,17 @@
   font-size: 12px;
   color: var(--ink-mute);
 }
+.cx-image {
+  padding: 0;
+  overflow: hidden;
+  line-height: 0;
+}
+.cx-image img {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 14px;
+}
 .cx-stats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -827,6 +838,21 @@ label.es-engine {
 }
 .es-engine span.is-ok {
   color: color-mix(in oklab, var(--good) 75%, var(--ink));
+}
+.es-engine-gaps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.es-engine-gaps em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 .es-engine-config {
   display: flex;
