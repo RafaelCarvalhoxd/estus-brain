@@ -609,22 +609,14 @@ func quote(s string) string {
 	return string(b)
 }
 
-// imageCapableProviders are the only engines generate_image is offered to —
-// kept in step with Capabilities.SupportsImageGen in each provider's own
-// Status, which is what the settings screen shows instead. A provider not
-// listed here still can't intelligently decide to call the tool even if it
-// somehow reached it (Claude Code and Codex get every tool via MCP with no
-// per-tool filtering, same as any other tool) — this only governs what's
-// offered to the providers that pick tools through toolsFor.
-var imageCapableProviders = map[string]bool{"openai": true}
-
-// toolsFor picks the tools an engine is given: all of them (minus
-// generate_image for a provider that can't draw), or for small on-device
-// models only the selected module's plus the day overview.
-func (c *Chat) toolsFor(providerID, module, message string, small bool) []Tool {
-	all := c.tools.Tools()
+// toolsFor picks the tools an engine is given: all of them, or for small
+// on-device models only the selected module's plus the day overview.
+// generate_image/edit_image are offered to every engine — the tool itself
+// picks a real backend (OpenAI, else Draw Things locally) regardless of
+// which engine called it, so there is no provider to gate this on.
+func (c *Chat) toolsFor(module, message string, small bool) []Tool {
 	if !small {
-		return filterImageTool(all, providerID)
+		return c.tools.Tools()
 	}
 	// A module chosen on screen is a stronger signal than anything in the
 	// text. Without one, the message itself decides — see routing.go, which
@@ -636,18 +628,5 @@ func (c *Chat) toolsFor(providerID, module, message string, small bool) []Tool {
 	} else {
 		mods = modulesFor(message)
 	}
-	return filterImageTool(c.tools.Tools(mods...), providerID)
-}
-
-func filterImageTool(tools []Tool, providerID string) []Tool {
-	if imageCapableProviders[providerID] {
-		return tools
-	}
-	out := make([]Tool, 0, len(tools))
-	for _, t := range tools {
-		if t.Name != "generate_image" {
-			out = append(out, t)
-		}
-	}
-	return out
+	return c.tools.Tools(mods...)
 }

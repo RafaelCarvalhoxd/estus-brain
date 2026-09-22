@@ -119,7 +119,7 @@ func (p *anthropicProvider) Status(ctx context.Context) ProviderStatus {
 	has := p.key(ctx) != ""
 	st := ProviderStatus{
 		ID: p.ID(), Name: "Claude (API key)", Kind: "api", NeedsKey: true, HasKey: has, Available: has, Model: p.chat.model(s, p.ID()),
-		Capabilities: Capabilities{SupportsVision: true},
+		Capabilities: Capabilities{SupportsVision: true, SupportsImageGen: true},
 	}
 	if has {
 		st.Detail = "Chave configurada"
@@ -136,7 +136,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, req ChatRequest, emit func
 	}
 	type block = map[string]any
 	var tools []block
-	for _, t := range p.chat.toolsFor(p.ID(), req.Module, req.Message, false) {
+	for _, t := range p.chat.toolsFor(req.Module, req.Message, false) {
 		tools = append(tools, block{"name": t.Name, "description": t.Description, "input_schema": t.Input})
 	}
 	messages := []block{}
@@ -196,10 +196,10 @@ func (p *anthropicProvider) Chat(ctx context.Context, req ChatRequest, emit func
 // openAIChat runs the chat-completions tool loop shared by OpenAI and Ollama.
 // Ollama's native /api/chat has the same message shape, except that it takes
 // tool arguments as objects and returns them that way too.
-func (c *Chat) openAIChat(ctx context.Context, providerID string, req ChatRequest, emit func(Event), small bool, call func(body map[string]any) (openAIMessage, error)) (ChatOutcome, error) {
+func (c *Chat) openAIChat(ctx context.Context, req ChatRequest, emit func(Event), small bool, call func(body map[string]any) (openAIMessage, error)) (ChatOutcome, error) {
 	type msg = map[string]any
 	var tools []msg
-	for _, t := range c.toolsFor(providerID, req.Module, req.Message, small) {
+	for _, t := range c.toolsFor(req.Module, req.Message, small) {
 		tools = append(tools, msg{"type": "function", "function": msg{"name": t.Name, "description": t.Description, "parameters": t.Input}})
 	}
 	messages := []msg{{"role": "system", "content": req.System}}
@@ -278,7 +278,7 @@ func (p *openAIProvider) Chat(ctx context.Context, req ChatRequest, emit func(Ev
 	if key == "" {
 		return ChatOutcome{}, fmt.Errorf("sem API key da OpenAI")
 	}
-	return p.chat.openAIChat(ctx, p.ID(), req, emit, false, func(body map[string]any) (openAIMessage, error) {
+	return p.chat.openAIChat(ctx, req, emit, false, func(body map[string]any) (openAIMessage, error) {
 		var res struct {
 			Choices []struct {
 				Message struct {
@@ -351,7 +351,10 @@ func (p *ollamaProvider) models(ctx context.Context) ([]string, error) {
 
 func (p *ollamaProvider) Status(ctx context.Context) ProviderStatus {
 	s, _ := p.chat.repo.Settings(ctx)
-	st := ProviderStatus{ID: p.ID(), Name: "Ollama (local)", Kind: "local", Model: p.chat.model(s, p.ID())}
+	st := ProviderStatus{
+		ID: p.ID(), Name: "Ollama (local)", Kind: "local", Model: p.chat.model(s, p.ID()),
+		Capabilities: Capabilities{SupportsImageGen: true},
+	}
 	models, err := p.models(ctx)
 	if err != nil {
 		st.Detail = "Ollama não está rodando em " + p.baseURL(ctx)
@@ -379,7 +382,7 @@ func (p *ollamaProvider) Chat(ctx context.Context, req ChatRequest, emit func(Ev
 		req.Model = models[0]
 	}
 	base := p.baseURL(ctx)
-	return p.chat.openAIChat(ctx, p.ID(), req, emit, true, func(body map[string]any) (openAIMessage, error) {
+	return p.chat.openAIChat(ctx, req, emit, true, func(body map[string]any) (openAIMessage, error) {
 		body["stream"] = false
 		var res struct {
 			Message struct {

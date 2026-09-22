@@ -124,7 +124,7 @@ func (p *claudeCodeProvider) Status(ctx context.Context) ProviderStatus {
 	s, _ := p.chat.repo.Settings(ctx)
 	st := ProviderStatus{
 		ID: p.ID(), Name: "Claude (sua conta)", Kind: "login", Model: p.chat.model(s, p.ID()), Models: []string{"sonnet", "opus", "haiku"},
-		Capabilities: Capabilities{SupportsVision: true},
+		Capabilities: Capabilities{SupportsVision: true, SupportsImageGen: true},
 	}
 	if p.chat.cfg.MultiUser {
 		st.Detail = "Desligado no modo multiusuário"
@@ -318,8 +318,10 @@ func (p *codexProvider) Status(ctx context.Context) ProviderStatus {
 	s, _ := p.chat.repo.Settings(ctx)
 	st := ProviderStatus{
 		ID: p.ID(), Name: "GPT (sua conta ChatGPT)", Kind: "login", Model: p.chat.model(s, p.ID()),
-		// image_generation is in codexDisabled below: Codex has it, we turn it off.
-		Capabilities: Capabilities{SupportsVision: true},
+		// Codex's own built-in image_generation is turned off (codexDisabled
+		// below); SupportsImageGen is true anyway because it reaches
+		// generate_image the same way it reaches every tool, via MCP.
+		Capabilities: Capabilities{SupportsVision: true, SupportsImageGen: true},
 	}
 	if p.chat.cfg.MultiUser {
 		st.Detail = "Desligado no modo multiusuário"

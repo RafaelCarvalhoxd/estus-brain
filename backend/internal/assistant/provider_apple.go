@@ -21,10 +21,12 @@ func (p *appleProvider) ID() string { return "apple" }
 func (p *appleProvider) Status(ctx context.Context) ProviderStatus {
 	st := ProviderStatus{
 		ID: p.ID(), Name: "Apple Intelligence", Kind: "local", Model: "on-device",
-		// Not SupportsImageGen: Image Playground was tried (making this
-		// process a real foreground app) and pulled back out — unreliable
-		// even working, and it took over the Mac's Dock the whole time.
-		Capabilities: Capabilities{SupportsVoice: true},
+		// Image Playground itself was tried (making this process a real
+		// foreground app) and pulled back out — unreliable even working, and
+		// it took over the Mac's Dock the whole time. SupportsImageGen is
+		// still true: generate_image reaches OpenAI or Draw Things directly,
+		// the same way it does from every other engine.
+		Capabilities: Capabilities{SupportsVoice: true, SupportsImageGen: true},
 	}
 	h, err := p.chat.bridge.ensure(ctx)
 	switch {
@@ -70,7 +72,7 @@ func (p *appleProvider) attempt(ctx context.Context, req ChatRequest, emit func(
 		Parameters  Schema `json:"parameters"`
 	}
 	var tools []tool
-	for _, t := range p.chat.toolsFor(p.ID(), req.Module, req.Message, true) {
+	for _, t := range p.chat.toolsFor(req.Module, req.Message, true) {
 		tools = append(tools, tool{t.Name, t.Description, t.Input})
 	}
 	messages := append([]Message{}, req.History...)

@@ -14,6 +14,17 @@ import (
 	"time"
 )
 
+// drawThingsURL is Draw Things' own local server (Advanced tab → API
+// Server → Protocol HTTP, port 7860) — a free, offline image generator for
+// whoever doesn't have an OpenAI key. DRAWTHINGS_URL overrides it, the same
+// way OLLAMA_URL does for Ollama.
+func drawThingsURL() string {
+	if u := os.Getenv("DRAWTHINGS_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return "http://127.0.0.1:7860"
+}
+
 // addImages registers generate_image when there's somewhere to keep the
 // result: it is saved as an ordinary Document (the same storage the
 // Documentos screen uses), so the picture survives a restart and shows up
@@ -49,7 +60,7 @@ func (r *Registry) addImages() {
 
 	r.add(Tool{
 		Name: "edit_image", Title: "Editar imagem", Module: "geral",
-		Description: "Edita uma imagem já anexada na conversa ou salva em Documentos, a partir de um pedido em texto (ex.: remover o fundo, mudar a cor, adicionar algo). Exige a API key da OpenAI configurada.",
+		Description: "Edita uma imagem já anexada na conversa ou salva em Documentos, a partir de um pedido em texto (ex.: remover o fundo, mudar a cor, adicionar algo). Usa a API key da OpenAI se houver, senão o Draw Things local.",
 		Input: object(map[string]any{
 			"document_id": str("Id da imagem a editar"),
 			"prompt":      str("O que mudar na imagem"),
@@ -71,11 +82,7 @@ func (r *Registry) addImages() {
 			if err != nil {
 				return nil, fmt.Errorf("ler imagem: %w", err)
 			}
-			key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY"))
-			if key == "" {
-				return nil, invalid("configure a API key da OpenAI em Configurações para editar imagens")
-			}
-			out, contentType, err := editImageOpenAI(ctx, key, imgData, doc.Name, prompt)
+			out, contentType, err := editImage(ctx, d, imgData, doc.Name, prompt)
 			if err != nil {
 				return nil, err
 			}
@@ -89,17 +96,64 @@ func (r *Registry) addImages() {
 	})
 }
 
-// generateImage uses the OpenAI key configured in Settings — the only
-// backend this app generates images with. Apple's on-device Image
-// Playground was tried and pulled back out: ImageCreator only runs with a
-// real foreground app, which took over the Mac's Dock and stayed unreliable
-// even then (confirmed live, not assumed) — not worth the trade-off.
+// generateImage tries OpenAI first when a key is configured (paid, quick,
+// general-purpose), then Draw Things running locally (free, offline —
+// confirmed against its real Automatic1111-compatible API, not assumed).
+// Neither cares which chat engine called the tool: Apple's on-device Image
+// Playground did (a real foreground app, one at a time) and was pulled back
+// out for it — this one works the same from any engine, including Ollama
+// and Apple, because it never touches the Mac's own UI at all.
 func generateImage(ctx context.Context, d Deps, prompt string) (data []byte, contentType string, err error) {
-	key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY"))
-	if key == "" {
-		return nil, "", invalid("configure a API key da OpenAI em Configurações para gerar imagens")
+	if key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY")); key != "" {
+		return generateImageOpenAI(ctx, key, prompt)
 	}
-	return generateImageOpenAI(ctx, key, prompt)
+	if drawThingsReachable(ctx) {
+		return generateImageDrawThings(ctx, prompt)
+	}
+	return nil, "", invalid("nenhum motor de imagem disponível — configure a API key da OpenAI em Configurações, ou abra o Draw Things com o servidor de API ligado (Avançado → API Server)")
+}
+
+// drawThingsReachable is a quick, short-timeout probe: Draw Things not being
+// open is the common case, and generateImage must fall through to the clear
+// "nothing configured" message instead of a raw connection-refused error.
+func drawThingsReachable(ctx context.Context) bool {
+	reqCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, drawThingsURL()+"/sdapi/v1/options", nil)
+	if err != nil {
+		return false
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	res.Body.Close()
+	return res.StatusCode < 500
+}
+
+// generateImageDrawThings hits the same /sdapi/v1/txt2img shape
+// Automatic1111 popularized and Draw Things implements for compatibility —
+// confirmed live against a running Draw Things instance, not from docs
+// alone. It runs whatever model is currently selected in the app (FLUX,
+// Stable Diffusion, …), so there is no model name to pass here.
+func generateImageDrawThings(ctx context.Context, prompt string) ([]byte, string, error) {
+	var res struct {
+		Images []string `json:"images"`
+	}
+	err := postJSON(ctx, drawThingsURL()+"/sdapi/v1/txt2img", nil,
+		map[string]any{"prompt": prompt, "width": 1024, "height": 1024},
+		&res)
+	if err != nil {
+		return nil, "", fmt.Errorf("gerar imagem no Draw Things: %w", err)
+	}
+	if len(res.Images) == 0 {
+		return nil, "", fmt.Errorf("gerar imagem no Draw Things: resposta sem imagem")
+	}
+	data, err := base64.StdEncoding.DecodeString(res.Images[0])
+	if err != nil {
+		return nil, "", fmt.Errorf("decodificar imagem do Draw Things: %w", err)
+	}
+	return data, "image/png", nil
 }
 
 func generateImageOpenAI(ctx context.Context, key, prompt string) ([]byte, string, error) {
@@ -121,6 +175,46 @@ func generateImageOpenAI(ctx context.Context, key, prompt string) ([]byte, strin
 	data, err := base64.StdEncoding.DecodeString(res.Data[0].B64JSON)
 	if err != nil {
 		return nil, "", fmt.Errorf("decodificar imagem da OpenAI: %w", err)
+	}
+	return data, "image/png", nil
+}
+
+// editImage mirrors generateImage's fallback: OpenAI when a key is
+// configured, else Draw Things running locally.
+func editImage(ctx context.Context, d Deps, imageData []byte, imageName, prompt string) ([]byte, string, error) {
+	if key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY")); key != "" {
+		return editImageOpenAI(ctx, key, imageData, imageName, prompt)
+	}
+	if drawThingsReachable(ctx) {
+		return editImageDrawThings(ctx, imageData, prompt)
+	}
+	return nil, "", invalid("nenhum motor de imagem disponível — configure a API key da OpenAI em Configurações, ou abra o Draw Things com o servidor de API ligado (Avançado → API Server)")
+}
+
+// editImageDrawThings hits /sdapi/v1/img2img, the same Automatic1111-shaped
+// endpoint Draw Things implements for txt2img's edit — confirmed live.
+// denoising_strength is deliberately mid-range: low barely changes the
+// image, high ignores it and just generates fresh from the prompt.
+func editImageDrawThings(ctx context.Context, imageData []byte, prompt string) ([]byte, string, error) {
+	var res struct {
+		Images []string `json:"images"`
+	}
+	err := postJSON(ctx, drawThingsURL()+"/sdapi/v1/img2img", nil,
+		map[string]any{
+			"prompt":             prompt,
+			"init_images":        []string{base64.StdEncoding.EncodeToString(imageData)},
+			"denoising_strength": 0.6,
+		},
+		&res)
+	if err != nil {
+		return nil, "", fmt.Errorf("editar imagem no Draw Things: %w", err)
+	}
+	if len(res.Images) == 0 {
+		return nil, "", fmt.Errorf("editar imagem no Draw Things: resposta sem imagem")
+	}
+	data, err := base64.StdEncoding.DecodeString(res.Images[0])
+	if err != nil {
+		return nil, "", fmt.Errorf("decodificar imagem editada do Draw Things: %w", err)
 	}
 	return data, "image/png", nil
 }

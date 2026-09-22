@@ -176,6 +176,13 @@ export function ChatApp({
 
   const engine = settings?.providers.find((p) => p.id === settings.provider && p.available) ?? null;
   const moduleColor = MODULES.find((m) => m.key === module)?.color ?? "var(--brain-glow)";
+  // A reliable, checkable signal to suggest switching — unlike guessing from
+  // a reply's wording: this attachment is a photo, and the active engine's
+  // own capabilities (not a guess) say it can't see one.
+  const visionSwitchTarget =
+    attachment && attachment.content_type.startsWith("image/") && engine && !engine.capabilities.supports_vision
+      ? settings?.providers.find((p) => p.available && p.capabilities.supports_vision)
+      : undefined;
 
   const update = (id: string, patch: Partial<ChatItem> | ((item: ChatItem) => Partial<ChatItem>)) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...(typeof patch === "function" ? patch(it) : patch) } : it)));
@@ -642,6 +649,14 @@ export function ChatApp({
                   </button>
                 </span>
               )
+            )}
+            {visionSwitchTarget && (
+              <span className="cx-vision-hint">
+                {engine!.name} não vê imagens.
+                <button type="button" className="btn-text" onClick={() => void chooseEngine(visionSwitchTarget.id)}>
+                  Usar {visionSwitchTarget.name}
+                </button>
+              </span>
             )}
           </div>
         )}

@@ -1115,6 +1115,15 @@ label.es-engine {
 .cx-attach-error {
   color: var(--bad);
 }
+.cx-vision-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-mute);
+}
+.cx-vision-hint button {
+  font-size: 12.5px;
+}
 .cx-attach-tag {
   display: flex;
   align-items: center;
