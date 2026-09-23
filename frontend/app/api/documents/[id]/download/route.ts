@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 // and the API stays unreachable from the outside.
 const API_URL = process.env.API_URL ?? "http://localhost:8080";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const res = await fetch(`${API_URL}/api/documents/${id}/content`, { cache: "no-store" });
 
@@ -18,5 +18,25 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const value = res.headers.get(header);
     if (value) headers.set(header, value);
   }
+
+  // ?inline=1 is the viewer asking to show the file instead of saving it.
+  if (new URL(request.url).searchParams.has("inline")) {
+    const disposition = headers.get("content-disposition");
+    headers.set("content-disposition", disposition ? disposition.replace(/^attachment/, "inline") : "inline");
+    headers.set("x-content-type-options", "nosniff");
+    // Markdown, CSV, JSON… would be offered as a download by some browsers;
+    // as plain text every browser shows them, accents included.
+    const type = headers.get("content-type") ?? "";
+    if ((type.startsWith("text/") && !type.startsWith("text/html")) || type.startsWith("application/json")) {
+      headers.set("content-type", "text/plain; charset=utf-8");
+    }
+    // An uploaded HTML or SVG would otherwise run its scripts on this
+    // origin. Chrome refuses to render a PDF under a sandbox, and its PDF
+    // viewer runs nothing on the page anyway, so PDFs are left out.
+    if (!headers.get("content-type")?.startsWith("application/pdf")) {
+      headers.set("content-security-policy", "sandbox");
+    }
+  }
+
   return new NextResponse(res.body, { status: 200, headers });
 }

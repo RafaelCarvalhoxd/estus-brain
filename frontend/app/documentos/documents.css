@@ -31,11 +31,22 @@
   flex-wrap: wrap;
   margin-bottom: 16px;
 }
-.doc-upload,
-.doc-new-folder {
+.doc-upload {
   display: flex;
   align-items: center;
-  gap: 8px;
+}
+.doc-upload label.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.doc-new-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.doc-new-folder svg {
+  width: 13px;
+  height: 13px;
 }
 /* The real input is hidden behind its label so the file picker matches the
    rest of the buttons; it stays focusable from the keyboard. */
@@ -53,113 +64,112 @@
 .doc-upload label {
   cursor: pointer;
 }
-.doc-new-folder input {
-  padding: 7px 11px;
-  border-radius: 9px;
-  border: 1px solid var(--hairline);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 12.5px;
-  width: 180px;
+/* Finder's list view: one table, folders first, columns aligned by a shared
+   grid so each row lines up with the header. */
+.doc-finder {
+  padding: 6px 8px;
+  --doc-cols: minmax(0, 1fr) 130px 90px 130px 96px;
 }
-
-.doc-folders {
+.doc-finder-head,
+.doc-item {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.doc-folder {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 10px 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--hairline);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-.doc-folder-open {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-  text-decoration: none;
-  color: var(--ink);
-}
-.doc-folder-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex: none;
-  border-radius: 9px;
-  background: color-mix(in oklab, var(--m-documentos) 14%, var(--surface-2));
-  color: color-mix(in oklab, var(--m-documentos) 55%, var(--ink));
-}
-.doc-folder-icon svg {
-  width: 17px;
-  height: 17px;
-}
-.doc-folder-name {
-  font-size: 13.5px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doc-list {
-  display: flex;
-  flex-direction: column;
-}
-.doc-row {
-  display: flex;
+  grid-template-columns: var(--doc-cols);
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
+  padding: 0 8px;
 }
-.doc-row + .doc-row {
-  border-top: 1px solid var(--hairline);
-}
-.doc-row-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border-radius: 8px;
-  background: var(--surface-2);
+.doc-finder-head {
+  height: 30px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--ink-mute);
 }
-.doc-row-icon svg {
-  width: 15px;
-  height: 15px;
+.doc-item {
+  min-height: 38px;
+  border-radius: 7px;
 }
-.doc-row-main {
-  flex: 1;
+.doc-item:nth-of-type(even) {
+  background: color-mix(in oklab, var(--surface-2) 55%, transparent);
+}
+.doc-item:hover {
+  background: var(--surface-2);
+}
+.doc-item.is-draft {
+  background: color-mix(in oklab, var(--m-documentos) 10%, transparent);
+}
+.doc-item-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
 }
-.doc-row-name {
-  display: block;
+.doc-item.is-draft .doc-item-name {
+  cursor: default;
+}
+.doc-item-icon {
+  display: flex;
+  flex: none;
+  color: var(--ink-mute);
+}
+.doc-item-icon.is-folder {
+  color: color-mix(in oklab, var(--m-documentos) 70%, var(--ink));
+}
+.doc-item-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.doc-item-label {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 550;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.doc-row-meta {
-  display: block;
-  font-size: 12px;
+.doc-item-cell {
+  font-size: 12.5px;
   color: var(--ink-mute);
-  margin-top: 2px;
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.doc-row .icon-btn {
+.doc-item .row-actions {
+  justify-content: flex-end;
+  opacity: 0;
+}
+.doc-item:hover .row-actions,
+.doc-item:focus-within .row-actions {
+  opacity: 1;
+}
+.doc-item .icon-btn {
   text-decoration: none;
+}
+.doc-folder-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+.doc-folder-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.doc-finder .empty-note {
+  padding: 18px 8px;
 }
 
 @media (max-width: 720px) {
@@ -167,8 +177,84 @@
     flex-direction: column;
     align-items: stretch;
   }
-  .doc-new-folder input {
-    flex: 1;
-    width: auto;
+  .doc-upload label,
+  .doc-new-folder {
+    justify-content: center;
   }
+  .doc-viewer {
+    height: 100%;
+  }
+  /* Phones keep name and actions; the other columns don't fit. */
+  .doc-finder {
+    --doc-cols: minmax(0, 1fr) 96px;
+  }
+  .doc-finder-head span:nth-child(n + 2):nth-child(-n + 4),
+  .doc-item-cell {
+    display: none;
+  }
+  .doc-item .row-actions {
+    opacity: 1;
+  }
+}
+
+.doc-viewer {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 100%);
+  height: min(88vh, 100%);
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.doc-viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 10px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+.doc-viewer-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-viewer-head .icon-btn {
+  text-decoration: none;
+}
+.doc-viewer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+}
+.doc-viewer-body img,
+.doc-viewer-body video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+/* A text file inherits the app's color scheme (white text in dark mode) on a
+   transparent page, so the frame takes the panel behind it instead of a
+   fixed white. */
+.doc-viewer-body iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+}
+.doc-viewer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  color: var(--ink-mute);
 }

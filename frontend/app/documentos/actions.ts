@@ -46,21 +46,15 @@ export async function uploadDocumentsAction(
   };
 }
 
-export async function createFolderAction(
-  _prevState: DocumentFormState,
-  formData: FormData,
-): Promise<DocumentFormState> {
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return { status: "error", message: "Dê um nome à pasta." };
-
+export async function createFolderAction(parentId: string | null, name: string): Promise<{ error?: string }> {
+  if (!name.trim()) return { error: "Dê um nome à pasta." };
   try {
-    await createDocumentFolder(folderIdOf(formData), name);
+    await createDocumentFolder(parentId, name.trim());
   } catch (err) {
-    return { status: "error", message: err instanceof Error ? err.message : "Falha ao criar pasta." };
+    return { error: err instanceof Error ? err.message : "Falha ao criar pasta." };
   }
-
   revalidatePath("/documentos");
-  return { status: "success", message: "Pasta criada." };
+  return {};
 }
 
 export async function renameFolderAction(id: string, name: string): Promise<{ error?: string }> {
