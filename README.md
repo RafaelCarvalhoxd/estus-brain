@@ -250,9 +250,13 @@ O agente usa as ferramentas do Estus pelo MCP.
    O Estus não manda notificações sozinho.
 
 Também dá para configurar pelo `.env` do backend: `AGENT_URL`, `AGENT_TOKEN`
-e `AGENT_MODEL`. A instalação nova começa sem agente (`provider: "none"`),
-então mesmo configurando só pelo `.env` é preciso um clique em "Salvar e
-ligar" na aba Agente para ligar o agente.
+e `AGENT_MODEL`. O que a tela salva vale primeiro; cada campo deixado vazio
+nela usa o `.env` (a tela mostra esse valor como "do .env: …" e não o copia
+para o banco). Trocar o endereço para outro servidor sem colar um token novo
+apaga o token salvo, para ele não ir para o servidor novo. A instalação nova
+começa sem agente (`provider: "none"`), então mesmo configurando só pelo
+`.env` é preciso um clique em "Salvar e ligar" na aba Agente para ligar o
+agente.
 
 ## Configurando a sincronização com Google Calendar
 

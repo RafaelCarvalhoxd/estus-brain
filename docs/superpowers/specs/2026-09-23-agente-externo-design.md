@@ -106,14 +106,18 @@ Um `Provider` chamado `agent` em `assistant/provider_agent.go`.
   - 401/403: "O agente recusou o token.";
   - outro status: "O agente respondeu <status>." com o corpo em "detalhes
     técnicos".
+  - erro dentro de uma resposta 200 (um chunk com `error`, ou o corpo JSON
+    único de um agente que ignora `stream: true`): "O agente devolveu um
+    erro: <mensagem>.".
 - **Capacidades:** visão sim, geração de imagem pelo lado do agente, voz
   pelo navegador.
 
 ## 4. Voz no navegador
 
 - **Ditado:** `SpeechRecognition` (`webkitSpeechRecognition`) em `pt-BR`. O
-  texto reconhecido vai para a caixa de mensagem, e o usuário envia. Sem
-  suporte no navegador, o botão do microfone não aparece.
+  texto reconhecido é enviado na hora, e a resposta é lida em voz alta (como
+  no fluxo de voz anterior). Sem suporte no navegador, o botão do microfone
+  não aparece.
 - **Ouvir resposta:** `speechSynthesis` com a primeira voz `pt-BR`
   disponível.
 - Nota na tela de ajustes: no Chrome o ditado passa pelo servidor do Google.
