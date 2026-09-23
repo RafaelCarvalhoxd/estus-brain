@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -34,15 +35,6 @@ type Event struct {
 	Provider       string          `json:"provider,omitempty"`
 }
 
-// ToolCall is the record of one tool used while answering.
-type ToolCall struct {
-	ID     string          `json:"id"`
-	Name   string          `json:"name"`
-	Args   json.RawMessage `json:"args"`
-	Result any             `json:"result,omitempty"`
-	Error  string          `json:"error,omitempty"`
-}
-
 // ---------------------------------------------------------------- providers
 
 type Message struct {
@@ -51,29 +43,17 @@ type Message struct {
 }
 
 type ChatRequest struct {
-	System    string
-	History   []Message
-	Message   string
-	Module    string
-	SessionID string
-	Model     string
-	// Attachment carries an image a vision-capable provider can send as real
-	// pixels — see visionCapableProviders. Anything else the person attached
-	// is already folded into Message as text by Chat.Send, so most providers
-	// never need to know this field exists.
+	System  string
+	History []Message
+	Message string
+	// Attachment carries an image the agent gets as real pixels. Anything
+	// else the person attached is already folded into Message as text by
+	// Chat.Send.
 	Attachment *Attachment
 }
 
 type ChatOutcome struct {
-	Text      string
-	SessionID string
-	ToolCalls []ToolCall
-}
-
-type Provider interface {
-	ID() string
-	Status(ctx context.Context) ProviderStatus
-	Chat(ctx context.Context, req ChatRequest, emit func(Event)) (ChatOutcome, error)
+	Text string
 }
 
 type ProviderStatus struct {
@@ -82,8 +62,6 @@ type ProviderStatus struct {
 	Kind      string   `json:"kind"` // login | api | local
 	Available bool     `json:"available"`
 	Detail    string   `json:"detail"`
-	NeedsKey  bool     `json:"needs_key,omitempty"`
-	HasKey    bool     `json:"has_key,omitempty"`
 	Model     string   `json:"model"`
 	Models    []string `json:"models,omitempty"`
 	// Capabilities describe what this engine's own model can do, regardless
@@ -92,10 +70,8 @@ type ProviderStatus struct {
 	Capabilities Capabilities `json:"capabilities"`
 }
 
-// Capabilities is what one engine's own model can do. SupportsImageGen is
-// the only one Estus actually wires to a tool today (generate_image, gated
-// by it in toolsFor); SupportsVision and SupportsVoice are informational,
-// ahead of file upload wiring them to something real.
+// Capabilities is what the engine's own model can do — informational, for
+// the settings screen.
 type Capabilities struct {
 	SupportsImageGen bool `json:"supports_image_gen"`
 	SupportsVision   bool `json:"supports_vision"`
@@ -105,91 +81,93 @@ type Capabilities struct {
 // ---------------------------------------------------------------- chat
 
 type ChatConfig struct {
-	Dir       string
-	MCPURL    string
-	MCPToken  string
-	ToolsURL  string
-	MultiUser bool
-	// VaultKey encrypts stored API keys; without it keys come only from env.
+	MCPURL   string
+	MCPToken string
+	// VaultKey encrypts the stored agent token; without it the token comes
+	// only from AGENT_TOKEN.
 	VaultKey *[32]byte
-	// AppleBridgeBin is the path to the Apple Intelligence helper, started on demand.
-	AppleBridgeBin string
-	AppleBridgeURL string
-	// Voice is the macOS voice that reads answers aloud, e.g. "Luciana".
-	Voice string
+	// Env is the agent config from AGENT_URL / AGENT_TOKEN / AGENT_MODEL,
+	// used for whatever the settings screen left empty.
+	Env agentConfig
 	// Documents resolves a chat attachment (see SendRequest.AttachmentID) —
 	// the same storage generate_image and documents_write already use.
 	Documents *service.DocumentService
 }
 
 type Chat struct {
-	tools     *Registry
-	repo      *postgres.AssistantRepo
-	cfg       ChatConfig
-	providers map[string]Provider
-	order     []string
-	mu        sync.Mutex
-	bridge    *AppleBridge
-	voice     *Voice
+	tools *Registry
+	repo  *postgres.AssistantRepo
+	cfg   ChatConfig
+	agent *agentProvider
+	mu    sync.Mutex
 }
 
-// NewChat takes bridge rather than building its own: the generate_image tool
-// (registered on tools before Chat exists) needs the very same instance, or
-// two processes would race for the same port.
-func NewChat(tools *Registry, repo *postgres.AssistantRepo, cfg ChatConfig, bridge *AppleBridge) *Chat {
-	c := &Chat{tools: tools, repo: repo, cfg: cfg, providers: map[string]Provider{}, bridge: bridge}
-	c.voice = newVoice(c.bridge, cfg.Voice)
-	for _, p := range []Provider{
-		&claudeCodeProvider{chat: c},
-		&codexProvider{chat: c},
-		&anthropicProvider{chat: c},
-		&openAIProvider{chat: c},
-		&ollamaProvider{chat: c},
-		&appleProvider{chat: c},
-	} {
-		c.providers[p.ID()] = p
-		c.order = append(c.order, p.ID())
-	}
+func NewChat(tools *Registry, repo *postgres.AssistantRepo, cfg ChatConfig) *Chat {
+	c := &Chat{tools: tools, repo: repo, cfg: cfg}
+	// Not the shared httpClient: its Timeout also covers reading the streamed
+	// body, so a long answer would be cut off. The request's context (the
+	// browser) bounds the call instead.
+	c.agent = &agentProvider{config: c.agentConfig, client: &http.Client{}}
 	return c
 }
 
-// Close stops helpers the chat started (the Apple bridge).
-func (c *Chat) Close() {
-	c.bridge.stop()
+// NewAgentEnv builds ChatConfig.Env from the process environment's values.
+func NewAgentEnv(url, token, model string) agentConfig {
+	return agentConfig{URL: strings.TrimRight(strings.TrimSpace(url), "/"), Token: strings.TrimSpace(token), Model: strings.TrimSpace(model)}
 }
 
-// Voice is the Mac's speech, shared by the web chat and other channels.
-func (c *Chat) Voice() *Voice { return c.voice }
+const agentTokenSecret = "agent"
 
-var defaultModels = map[string]string{
-	"claude_code": "sonnet",
-	"codex":       "",
-	"anthropic":   "claude-sonnet-5",
-	"openai":      "gpt-5-mini",
-	"ollama":      "",
-	"apple":       "on-device",
-}
-
-func (c *Chat) model(s postgres.AssistantSettings, provider string) string {
-	if m := strings.TrimSpace(s.Models[provider]); m != "" {
-		return m
+// agentConfig is the saved agent settings, each empty field filled from env.
+func (c *Chat) agentConfig(ctx context.Context) (agentConfig, error) {
+	s, err := c.repo.Settings(ctx)
+	if err != nil {
+		return agentConfig{}, err
 	}
-	return defaultModels[provider]
+	cfg := agentConfig{URL: s.AgentURL, Token: c.secret(s, agentTokenSecret), Model: s.AgentModel}
+	if cfg.URL == "" {
+		cfg.URL = c.cfg.Env.URL
+	}
+	if cfg.Token == "" {
+		cfg.Token = c.cfg.Env.Token
+	}
+	if cfg.Model == "" {
+		cfg.Model = c.cfg.Env.Model
+	}
+	return cfg, nil
+}
+
+func (c *Chat) secret(s postgres.AssistantSettings, name string) string {
+	blob, ok := s.Secrets[name]
+	if !ok || c.cfg.VaultKey == nil {
+		return ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(blob)
+	if err != nil || len(raw) <= 12 {
+		return ""
+	}
+	value, err := domain.DecryptPassword(*c.cfg.VaultKey, raw[12:], raw[:12])
+	if err != nil {
+		return ""
+	}
+	return value
 }
 
 // ---- settings
 
 type SettingsView struct {
-	Provider  string           `json:"provider"`
-	OllamaURL string           `json:"ollama_url"`
+	Provider  string           `json:"provider"` // agent | none
 	Providers []ProviderStatus `json:"providers"`
-	MCP       struct {
+	Agent     struct {
+		URL      string `json:"url"`
+		Model    string `json:"model"`
+		HasToken bool   `json:"has_token"`
+	} `json:"agent"`
+	MCP struct {
 		URL   string `json:"url"`
 		Token string `json:"token"`
 	} `json:"mcp"`
-	CanStoreKeys bool        `json:"can_store_keys"`
-	MultiUser    bool        `json:"multi_user"`
-	Voice        VoiceStatus `json:"voice"`
+	CanStoreKeys bool `json:"can_store_keys"`
 }
 
 func (c *Chat) Settings(ctx context.Context) (SettingsView, error) {
@@ -197,38 +175,24 @@ func (c *Chat) Settings(ctx context.Context) (SettingsView, error) {
 	if err != nil {
 		return SettingsView{}, err
 	}
-	view := SettingsView{Provider: s.Provider, OllamaURL: s.OllamaURL, CanStoreKeys: c.cfg.VaultKey != nil, MultiUser: c.cfg.MultiUser}
-	view.MCP.URL = c.cfg.MCPURL
-	view.MCP.Token = c.cfg.MCPToken
-
-	statuses := make([]ProviderStatus, len(c.order))
-	var wg sync.WaitGroup
-	for i, id := range c.order {
-		wg.Add(1)
-		go func(i int, p Provider) {
-			defer wg.Done()
-			sctx, cancel := context.WithTimeout(ctx, 4*time.Second)
-			defer cancel()
-			statuses[i] = p.Status(sctx)
-		}(i, c.providers[id])
+	view := SettingsView{Provider: s.Provider, CanStoreKeys: c.cfg.VaultKey != nil}
+	view.MCP.URL, view.MCP.Token = c.cfg.MCPURL, c.cfg.MCPToken
+	cfg, err := c.agentConfig(ctx)
+	if err != nil {
+		return SettingsView{}, err
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		vctx, cancel := context.WithTimeout(ctx, 6*time.Second)
-		defer cancel()
-		view.Voice = c.voice.Status(vctx)
-	}()
-	wg.Wait()
-	view.Providers = statuses
+	view.Agent.URL, view.Agent.Model, view.Agent.HasToken = cfg.URL, cfg.Model, cfg.Token != ""
+	sctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	view.Providers = []ProviderStatus{c.agent.Status(sctx)}
 	return view, nil
 }
 
 type SettingsUpdate struct {
-	Provider  *string           `json:"provider"`
-	Models    map[string]string `json:"models"`
-	Keys      map[string]string `json:"keys"` // provider → key; "" removes it
-	OllamaURL *string           `json:"ollama_url"`
+	Provider   *string `json:"provider"`
+	AgentURL   *string `json:"agent_url"`
+	AgentModel *string `json:"agent_model"`
+	AgentToken *string `json:"agent_token"` // "" removes it
 }
 
 func (c *Chat) UpdateSettings(ctx context.Context, u SettingsUpdate) error {
@@ -239,62 +203,33 @@ func (c *Chat) UpdateSettings(ctx context.Context, u SettingsUpdate) error {
 		return err
 	}
 	if u.Provider != nil {
-		if *u.Provider != "none" {
-			if _, ok := c.providers[*u.Provider]; !ok {
-				return fmt.Errorf("%w: unknown provider %q", domain.ErrValidation, *u.Provider)
-			}
+		if *u.Provider != "none" && *u.Provider != agentID {
+			return fmt.Errorf("%w: unknown provider %q", domain.ErrValidation, *u.Provider)
 		}
 		s.Provider = *u.Provider
 	}
-	for p, m := range u.Models {
-		if _, ok := c.providers[p]; ok {
-			s.Models[p] = strings.TrimSpace(m)
-		}
+	if u.AgentURL != nil {
+		s.AgentURL = strings.TrimRight(strings.TrimSpace(*u.AgentURL), "/")
 	}
-	for p, key := range u.Keys {
-		if p != "anthropic" && p != "openai" {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		if key == "" {
-			delete(s.Secrets, p)
-			continue
-		}
-		if c.cfg.VaultKey == nil {
-			return fmt.Errorf("%w: set VAULT_ENCRYPTION_KEY to store API keys, or use ANTHROPIC_API_KEY / OPENAI_API_KEY", domain.ErrValidation)
-		}
-		ct, nonce, err := domain.EncryptPassword(*c.cfg.VaultKey, key)
-		if err != nil {
-			return err
-		}
-		s.Secrets[p] = base64.StdEncoding.EncodeToString(append(nonce, ct...))
+	if u.AgentModel != nil {
+		s.AgentModel = strings.TrimSpace(*u.AgentModel)
 	}
-	if u.OllamaURL != nil {
-		s.OllamaURL = strings.TrimRight(strings.TrimSpace(*u.OllamaURL), "/")
+	if u.AgentToken != nil {
+		token := strings.TrimSpace(*u.AgentToken)
+		if token == "" {
+			delete(s.Secrets, agentTokenSecret)
+		} else {
+			if c.cfg.VaultKey == nil {
+				return fmt.Errorf("%w: defina VAULT_ENCRYPTION_KEY para salvar o token, ou use AGENT_TOKEN", domain.ErrValidation)
+			}
+			ct, nonce, err := domain.EncryptPassword(*c.cfg.VaultKey, token)
+			if err != nil {
+				return err
+			}
+			s.Secrets[agentTokenSecret] = base64.StdEncoding.EncodeToString(append(nonce, ct...))
+		}
 	}
 	return c.repo.SaveSettings(ctx, s)
-}
-
-// apiKey returns a stored key (decrypted) or the env fallback.
-func (c *Chat) apiKey(ctx context.Context, provider, envValue string) string {
-	return apiKeyFrom(ctx, c.repo, c.cfg.VaultKey, provider, envValue)
-}
-
-// apiKeyFrom is apiKey's logic as a free function: generate_image needs it
-// too, from the registry, which is built before any Chat exists.
-func apiKeyFrom(ctx context.Context, repo *postgres.AssistantRepo, vaultKey *[32]byte, provider, envValue string) string {
-	s, err := repo.Settings(ctx)
-	if err == nil && vaultKey != nil {
-		if blob, ok := s.Secrets[provider]; ok {
-			raw, err := base64.StdEncoding.DecodeString(blob)
-			if err == nil && len(raw) > 12 {
-				if key, err := domain.DecryptPassword(*vaultKey, raw[12:], raw[:12]); err == nil {
-					return key
-				}
-			}
-		}
-	}
-	return envValue
 }
 
 // ---- conversations
@@ -383,7 +318,6 @@ type SendRequest struct {
 	ConversationID string `json:"conversation_id"`
 	Message        string `json:"message"`
 	Module         string `json:"module"`
-	Provider       string `json:"provider"`
 	// AttachmentID is a document already uploaded (POST /api/assistant/attachments)
 	// that this message refers to — an image, PDF, spreadsheet or text file.
 	AttachmentID string `json:"attachment_id"`
@@ -393,7 +327,7 @@ type SendRequest struct {
 
 var ErrNoProvider = errors.New("no AI engine selected")
 
-// Send answers a message with the chosen engine, streaming events, and keeps
+// Send answers a message with the agent, streaming events, and keeps
 // both sides of the turn in the conversation.
 func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) error {
 	message := strings.TrimSpace(req.Message)
@@ -404,21 +338,14 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	if err != nil {
 		return err
 	}
-	providerID := req.Provider
-	if providerID == "" {
-		providerID = settings.Provider
-	}
-	provider, ok := c.providers[providerID]
-	if !ok {
+	if settings.Provider != agentID {
 		return ErrNoProvider
 	}
-	if c.cfg.MultiUser && (providerID == "claude_code" || providerID == "codex") {
-		return fmt.Errorf("%w: motores que usam o login da sua assinatura ficam desligados no modo multiusuário; escolha outro motor", domain.ErrValidation)
-	}
+	providerID := agentID
 
 	var attachment *Attachment
 	if req.AttachmentID != "" {
-		attachment, err = resolveAttachment(ctx, c.cfg.Documents, req.AttachmentID, providerID)
+		attachment, err = resolveAttachment(ctx, c.cfg.Documents, req.AttachmentID)
 		if err != nil {
 			return fmt.Errorf("anexo: %w", err)
 		}
@@ -456,12 +383,6 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	chatReq := ChatRequest{
 		System:  c.systemPrompt(req.Module),
 		Message: message,
-		Module:  req.Module,
-		Model:   c.model(settings, providerID),
-	}
-	// A CLI engine's session only continues if that same engine answered last.
-	if conv.Provider == providerID {
-		chatReq.SessionID = conv.SessionID
 	}
 	// Engines want turns that alternate and start with the person: merge
 	// consecutive messages of one side (a flow can add several) and drop any
@@ -484,10 +405,9 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 		chatReq.Message = chatReq.History[n-1].Content + "\n\n" + chatReq.Message
 		chatReq.History = chatReq.History[:n-1]
 	}
-	// A vision-capable engine gets the image itself on ChatRequest.Attachment
-	// (each such provider builds its own content blocks from it); every other
-	// attachment is already text by now, so it's just more of the message —
-	// no provider needs to know it came from a file.
+	// An image goes to the agent as itself on ChatRequest.Attachment; every
+	// other attachment is already text by now, so it's just more of the
+	// message.
 	if attachment != nil {
 		if attachment.ImageBase64 != "" {
 			chatReq.Attachment = attachment
@@ -496,20 +416,20 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 		}
 	}
 
-	outcome, chatErr := provider.Chat(ctx, chatReq, emit)
+	outcome, chatErr := c.agent.Chat(ctx, chatReq, emit)
 	if chatErr != nil && ctx.Err() != nil {
 		// The person stopped the answer (or left); say that, not what the
 		// engine made of being cut off.
 		chatErr = fmt.Errorf("%w: %v", context.Canceled, chatErr)
 	}
 	text := strings.TrimSpace(outcome.Text)
-	stored := map[string]any{"tool_calls": outcome.ToolCalls}
+	stored := map[string]any{}
 	// No answer, or one cut short, always comes with an explanation.
 	if chatErr != nil || text == "" {
 		if chatErr != nil {
 			slog.Warn("assistant chat failed", "provider", providerID, "error", chatErr)
 		}
-		why := explainFailure(providerID, chatReq.Model, chatErr, outcome)
+		why := explainFailure(chatErr)
 		if text != "" && !errors.Is(chatErr, context.Canceled) {
 			why.Message = "A resposta foi interrompida. " + why.Message
 		}
@@ -525,11 +445,7 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	if err != nil {
 		return err
 	}
-	session := outcome.SessionID
-	if session == "" && chatErr == nil {
-		session = chatReq.SessionID
-	}
-	_ = c.repo.TouchConversation(saveCtx, conv.ID, providerID, session)
+	_ = c.repo.TouchConversation(saveCtx, conv.ID, providerID)
 	emit(Event{Type: "done", ConversationID: conv.ID, MessageID: saved.ID, Provider: providerID})
 	return nil
 }
@@ -559,12 +475,6 @@ func (c *Chat) systemPrompt(module string) string {
 	b.WriteString("Para lançar, cadastrar ou editar, faça direto quando as informações estiverem claras; se faltar algo essencial (valor, data), pergunte. ")
 	b.WriteString("Gasto sem categoria dita: escolha a categoria existente que melhor encaixa (liste antes); só quando nenhuma serve, passe um nome novo e curto — a categoria é criada sozinha. Avise na resposta quando criar uma categoria nova. ")
 	b.WriteString("Se não entender o pedido, diga que não entendeu e o que ficou confuso, em vez de chutar. ")
-	// The model is given only some modules' tools when it is small. Asked for
-	// a habit while holding only the finance tools, one booked an expense and
-	// then said the habit had been created — the wrong action AND a false
-	// report. Routing makes that rare; this makes it honest when it happens.
-	b.WriteString("Se não existir ferramenta para o que foi pedido, diga que não consegue fazer isso por aqui e onde a pessoa consegue. ")
-	b.WriteString("Nunca use uma ferramenta de outro assunto como aproximação — lançar um gasto não é criar um hábito. ")
 	b.WriteString("Nunca diga que fez algo sem ter chamado a ferramenta que faz aquilo. ")
 	b.WriteString("Se uma ferramenta devolver erro, explique em palavras simples por que não deu certo e o que a pessoa precisa informar ou corrigir (ex.: categoria que não existe: mostre as que existem). Nunca termine sem responder. ")
 	b.WriteString("Antes de excluir qualquer coisa, confirme com a pessoa. Nunca invente ids: liste antes. Valores em R$ no formato brasileiro. ")
@@ -574,55 +484,4 @@ func (c *Chat) systemPrompt(module string) string {
 		fmt.Fprintf(&b, "\nA pessoa está no módulo de %s: priorize esse assunto.", name)
 	}
 	return b.String()
-}
-
-// runTool executes a tool for an API-based engine, streaming its start and
-// result, and returns the text handed back to the model.
-func (c *Chat) runTool(ctx context.Context, id, name string, args json.RawMessage, emit func(Event), calls *[]ToolCall) string {
-	if len(args) == 0 {
-		args = json.RawMessage(`{}`)
-	}
-	emit(Event{Type: "tool", ToolID: id, Tool: name, Args: args})
-	call := ToolCall{ID: id, Name: name, Args: args}
-	result, err := c.tools.Call(ctx, name, args)
-	var text string
-	if err != nil {
-		call.Error = ToolErrorMessage(err)
-		text = `{"erro": ` + quote(call.Error) + `}`
-		emit(Event{Type: "tool_result", ToolID: id, Tool: name, Error: call.Error})
-	} else {
-		call.Result = result
-		b, _ := json.Marshal(result)
-		text = string(b)
-		emit(Event{Type: "tool_result", ToolID: id, Tool: name, Result: result})
-	}
-	*calls = append(*calls, call)
-	return truncate(text, 20000)
-}
-
-func quote(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}
-
-// toolsFor picks the tools an engine is given: all of them, or for small
-// on-device models only the selected module's plus the day overview.
-// generate_image/edit_image are offered to every engine — the tool itself
-// picks a real backend (OpenAI, else Draw Things locally) regardless of
-// which engine called it, so there is no provider to gate this on.
-func (c *Chat) toolsFor(module, message string, small bool) []Tool {
-	if !small {
-		return c.tools.Tools()
-	}
-	// A module chosen on screen is a stronger signal than anything in the
-	// text. Without one, the message itself decides — see routing.go, which
-	// exists because "crie um hábito" used to reach a model holding only the
-	// finance tools.
-	mods := []string{"geral"}
-	if module != "" {
-		mods = append(mods, module)
-	} else {
-		mods = modulesFor(message)
-	}
-	return c.tools.Tools(mods...)
 }

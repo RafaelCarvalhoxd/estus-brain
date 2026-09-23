@@ -14,11 +14,11 @@ import (
 )
 
 type AssistantSettings struct {
-	Provider  string
-	Models    map[string]string
-	Secrets   map[string]string // provider → base64(nonce|ciphertext)
-	OllamaURL string
-	UpdatedAt time.Time
+	Provider   string
+	AgentURL   string
+	AgentModel string
+	Secrets    map[string]string // name → base64(nonce|ciphertext)
+	UpdatedAt  time.Time
 }
 
 type Conversation struct {
@@ -26,7 +26,6 @@ type Conversation struct {
 	Title     string
 	Module    string
 	Provider  string
-	SessionID string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -58,35 +57,33 @@ func assistantErr(op string, err error) error {
 
 func (r *AssistantRepo) Settings(ctx context.Context) (AssistantSettings, error) {
 	var s AssistantSettings
-	var models, secrets []byte
-	err := r.db.Pool.QueryRow(ctx, `select provider, models, secrets, ollama_url, updated_at from assistant_settings where id = 1`).
-		Scan(&s.Provider, &models, &secrets, &s.OllamaURL, &s.UpdatedAt)
+	var secrets []byte
+	err := r.db.Pool.QueryRow(ctx, `select provider, agent_url, agent_model, secrets, updated_at from assistant_settings where id = 1`).
+		Scan(&s.Provider, &s.AgentURL, &s.AgentModel, &secrets, &s.UpdatedAt)
 	if err != nil {
 		return AssistantSettings{}, assistantErr("assistant settings", err)
 	}
-	s.Models, s.Secrets = map[string]string{}, map[string]string{}
-	_ = json.Unmarshal(models, &s.Models)
+	s.Secrets = map[string]string{}
 	_ = json.Unmarshal(secrets, &s.Secrets)
 	return s, nil
 }
 
 func (r *AssistantRepo) SaveSettings(ctx context.Context, s AssistantSettings) error {
-	models, _ := json.Marshal(s.Models)
 	secrets, _ := json.Marshal(s.Secrets)
 	_, err := r.db.Pool.Exec(ctx, `
 		update assistant_settings
-		set provider = $1, models = $2::jsonb, secrets = $3::jsonb, ollama_url = $4, updated_at = now()
-		where id = 1`, s.Provider, string(models), string(secrets), s.OllamaURL)
+		set provider = $1, agent_url = $2, agent_model = $3, secrets = $4::jsonb, updated_at = now()
+		where id = 1`, s.Provider, s.AgentURL, s.AgentModel, string(secrets))
 	if err != nil {
 		return fmt.Errorf("save assistant settings: %w", err)
 	}
 	return nil
 }
 
-const conversationColumns = `id, title, module, provider, session_id, created_at, updated_at`
+const conversationColumns = `id, title, module, provider, created_at, updated_at`
 
 func scanConversation(row scanner, c *Conversation) error {
-	return row.Scan(&c.ID, &c.Title, &c.Module, &c.Provider, &c.SessionID, &c.CreatedAt, &c.UpdatedAt)
+	return row.Scan(&c.ID, &c.Title, &c.Module, &c.Provider, &c.CreatedAt, &c.UpdatedAt)
 }
 
 func (r *AssistantRepo) ListConversations(ctx context.Context, limit int) ([]Conversation, error) {
@@ -125,14 +122,13 @@ func (r *AssistantRepo) CreateConversation(ctx context.Context, title, module st
 	return c, nil
 }
 
-// TouchConversation records the engine (and its session) that last answered.
-func (r *AssistantRepo) TouchConversation(ctx context.Context, id, provider, sessionID string) error {
+// TouchConversation records the engine that last answered.
+func (r *AssistantRepo) TouchConversation(ctx context.Context, id, provider string) error {
 	_, err := r.db.Pool.Exec(ctx, `
 		update assistant_conversations
 		set provider = case when $2 = '' then provider else $2 end,
-		    session_id = $3,
 		    updated_at = now()
-		where id = $1`, id, provider, sessionID)
+		where id = $1`, id, provider)
 	if err != nil {
 		return assistantErr("touch conversation", err)
 	}

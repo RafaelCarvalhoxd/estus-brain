@@ -137,8 +137,6 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("POST /api/assistant/record", a.Record)
 		mux.HandleFunc("POST /api/assistant/chat", a.Send)
 		mux.HandleFunc("POST /api/assistant/attachments", a.UploadAttachment)
-		mux.HandleFunc("POST /api/assistant/voice/transcribe", a.Transcribe)
-		mux.HandleFunc("POST /api/assistant/voice/speak", a.Speak)
 	}
 	if m.MCP != nil {
 		mux.Handle("/mcp", m.MCP)

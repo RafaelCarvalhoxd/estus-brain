@@ -41,8 +41,6 @@ type agentProvider struct {
 	client *http.Client
 }
 
-func (p *agentProvider) ID() string { return agentID }
-
 func (p *agentProvider) Status(ctx context.Context) ProviderStatus {
 	st := ProviderStatus{ID: agentID, Name: "Agente externo", Kind: "local", Capabilities: Capabilities{SupportsVision: true}}
 	cfg, err := p.config(ctx)

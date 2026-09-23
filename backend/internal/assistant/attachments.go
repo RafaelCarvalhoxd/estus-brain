@@ -16,19 +16,16 @@ import (
 )
 
 // Attachment is one file the person attached to a chat message, resolved
-// once in Chat.Send so every provider gets something useful — real pixels
-// for one that can see, extracted text for every other, instead of the
-// attachment silently vanishing for whichever engine happens to be picked.
+// once in Chat.Send: real pixels for an image, extracted text for any other
+// file, so the agent gets something useful either way.
 type Attachment struct {
 	Name        string
 	ContentType string
-	// Text is what a provider with no vision reads instead of the image —
-	// extracted from a PDF/spreadsheet/plain text file, or a note saying an
-	// image came in and this engine can't see it.
+	// Text is what the agent reads for a non-image file — extracted from a
+	// PDF/spreadsheet/plain text file.
 	Text string
-	// ImageBase64 and ImageMediaType are set only for an image a vision
-	// provider (Anthropic or OpenAI's API today — see visionCapableProviders)
-	// can actually see.
+	// ImageBase64 and ImageMediaType are set only for an image, which the
+	// agent always gets as the image itself.
 	ImageBase64    string
 	ImageMediaType string
 }
@@ -38,15 +35,9 @@ const (
 	maxAttachmentChars = 8000     // keeps one file from crowding out the rest of the context
 )
 
-// visionCapableProviders send real image bytes; everyone else — including
-// Claude Code and Codex, whose CLIs run with their own file tools switched
-// off (see providers_cli.go) and so can't read a path even if given one —
-// gets Attachment.Text's fallback note instead.
-var visionCapableProviders = map[string]bool{"anthropic": true, "openai": true}
-
 // resolveAttachment reads the uploaded document once and turns it into
-// whatever providerID can use.
-func resolveAttachment(ctx context.Context, documents *service.DocumentService, documentID, providerID string) (*Attachment, error) {
+// what the agent can use.
+func resolveAttachment(ctx context.Context, documents *service.DocumentService, documentID string) (*Attachment, error) {
 	if documents == nil {
 		return nil, fmt.Errorf("módulo de documentos indisponível")
 	}
@@ -62,7 +53,7 @@ func resolveAttachment(ctx context.Context, documents *service.DocumentService, 
 	}
 
 	att := &Attachment{Name: doc.Name, ContentType: doc.ContentType}
-	if strings.HasPrefix(doc.ContentType, "image/") && visionCapableProviders[providerID] {
+	if strings.HasPrefix(doc.ContentType, "image/") {
 		att.ImageBase64 = base64.StdEncoding.EncodeToString(data)
 		att.ImageMediaType = doc.ContentType
 		return att, nil
@@ -72,8 +63,7 @@ func resolveAttachment(ctx context.Context, documents *service.DocumentService, 
 }
 
 // describeDocument renders any stored document as text: what documents_read
-// hands the model, and what resolveAttachment falls back to for a provider
-// that can't see the actual pixels of an image.
+// hands the model, and what resolveAttachment uses for any non-image file.
 func describeDocument(doc domain.Document, data []byte) string {
 	switch {
 	case strings.HasPrefix(doc.ContentType, "image/"):

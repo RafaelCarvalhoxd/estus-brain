@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/rafael/estus-vault/backend/internal/assistant"
 	"github.com/rafael/estus-vault/backend/internal/domain"
@@ -207,58 +206,4 @@ func (h *AssistantHandlers) Send(w http.ResponseWriter, r *http.Request) {
 		emit(assistant.Event{Type: "error", Error: assistant.SendErrorMessage(err), Detail: err.Error()})
 		emit(assistant.Event{Type: "done"})
 	}
-}
-
-// ---- voice
-
-// Transcribe turns a recording into text with the Mac's speech.
-func (h *AssistantHandlers) Transcribe(w http.ResponseWriter, r *http.Request) {
-	audio, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 10<<20))
-	if err != nil {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Áudio longo demais — mande até 3 minutos."})
-		return
-	}
-	started := time.Now()
-	t, err := h.chat.Voice().Transcribe(r.Context(), audio, r.Header.Get("X-Filename"))
-	if err != nil {
-		writeVoiceError(w, err)
-		return
-	}
-	slog.Info("voice transcribed", "audio_seconds", t.Seconds, "took_ms", time.Since(started).Milliseconds())
-	writeJSON(w, http.StatusOK, t)
-}
-
-// Speak reads an answer aloud, as AAC audio.
-func (h *AssistantHandlers) Speak(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Text string `json:"text"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256<<10)).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "JSON inválido"})
-		return
-	}
-	audio, err := h.chat.Voice().Speak(r.Context(), req.Text)
-	if err != nil {
-		writeVoiceError(w, err)
-		return
-	}
-	w.Header().Set("Content-Type", "audio/mp4")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(audio)
-}
-
-// writeVoiceError answers with the sentence the chat shows; only unexpected
-// failures are logged (never the audio or the text).
-func writeVoiceError(w http.ResponseWriter, err error) {
-	status := http.StatusInternalServerError
-	switch {
-	case errors.Is(err, assistant.ErrVoiceRejected):
-		status = http.StatusUnprocessableEntity
-	case errors.Is(err, assistant.ErrVoiceUnavailable), errors.Is(err, assistant.ErrVoiceOutdated):
-		status = http.StatusServiceUnavailable
-	default:
-		slog.Error("voice failed", "error", err)
-	}
-	writeJSON(w, status, map[string]string{"error": assistant.VoiceErrorMessage(err)})
 }

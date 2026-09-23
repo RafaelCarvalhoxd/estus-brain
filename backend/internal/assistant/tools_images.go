@@ -20,7 +20,7 @@ import (
 // there too, not just in the conversation that made it.
 func (r *Registry) addImages() {
 	d := r.deps
-	if d.Documents == nil || d.AssistantRepo == nil {
+	if d.Documents == nil {
 		return
 	}
 	r.add(Tool{
@@ -49,7 +49,7 @@ func (r *Registry) addImages() {
 
 	r.add(Tool{
 		Name: "edit_image", Title: "Editar imagem", Module: "geral",
-		Description: "Edita uma imagem já anexada na conversa ou salva em Documentos, a partir de um pedido em texto (ex.: remover o fundo, mudar a cor, adicionar algo). Requer a API key da OpenAI.",
+		Description: "Edita uma imagem já anexada na conversa ou salva em Documentos, a partir de um pedido em texto (ex.: remover o fundo, mudar a cor, adicionar algo). Requer OPENAI_API_KEY no servidor.",
 		Input: object(map[string]any{
 			"document_id": str("Id da imagem a editar"),
 			"prompt":      str("O que mudar na imagem"),
@@ -90,9 +90,9 @@ func (r *Registry) addImages() {
 // the whole Mac during generation, an unresolved resource problem, not
 // something to keep as a silent fallback.
 func generateImage(ctx context.Context, d Deps, prompt string) (data []byte, contentType string, err error) {
-	key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY"))
+	key := os.Getenv("OPENAI_API_KEY")
 	if key == "" {
-		return nil, "", invalid("nenhum motor de imagem disponível — configure a API key da OpenAI em Configurações")
+		return nil, "", invalid("nenhum motor de imagem disponível — defina OPENAI_API_KEY no servidor")
 	}
 	return generateImageOpenAI(ctx, key, prompt)
 }
@@ -122,9 +122,9 @@ func generateImageOpenAI(ctx context.Context, key, prompt string) ([]byte, strin
 
 // editImage requires an OpenAI key — see generateImage.
 func editImage(ctx context.Context, d Deps, imageData []byte, imageName, prompt string) ([]byte, string, error) {
-	key := apiKeyFrom(ctx, d.AssistantRepo, d.VaultKey, "openai", os.Getenv("OPENAI_API_KEY"))
+	key := os.Getenv("OPENAI_API_KEY")
 	if key == "" {
-		return nil, "", invalid("nenhum motor de imagem disponível — configure a API key da OpenAI em Configurações")
+		return nil, "", invalid("nenhum motor de imagem disponível — defina OPENAI_API_KEY no servidor")
 	}
 	return editImageOpenAI(ctx, key, imageData, imageName, prompt)
 }

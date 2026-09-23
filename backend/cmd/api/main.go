@@ -124,31 +124,22 @@ func run() error {
 		vaultHandlers = httpapi.NewVaultHandlers(vaultService, cfg.AppPassword)
 	}
 
-	// The assistant: every action as a tool, shared by the chat, MCP and the
-	// AI engines. The vault stays out of it.
+	// The assistant: every action as a tool, shared by the chat's agent and
+	// MCP. The vault stays out of it.
 	mcpToken, err := assistant.LoadOrCreateToken(cfg.AssistantDir, cfg.MCPToken)
 	if err != nil {
 		return fmt.Errorf("assistant token: %w", err)
 	}
 	chatCfg := assistant.ChatConfig{
-		Dir:            cfg.AssistantDir,
-		MCPURL:         "http://127.0.0.1:" + cfg.Port + "/mcp",
-		MCPToken:       mcpToken,
-		ToolsURL:       "http://127.0.0.1:" + cfg.Port + "/api/assistant/tools",
-		MultiUser:      cfg.MultiUser,
-		AppleBridgeBin: getenv("APPLE_BRIDGE_BIN", "../apple-bridge/.build/release/estus-apple-bridge"),
-		AppleBridgeURL: getenv("APPLE_BRIDGE_URL", "http://127.0.0.1:8765"),
-		Voice:          getenv("ASSISTANT_VOICE", "Luciana"),
-		Documents:      documentServiceOrNil(documentService, documentErr),
+		MCPURL:    "http://127.0.0.1:" + cfg.Port + "/mcp",
+		MCPToken:  mcpToken,
+		Env:       assistant.NewAgentEnv(cfg.AgentURL, cfg.AgentToken, cfg.AgentModel),
+		Documents: documentServiceOrNil(documentService, documentErr),
 	}
 	if key, err := domain.LoadEncryptionKeyFromEnv(); err == nil {
 		chatCfg.VaultKey = &key
 	}
-	// Built ahead of the tool registry: generate_image (registered inside
-	// assistant.New below) reads the same stored OpenAI key and falls back to
-	// the same Apple bridge instance that Chat uses for text and voice.
 	assistantRepo := postgres.NewAssistantRepo(db)
-	appleBridge := assistant.NewAppleBridge(chatCfg.AppleBridgeBin, chatCfg.AppleBridgeURL)
 	tools := assistant.New(assistant.Deps{
 		Categories:     categoryRepo,
 		Cards:          cardRepo,
@@ -167,11 +158,8 @@ func run() error {
 		Documents:      documentServiceOrNil(documentService, documentErr),
 		Boards:         boardService,
 		Location:       location,
-		AssistantRepo:  assistantRepo,
-		VaultKey:       chatCfg.VaultKey,
 	})
-	chat := assistant.NewChat(tools, assistantRepo, chatCfg, appleBridge)
-	defer chat.Close()
+	chat := assistant.NewChat(tools, assistantRepo, chatCfg)
 	assistantHandlers := httpapi.NewAssistantHandlers(tools, chat, documentServiceOrNil(documentService, documentErr))
 	mcpHandler := tools.MCPHandler(func() []string { return []string{mcpToken} })
 	slog.Info("assistant ready", "tools", len(tools.Tools()), "mcp", "/mcp")
@@ -223,11 +211,4 @@ func documentServiceOrNil(s *service.DocumentService, err error) *service.Docume
 		return nil
 	}
 	return s
-}
-
-func getenv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

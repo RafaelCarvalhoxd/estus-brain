@@ -61,11 +61,6 @@ type Deps struct {
 	// Location is the owner's time zone: "today", "this month" and bare
 	// dates and times in tool input are read in it.
 	Location *time.Location
-	// AssistantRepo and VaultKey let generate_image read the same stored
-	// OpenAI key the chat settings screen writes — the same pair
-	// Chat.apiKey reads with, but the registry is built before Chat exists.
-	AssistantRepo *postgres.AssistantRepo
-	VaultKey      *[32]byte
 }
 
 type Registry struct {
