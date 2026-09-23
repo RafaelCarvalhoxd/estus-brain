@@ -59,19 +59,19 @@ type ChatOutcome struct {
 type ProviderStatus struct {
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
-	Kind      string   `json:"kind"` // login | api | local
+	Kind      string   `json:"kind"` // "local": the agent is a server the owner runs
 	Available bool     `json:"available"`
 	Detail    string   `json:"detail"`
 	Model     string   `json:"model"`
 	Models    []string `json:"models,omitempty"`
-	// Capabilities describe what this engine's own model can do, regardless
-	// of whether Estus has wired the feature up yet — a fact for the
-	// settings screen to show ("Claude não gera imagem"), not a switch.
+	// Capabilities describe what the external agent can do with a message
+	// (it gets images as pixels) — a fact for the settings screen, not a
+	// switch.
 	Capabilities Capabilities `json:"capabilities"`
 }
 
-// Capabilities is what the engine's own model can do — informational, for
-// the settings screen.
+// Capabilities is what the external agent can do — informational, for the
+// settings screen.
 type Capabilities struct {
 	SupportsImageGen bool `json:"supports_image_gen"`
 	SupportsVision   bool `json:"supports_vision"`

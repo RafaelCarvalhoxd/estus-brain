@@ -45,10 +45,10 @@ func TestDescribeDocumentPlainText(t *testing.T) {
 	}
 }
 
-func TestDescribeDocumentImageWithoutVision(t *testing.T) {
+func TestDescribeDocumentImage(t *testing.T) {
 	doc := domain.Document{Name: "foto.png", ContentType: "image/png"}
 	got := describeDocument(doc, []byte{0x89, 0x50, 0x4e, 0x47})
-	if !strings.Contains(got, "foto.png") || !strings.Contains(got, "não consegue ver imagens") {
+	if !strings.Contains(got, "foto.png") || !strings.Contains(got, "não é lido como texto") {
 		t.Errorf("describeDocument imagem = %q, want a note naming the file and the limitation", got)
 	}
 }

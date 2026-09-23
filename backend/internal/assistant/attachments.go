@@ -67,7 +67,7 @@ func resolveAttachment(ctx context.Context, documents *service.DocumentService, 
 func describeDocument(doc domain.Document, data []byte) string {
 	switch {
 	case strings.HasPrefix(doc.ContentType, "image/"):
-		return fmt.Sprintf("[a pessoa anexou uma imagem (%s), mas este motor não consegue ver imagens]", doc.Name)
+		return fmt.Sprintf("[imagem %s: o conteúdo não é lido como texto]", doc.Name)
 	case doc.ContentType == "application/pdf":
 		text, err := extractPDFText(data)
 		if err != nil {
