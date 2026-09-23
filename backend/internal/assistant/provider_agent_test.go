@@ -166,3 +166,55 @@ func TestAgentStatus(t *testing.T) {
 		t.Fatalf("status = %+v", none)
 	}
 }
+
+func TestAgentChatStreamError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Começando\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"error\":{\"message\":\"modelo sobrecarregado\"}}\n\n")
+	}))
+	defer srv.Close()
+
+	out, err := agentFor(agentConfig{URL: srv.URL, Model: "m"}).Chat(context.Background(), ChatRequest{Message: "oi"}, func(Event) {})
+	var streamErr *agentStreamError
+	if !errors.As(err, &streamErr) || streamErr.Message != "modelo sobrecarregado" {
+		t.Fatalf("err = %v, want agentStreamError", err)
+	}
+	if out.Text != "Começando" {
+		t.Fatalf("text = %q, want what arrived before the error", out.Text)
+	}
+	if got := explainFailure(err).Message; !strings.Contains(got, "O agente devolveu um erro: modelo sobrecarregado") {
+		t.Fatalf("explanation = %q", got)
+	}
+}
+
+func TestAgentChatSingleJSONBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		fmt.Fprint(w, `{"choices":[{"message":{"role":"assistant","content":"Tudo certo."}}]}`)
+	}))
+	defer srv.Close()
+
+	var events []Event
+	out, err := agentFor(agentConfig{URL: srv.URL, Model: "m"}).Chat(context.Background(), ChatRequest{Message: "oi"}, func(e Event) { events = append(events, e) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Text != "Tudo certo." || len(events) != 1 || events[0].Type != "text" || events[0].Text != "Tudo certo." {
+		t.Fatalf("text = %q, events = %+v", out.Text, events)
+	}
+}
+
+func TestAgentChatSingleJSONError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":{"message":"sem créditos"}}`)
+	}))
+	defer srv.Close()
+
+	_, err := agentFor(agentConfig{URL: srv.URL, Model: "m"}).Chat(context.Background(), ChatRequest{Message: "oi"}, func(Event) {})
+	var streamErr *agentStreamError
+	if !errors.As(err, &streamErr) || streamErr.Message != "sem créditos" {
+		t.Fatalf("err = %v, want agentStreamError", err)
+	}
+}

@@ -30,6 +30,7 @@ func explainFailure(err error) Explanation {
 func describeError(err error) string {
 	var down *agentUnreachableError
 	var api *apiError
+	var reported *agentStreamError
 	switch {
 	case errors.Is(err, context.Canceled):
 		return "Você interrompeu a resposta antes de ela terminar."
@@ -39,6 +40,8 @@ func describeError(err error) string {
 		return "Configure o endereço do agente " + settingsHint + "."
 	case errors.As(err, &down):
 		return fmt.Sprintf("O agente não respondeu em %s. Confira se ele está rodando e se o endereço %s está certo.", down.URL, settingsHint)
+	case errors.As(err, &reported):
+		return "O agente devolveu um erro: " + reported.Message
 	case errors.As(err, &api) && (api.Status == 401 || api.Status == 403):
 		return "O agente recusou o token. Confira o token " + settingsHint + "."
 	case errors.As(err, &api) && api.Status == 404:

@@ -36,13 +36,40 @@ type agentUnreachableError struct {
 func (e *agentUnreachableError) Error() string { return fmt.Sprintf("agente em %s: %v", e.URL, e.Err) }
 func (e *agentUnreachableError) Unwrap() error { return e.Err }
 
+// agentStreamError is an error the agent reported inside a 200 reply — mid
+// stream or as its whole JSON body — rather than as an HTTP status.
+type agentStreamError struct {
+	Message string
+}
+
+func (e *agentStreamError) Error() string { return "o agente devolveu um erro: " + e.Message }
+
+// agentErrorMessage reads an OpenAI-style "error" field, which agents send
+// as {"message": …} or as a bare string.
+func agentErrorMessage(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var obj struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &obj) == nil && obj.Message != "" {
+		return obj.Message
+	}
+	var str string
+	if json.Unmarshal(raw, &str) == nil && str != "" {
+		return str
+	}
+	return truncate(string(raw), 300)
+}
+
 type agentProvider struct {
 	config func(ctx context.Context) (agentConfig, error)
 	client *http.Client
 }
 
 func (p *agentProvider) Status(ctx context.Context) ProviderStatus {
-	st := ProviderStatus{ID: agentID, Name: "Agente externo", Kind: "local", Capabilities: Capabilities{SupportsVision: true}}
+	st := ProviderStatus{ID: agentID, Name: "Agente externo"}
 	cfg, err := p.config(ctx)
 	if err != nil {
 		st.Detail = err.Error()
@@ -165,6 +192,30 @@ func (p *agentProvider) Chat(ctx context.Context, req ChatRequest, emit func(Eve
 	}
 	defer res.Body.Close()
 
+	// Some agents ignore stream:true and answer with one JSON body.
+	if strings.HasPrefix(res.Header.Get("Content-Type"), "application/json") {
+		var reply struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+			Error json.RawMessage `json:"error"`
+		}
+		if err := json.NewDecoder(io.LimitReader(res.Body, 8<<20)).Decode(&reply); err != nil {
+			return ChatOutcome{}, fmt.Errorf("resposta do agente: %w", err)
+		}
+		if msg := agentErrorMessage(reply.Error); msg != "" {
+			return ChatOutcome{}, &agentStreamError{Message: msg}
+		}
+		if len(reply.Choices) == 0 || reply.Choices[0].Message.Content == "" {
+			return ChatOutcome{}, nil
+		}
+		text := reply.Choices[0].Message.Content
+		emit(Event{Type: "text", Text: text})
+		return ChatOutcome{Text: text}, nil
+	}
+
 	var text strings.Builder
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Buffer(make([]byte, 64<<10), 4<<20)
@@ -185,8 +236,15 @@ func (p *agentProvider) Chat(ctx context.Context, req ChatRequest, emit func(Eve
 					Content string `json:"content"`
 				} `json:"delta"`
 			} `json:"choices"`
+			Error json.RawMessage `json:"error"`
 		}
-		if json.Unmarshal([]byte(data), &chunk) != nil || len(chunk.Choices) == 0 || chunk.Choices[0].Delta.Content == "" {
+		if json.Unmarshal([]byte(data), &chunk) != nil {
+			continue
+		}
+		if msg := agentErrorMessage(chunk.Error); msg != "" {
+			return ChatOutcome{Text: text.String()}, &agentStreamError{Message: msg}
+		}
+		if len(chunk.Choices) == 0 || chunk.Choices[0].Delta.Content == "" {
 			continue
 		}
 		piece := chunk.Choices[0].Delta.Content

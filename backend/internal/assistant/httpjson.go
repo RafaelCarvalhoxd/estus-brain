@@ -70,8 +70,8 @@ func hostOf(url string) string {
 	return s
 }
 
-// userContentOpenAI is OpenAI's equivalent of userContentAnthropic: a data
-// URL in an image_url block instead of a separate media-type field.
+// userContentOpenAI is the new user turn in the OpenAI format: plain text,
+// or text plus the image as a data URL in an image_url block.
 func userContentOpenAI(req ChatRequest) any {
 	if req.Attachment == nil || req.Attachment.ImageBase64 == "" {
 		return req.Message

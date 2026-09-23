@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -59,23 +60,10 @@ type ChatOutcome struct {
 type ProviderStatus struct {
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
-	Kind      string   `json:"kind"` // "local": the agent is a server the owner runs
 	Available bool     `json:"available"`
 	Detail    string   `json:"detail"`
 	Model     string   `json:"model"`
 	Models    []string `json:"models,omitempty"`
-	// Capabilities describe what the external agent can do with a message
-	// (it gets images as pixels) — a fact for the settings screen, not a
-	// switch.
-	Capabilities Capabilities `json:"capabilities"`
-}
-
-// Capabilities is what the external agent can do — informational, for the
-// settings screen.
-type Capabilities struct {
-	SupportsImageGen bool `json:"supports_image_gen"`
-	SupportsVision   bool `json:"supports_vision"`
-	SupportsVoice    bool `json:"supports_voice"`
 }
 
 // ---------------------------------------------------------------- chat
@@ -124,33 +112,77 @@ func (c *Chat) agentConfig(ctx context.Context) (agentConfig, error) {
 	if err != nil {
 		return agentConfig{}, err
 	}
-	cfg := agentConfig{URL: s.AgentURL, Token: c.secret(s, agentTokenSecret), Model: s.AgentModel}
-	if cfg.URL == "" {
-		cfg.URL = c.cfg.Env.URL
-	}
-	if cfg.Token == "" {
-		cfg.Token = c.cfg.Env.Token
-	}
-	if cfg.Model == "" {
-		cfg.Model = c.cfg.Env.Model
-	}
-	return cfg, nil
+	return mergeAgentConfig(c.savedAgentConfig(s), c.cfg.Env), nil
 }
 
-func (c *Chat) secret(s postgres.AssistantSettings, name string) string {
-	blob, ok := s.Secrets[name]
-	if !ok || c.cfg.VaultKey == nil {
+func (c *Chat) savedAgentConfig(s postgres.AssistantSettings) agentConfig {
+	return agentConfig{URL: s.AgentURL, Token: openSecret(c.cfg.VaultKey, s.Secrets[agentTokenSecret]), Model: s.AgentModel}
+}
+
+// mergeAgentConfig fills each field the settings screen left empty from env.
+func mergeAgentConfig(saved, env agentConfig) agentConfig {
+	if saved.URL == "" {
+		saved.URL = env.URL
+	}
+	if saved.Token == "" {
+		saved.Token = env.Token
+	}
+	if saved.Model == "" {
+		saved.Model = env.Model
+	}
+	return saved
+}
+
+// sealSecret encrypts a stored secret as base64(nonce|ciphertext).
+func sealSecret(key [32]byte, value string) (string, error) {
+	ct, nonce, err := domain.EncryptPassword(key, value)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(append(nonce, ct...)), nil
+}
+
+// openSecret reverses sealSecret; anything unreadable (no key, another key,
+// a damaged blob) reads as no secret.
+func openSecret(key *[32]byte, blob string) string {
+	if blob == "" || key == nil {
 		return ""
 	}
 	raw, err := base64.StdEncoding.DecodeString(blob)
 	if err != nil || len(raw) <= 12 {
 		return ""
 	}
-	value, err := domain.DecryptPassword(*c.cfg.VaultKey, raw[12:], raw[:12])
+	value, err := domain.DecryptPassword(*key, raw[12:], raw[:12])
 	if err != nil {
 		return ""
 	}
 	return value
+}
+
+// normalizeAgentURL trims the address the owner typed; empty is allowed and
+// means "use AGENT_URL".
+func normalizeAgentURL(raw string) (string, error) {
+	s := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if s == "" {
+		return "", nil
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", fmt.Errorf("%w: o endereço do agente precisa começar com http:// ou https:// (ex.: http://127.0.0.1:8642)", domain.ErrValidation)
+	}
+	return s, nil
+}
+
+// agentHostChanged says whether two agent addresses point at different
+// servers (host and port), so a token meant for one isn't sent to the other.
+func agentHostChanged(oldURL, newURL string) bool {
+	host := func(s string) string {
+		if u, err := url.Parse(s); err == nil {
+			return u.Host
+		}
+		return s
+	}
+	return host(oldURL) != host(newURL)
 }
 
 // ---- settings
@@ -158,10 +190,16 @@ func (c *Chat) secret(s postgres.AssistantSettings, name string) string {
 type SettingsView struct {
 	Provider  string           `json:"provider"` // agent | none
 	Providers []ProviderStatus `json:"providers"`
-	Agent     struct {
+	// Agent keeps what the settings screen saved apart from what .env gives,
+	// so the form edits only the saved values and never copies .env into
+	// the database.
+	Agent struct {
 		URL      string `json:"url"`
 		Model    string `json:"model"`
 		HasToken bool   `json:"has_token"`
+		EnvURL   string `json:"env_url"`
+		EnvModel string `json:"env_model"`
+		EnvToken bool   `json:"env_token"`
 	} `json:"agent"`
 	MCP struct {
 		URL   string `json:"url"`
@@ -177,11 +215,8 @@ func (c *Chat) Settings(ctx context.Context) (SettingsView, error) {
 	}
 	view := SettingsView{Provider: s.Provider, CanStoreKeys: c.cfg.VaultKey != nil}
 	view.MCP.URL, view.MCP.Token = c.cfg.MCPURL, c.cfg.MCPToken
-	cfg, err := c.agentConfig(ctx)
-	if err != nil {
-		return SettingsView{}, err
-	}
-	view.Agent.URL, view.Agent.Model, view.Agent.HasToken = cfg.URL, cfg.Model, cfg.Token != ""
+	view.Agent.URL, view.Agent.Model, view.Agent.HasToken = s.AgentURL, s.AgentModel, s.Secrets[agentTokenSecret] != ""
+	view.Agent.EnvURL, view.Agent.EnvModel, view.Agent.EnvToken = c.cfg.Env.URL, c.cfg.Env.Model, c.cfg.Env.Token != ""
 	sctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 	view.Providers = []ProviderStatus{c.agent.Status(sctx)}
@@ -209,7 +244,18 @@ func (c *Chat) UpdateSettings(ctx context.Context, u SettingsUpdate) error {
 		s.Provider = *u.Provider
 	}
 	if u.AgentURL != nil {
-		s.AgentURL = strings.TrimRight(strings.TrimSpace(*u.AgentURL), "/")
+		next, err := normalizeAgentURL(*u.AgentURL)
+		if err != nil {
+			return err
+		}
+		// A saved token belongs to the server it was saved for; moving to
+		// another one without a new token drops it (AGENT_TOKEN still applies).
+		before := mergeAgentConfig(agentConfig{URL: s.AgentURL}, c.cfg.Env).URL
+		after := mergeAgentConfig(agentConfig{URL: next}, c.cfg.Env).URL
+		if u.AgentToken == nil && agentHostChanged(before, after) {
+			delete(s.Secrets, agentTokenSecret)
+		}
+		s.AgentURL = next
 	}
 	if u.AgentModel != nil {
 		s.AgentModel = strings.TrimSpace(*u.AgentModel)
@@ -222,11 +268,11 @@ func (c *Chat) UpdateSettings(ctx context.Context, u SettingsUpdate) error {
 			if c.cfg.VaultKey == nil {
 				return fmt.Errorf("%w: defina VAULT_ENCRYPTION_KEY para salvar o token, ou use AGENT_TOKEN", domain.ErrValidation)
 			}
-			ct, nonce, err := domain.EncryptPassword(*c.cfg.VaultKey, token)
+			blob, err := sealSecret(*c.cfg.VaultKey, token)
 			if err != nil {
 				return err
 			}
-			s.Secrets[agentTokenSecret] = base64.StdEncoding.EncodeToString(append(nonce, ct...))
+			s.Secrets[agentTokenSecret] = blob
 		}
 	}
 	return c.repo.SaveSettings(ctx, s)
@@ -380,31 +426,8 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 		return err
 	}
 
-	chatReq := ChatRequest{
-		System:  c.systemPrompt(req.Module),
-		Message: message,
-	}
-	// Engines want turns that alternate and start with the person: merge
-	// consecutive messages of one side (a flow can add several) and drop any
-	// leading assistant text.
-	for _, m := range history {
-		if strings.TrimSpace(m.Content) == "" {
-			continue
-		}
-		n := len(chatReq.History)
-		switch {
-		case n == 0 && m.Role != "user":
-			continue
-		case n > 0 && chatReq.History[n-1].Role == m.Role:
-			chatReq.History[n-1].Content += "\n\n" + m.Content
-		default:
-			chatReq.History = append(chatReq.History, Message{Role: m.Role, Content: m.Content})
-		}
-	}
-	if n := len(chatReq.History); n > 0 && chatReq.History[n-1].Role == "user" {
-		chatReq.Message = chatReq.History[n-1].Content + "\n\n" + chatReq.Message
-		chatReq.History = chatReq.History[:n-1]
-	}
+	chatReq := ChatRequest{System: c.systemPrompt(req.Module)}
+	chatReq.History, chatReq.Message = buildHistory(history, message)
 	// An image goes to the agent as itself on ChatRequest.Attachment; every
 	// other attachment is already text by now, so it's just more of the
 	// message.
@@ -448,6 +471,33 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	_ = c.repo.TouchConversation(saveCtx, conv.ID, providerID)
 	emit(Event{Type: "done", ConversationID: conv.ID, MessageID: saved.ID, Provider: providerID})
 	return nil
+}
+
+// buildHistory turns stored messages into turns that alternate and start
+// with the person, as chat APIs want: blank messages are skipped, consecutive
+// messages of one side (a flow can add several) merge, a leading assistant
+// text is dropped, and an unanswered last user turn joins the new message.
+func buildHistory(msgs []postgres.ConversationMessage, message string) ([]Message, string) {
+	var history []Message
+	for _, m := range msgs {
+		if strings.TrimSpace(m.Content) == "" {
+			continue
+		}
+		n := len(history)
+		switch {
+		case n == 0 && m.Role != "user":
+			continue
+		case n > 0 && history[n-1].Role == m.Role:
+			history[n-1].Content += "\n\n" + m.Content
+		default:
+			history = append(history, Message{Role: m.Role, Content: m.Content})
+		}
+	}
+	if n := len(history); n > 0 && history[n-1].Role == "user" {
+		message = history[n-1].Content + "\n\n" + message
+		history = history[:n-1]
+	}
+	return history, message
 }
 
 var moduleNames = map[string]string{
