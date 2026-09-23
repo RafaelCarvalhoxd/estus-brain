@@ -56,10 +56,12 @@ Fontes: <https://hermes-agent.nousresearch.com/docs/user-guide/features/api-serv
   `provider_apple.go`, `voice.go`, os handlers `transcribe`/`speak` e suas
   rotas, `APPLE_BRIDGE_BIN`, `APPLE_BRIDGE_URL`, `ASSISTANT_VOICE`, textos de
   erro da Apple em `explain.go`, seção "Voz" do README.
-- **Motores:** `providers_cli.go`, `providers_api.go`, e a parte de
-  `routing.go` que corta ferramentas para modelos pequenos (o agente recebe
-  as ferramentas pelo MCP, não pelo Estus). Chaves de API salvas nas
-  configurações do assistente saem, com migração que remove as colunas.
+- **Motores:** `providers_cli.go`, `providers_api.go` (os helpers HTTP que a
+  geração de imagem usa mudam para `httpjson.go`), `routing.go` e o laço de
+  ferramentas do chat (o agente recebe as ferramentas pelo MCP, não pelo
+  Estus). Migração `0030_assistant_agent`: apaga as chaves salvas, as colunas
+  `models` e `ollama_url`, e `session_id` das conversas (só os motores de
+  linha de comando usavam). `ASSISTANT_MULTI_USER` sai.
 - **Frontend de voz:** `useVoiceRecorder.ts` e `wav.ts`, trocados pela versão
   do navegador.
 - **Varredura final:** `go vet`, `staticcheck`/`deadcode` no backend e `tsc`
@@ -84,15 +86,17 @@ Um `Provider` chamado `agent` em `assistant/provider_agent.go`.
   env `AGENT_URL`, `AGENT_TOKEN`, `AGENT_MODEL`):
   - endereço base, ex. `http://localhost:8642`;
   - token, guardado cifrado com a mesma chave do cofre;
-  - modelo/agente, ex. `hermes-agent` ou `openclaw/default`.
+  - modelo/agente, ex. `hermes-agent` ou `openclaw/default`. Vazio usa o
+    primeiro que o agente lista em `/v1/models`.
 - **Envio:** `POST {endereço}/v1/chat/completions` com `stream: true`,
   `model`, e `messages` = mensagem de sistema do Estus (módulo atual e data)
   + histórico salvo + mensagem nova. Sem sessão do lado do agente: o Estus
   manda a conversa inteira a cada vez, então nada duplica e trocar de
   agente no meio não quebra.
 - **Imagem anexada** vai como parte `image_url` com `data:` URL.
-- **Outro tipo de anexo** não é enviado. O chat avisa: "O agente só recebe
-  imagens. Salve o arquivo em Documentos e peça para ele ler de lá."
+- **Outro tipo de anexo** segue como hoje: PDF, planilha e texto viram texto
+  dentro da mensagem (`attachments.go`), então o agente recebe o conteúdo
+  sem precisar aceitar arquivos.
 - **Resposta:** cada `delta.content` do SSE vira um evento `text`, como hoje.
   Eventos que não são do formato OpenAI (ex. `hermes.tool.progress`) são
   ignorados.
@@ -118,8 +122,10 @@ Um `Provider` chamado `agent` em `assistant/provider_agent.go`.
 
 `EngineSettings.tsx` passa a ter duas abas:
 
-- **Agente:** endereço, token, modelo, botão "Testar conexão" (faz
-  `GET {endereço}/v1/models` com o token e mostra ok ou o erro acima).
+- **Agente:** endereço, token, modelo, botão "Testar conexão". Os ajustes
+  já consultam `GET {endereço}/v1/models` com o token; o botão recarrega e
+  mostra "Conectado" ou o erro. Quando o agente lista modelos, o campo vira
+  uma lista para escolher.
 - **MCP:** endereço e token do MCP do Estus para copiar, com exemplos de
   configuração para Hermes e OpenClaw no lugar dos exemplos de Claude Code,
   Codex e Desktop.
@@ -138,9 +144,11 @@ README ganha "Conectando um agente", com:
 ## Testes
 
 - `provider_agent_test.go` contra um servidor falso (`httptest`) no formato
-  OpenAI: streaming de texto, imagem anexada virando `image_url`, anexo não
-  imagem recusado, 401, conexão recusada, evento desconhecido ignorado.
-- Teste do "Testar conexão" com o mesmo servidor falso.
+  OpenAI: streaming de texto, imagem anexada virando `image_url`, 401,
+  conexão recusada, evento desconhecido ignorado, modelo vazio usando o
+  primeiro de `/v1/models`.
+- `Status` do motor contra o mesmo servidor falso (o botão "Testar conexão"
+  só recarrega os ajustes, que chamam `Status`).
 - `go test ./...`, `npm run lint`, `npx tsc --noEmit` passando depois da
   varredura.
 - Não há teste contra Hermes ou OpenClaw reais: depende de o usuário ter um
