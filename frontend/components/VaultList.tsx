@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { deleteVaultEntryAction } from "@/app/senhas/actions";
+import { Modal } from "@/components/Modal";
 import { VaultEntryForm } from "@/components/VaultEntryForm";
 import type { VaultEntry } from "@/lib/vault";
 import { IconSearch } from "./icons";
@@ -12,8 +13,9 @@ type RevealState = { password: string; secondsLeft: number };
 
 export function VaultList({ entries }: { entries: VaultEntry[] }) {
   const [revealed, setRevealed] = useState<Record<string, RevealState>>({});
-  const [revealing, setRevealing] = useState<string | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [revealing, setRevealing] = useState(false);
+  const [askingFor, setAskingFor] = useState<VaultEntry | null>(null);
+  const [askError, setAskError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
@@ -42,20 +44,35 @@ export function VaultList({ entries }: { entries: VaultEntry[] }) {
     }, 1000);
   }
 
-  async function revelar(id: string) {
-    setErrors((e) => ({ ...e, [id]: "" }));
-    setRevealing(id);
+  function pedirSenha(entry: VaultEntry) {
+    setAskError("");
+    setAskingFor(entry);
+  }
+
+  async function revelar(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!askingFor) return;
+    const id = askingFor.id;
+    const appPassword = String(new FormData(e.currentTarget).get("password") ?? "");
+    setAskError("");
+    setRevealing(true);
     try {
-      const res = await fetch(`/api/vault/${id}/reveal`, { method: "POST" });
+      const res = await fetch(`/api/vault/${id}/reveal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: appPassword }),
+      });
+      if (res.status === 401) throw new Error("Senha incorreta.");
       if (!res.ok) throw new Error("Não foi possível revelar a senha.");
       const { password } = await res.json();
 
       setRevealed((prev) => ({ ...prev, [id]: { password, secondsLeft: REVEAL_SECONDS } }));
       startCountdown(id);
+      setAskingFor(null);
     } catch (err) {
-      setErrors((e) => ({ ...e, [id]: friendlyMessage(err) }));
+      setAskError(err instanceof Error ? err.message : "Não foi possível revelar a senha.");
     } finally {
-      setRevealing(null);
+      setRevealing(false);
     }
   }
 
@@ -121,13 +138,8 @@ export function VaultList({ entries }: { entries: VaultEntry[] }) {
                       Copiar
                     </button>
                   ) : (
-                    <button
-                      className="btn-text"
-                      type="button"
-                      onClick={() => revelar(entry.id)}
-                      disabled={revealing === entry.id}
-                    >
-                      {revealing === entry.id ? "Revelando…" : "Revelar"}
+                    <button className="btn-text" type="button" onClick={() => pedirSenha(entry)}>
+                      Revelar
                     </button>
                   )}
                   <button className="btn-text" type="button" onClick={() => setEditingId(entry.id)}>
@@ -139,21 +151,28 @@ export function VaultList({ entries }: { entries: VaultEntry[] }) {
                     </button>
                   </form>
                 </div>
-
-                {errors[entry.id] && <p className="form-error vault-row-error">{errors[entry.id]}</p>}
               </>
             )}
           </div>
         );
       })}
+      <Modal open={askingFor !== null} onClose={() => setAskingFor(null)}>
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Revelar {askingFor?.title}</h2>
+          </div>
+          <form onSubmit={revelar} className="form-grid">
+            <div className="field">
+              <label htmlFor="reveal-password">Senha do app</label>
+              <input id="reveal-password" name="password" type="password" autoComplete="current-password" autoFocus required />
+            </div>
+            <button className="btn-block" type="submit" disabled={revealing}>
+              {revealing ? "Revelando…" : "Revelar"}
+            </button>
+            {askError && <p className="form-error">{askError}</p>}
+          </form>
+        </div>
+      </Modal>
     </div>
   );
-}
-
-function friendlyMessage(err: unknown): string {
-  if (err instanceof DOMException && err.name === "NotAllowedError") {
-    return "Confirmação cancelada.";
-  }
-  if (err instanceof Error) return err.message;
-  return "Não foi possível revelar a senha.";
 }

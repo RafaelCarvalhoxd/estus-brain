@@ -65,6 +65,35 @@ func (in NewTransactionInput) validate() error {
 // card actually exist before touching the ledger — a foreign key violation
 // deep in a batch insert is a worse failure mode than a clear 404 up front.
 func (s *TransactionService) Create(ctx context.Context, in NewTransactionInput) ([]domain.Transaction, error) {
+	txns, err := s.build(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.transactions.CreateBatch(ctx, txns); err != nil {
+		return nil, fmt.Errorf("save transaction: %w", err)
+	}
+	return txns, nil
+}
+
+// Replace rewrites a purchase entirely — amount, date, method, card and
+// installments included — by swapping its rows (every installment of it)
+// for the ones in built from in, in one commit.
+func (s *TransactionService) Replace(ctx context.Context, id string, in NewTransactionInput) ([]domain.Transaction, error) {
+	txns, err := s.build(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.transactions.Replace(ctx, id, txns); err != nil {
+		return nil, err
+	}
+	return txns, nil
+}
+
+// build validates in and expands it into one row per installment. It checks
+// that the category and (when present) the credit card exist first — a
+// foreign key violation deep in a batch insert is a worse failure mode than
+// a clear 404 up front.
+func (s *TransactionService) build(ctx context.Context, in NewTransactionInput) ([]domain.Transaction, error) {
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
@@ -75,39 +104,28 @@ func (s *TransactionService) Create(ctx context.Context, in NewTransactionInput)
 	if _, err := s.categories.Get(ctx, in.CategoryID); err != nil {
 		return nil, fmt.Errorf("category %s: %w", in.CategoryID, err)
 	}
-	var cardPtr *domain.CreditCard
 	if in.PaymentMethod == domain.PaymentCredit {
 		card, err := s.cards.Get(ctx, in.CreditCardID)
 		if err != nil {
 			return nil, fmt.Errorf("credit card %s: %w", in.CreditCardID, err)
 		}
-		cardPtr = &card
-	}
-
-	var txns []domain.Transaction
-	if in.PaymentMethod == domain.PaymentCredit {
-		txns = domain.NewInstallmentPurchase(in.Description, in.AmountCents, in.CategoryID, *cardPtr, in.PurchaseDate, in.Installments)
+		txns := domain.NewInstallmentPurchase(in.Description, in.AmountCents, in.CategoryID, card, in.PurchaseDate, in.Installments)
 		if in.Installments == 1 {
 			txns[0].IsRecurring = in.IsRecurring
 		}
-	} else {
-		txns = []domain.Transaction{{
-			ID:               domain.NewID(),
-			Description:      in.Description,
-			AmountCents:      in.AmountCents,
-			CategoryID:       in.CategoryID,
-			PaymentMethod:    in.PaymentMethod,
-			PurchaseDate:     in.PurchaseDate,
-			CompetenceMonth:  domain.CompetenceMonth(in.PurchaseDate, in.PaymentMethod, cardPtr),
-			InstallmentTotal: 1,
-			IsRecurring:      in.IsRecurring,
-		}}
+		return txns, nil
 	}
-
-	if err := s.transactions.CreateBatch(ctx, txns); err != nil {
-		return nil, fmt.Errorf("save transaction: %w", err)
-	}
-	return txns, nil
+	return []domain.Transaction{{
+		ID:               domain.NewID(),
+		Description:      in.Description,
+		AmountCents:      in.AmountCents,
+		CategoryID:       in.CategoryID,
+		PaymentMethod:    in.PaymentMethod,
+		PurchaseDate:     in.PurchaseDate,
+		CompetenceMonth:  domain.CompetenceMonth(in.PurchaseDate),
+		InstallmentTotal: 1,
+		IsRecurring:      in.IsRecurring,
+	}}, nil
 }
 
 func (s *TransactionService) Update(ctx context.Context, id, description, categoryID string) error {

@@ -178,13 +178,13 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
                 token={token}
                 reveal={reveal}
                 title="Claude Desktop"
-                hint="Compile o relay com `go build -o estus-mcp ./cmd/estus-mcp` (em backend/) e aponte para o app. Fora desta máquina, passe o certificado mTLS."
+                hint="Compile o relay com `go build -o estus-mcp ./cmd/estus-mcp` (em backend/) e aponte para o app."
                 text={JSON.stringify(
                   {
                     mcpServers: {
                       "estus-brain": {
                         command: "/caminho/para/estus-mcp",
-                        env: { ESTUS_MCP_URL: appURL, ESTUS_MCP_TOKEN: token, ESTUS_CLIENT_CERT: "/caminho/cliente.crt", ESTUS_CLIENT_KEY: "/caminho/cliente.key" },
+                        env: { ESTUS_MCP_URL: appURL, ESTUS_MCP_TOKEN: token },
                       },
                     },
                   },
@@ -197,9 +197,8 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
                   <b>Claude.ai e ChatGPT na web</b>
                 </div>
                 <p className="es-hint">
-                  Os conectores web chamam o MCP a partir da nuvem deles, então o endereço precisa ser público (por exemplo um túnel só para /mcp) — o
-                  mTLS do app bloqueia esse acesso. Enquanto o login OAuth não existe, dá para usar o endereço com o token embutido; trate esse link
-                  como uma senha:
+                  Os conectores web chamam o MCP a partir da nuvem deles, então o endereço precisa ser público. O /mcp não pede a senha do app, só o
+                  token. Enquanto o login OAuth não existe, dá para usar o endereço com o token embutido; trate esse link como uma senha:
                 </p>
                 <pre>{`https://SEU-ENDERECO-PUBLICO/mcp?token=${reveal ? token : "…"}`}</pre>
               </div>

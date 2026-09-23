@@ -99,7 +99,7 @@ func TestEndSeriesFromANonLatestOccurrenceStopsMaterialize(t *testing.T) {
 
 	// From the September row — NOT the latest occurrence — the owner clicks
 	// "Encerrar repetição".
-	if _, err := svc.EndSeries(ctx, september.ID); err != nil {
+	if _, err := svc.EndSeries(ctx, september.ID, false); err != nil {
 		t.Fatalf("end series from september: %v", err)
 	}
 

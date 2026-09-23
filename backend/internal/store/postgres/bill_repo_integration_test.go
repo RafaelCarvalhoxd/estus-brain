@@ -86,7 +86,7 @@ func TestBillRepo_Integration(t *testing.T) {
 		}
 	}
 
-	_, receivableOpenCents, _, err := repo.OpenTotals(ctx)
+	_, receivableOpenCents, _, err := repo.OpenTotals(ctx, domain.YearMonthOf(time.Now()), time.Now())
 	if err != nil {
 		t.Fatalf("open totals: %v", err)
 	}
@@ -542,7 +542,7 @@ func TestOpenTotalsExcludesBillsFabricatedByLookingAhead(t *testing.T) {
 		}
 	}()
 
-	payableOpenCents, _, _, err := repo.OpenTotals(ctx)
+	payableOpenCents, _, _, err := repo.OpenTotals(ctx, domain.YearMonthOf(time.Now()), time.Now())
 	if err != nil {
 		t.Fatalf("open totals: %v", err)
 	}

@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Category, Transaction, PaymentMethod } from "@/lib/types";
+import type { Category, CreditCard, Transaction, PaymentMethod } from "@/lib/types";
 import { formatYearMonthShort } from "@/lib/month";
-import { updateTransactionAction, deleteTransactionAction } from "@/app/financeiro/lancamentos/actions";
+import { deleteTransactionAction } from "@/app/financeiro/lancamentos/actions";
+import { Modal } from "./Modal";
+import { NewTransactionForm } from "./NewTransactionForm";
 import { IconPencil, IconTrash } from "./icons";
 
 const PAYMENT_LABEL: Record<PaymentMethod, string> = {
@@ -21,71 +23,13 @@ function meta(t: Transaction): string {
     parts.push(formatDay(t.purchase_date));
   }
   if (t.is_recurring) parts.push("recorrente");
+  if (t.category_kind === "receita") parts.push("receita");
   return parts.join(" · ");
 }
 
 function formatDay(iso: string): string {
   const [, month, day] = iso.split("-");
   return `${day}/${month}`;
-}
-
-function EditRow({
-  transaction,
-  categories,
-  onDone,
-}: {
-  transaction: Transaction;
-  categories: Category[];
-  onDone: () => void;
-}) {
-  const router = useRouter();
-  const [description, setDescription] = useState(transaction.description);
-  const [categoryId, setCategoryId] = useState(transaction.category_id);
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    setSaving(true);
-    try {
-      await updateTransactionAction(transaction.id, description, categoryId);
-      router.refresh();
-      onDone();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="txn txn-editing">
-      <div className="row2" style={{ flex: 1 }}>
-        <input
-          className="txn-edit-input"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          disabled={saving}
-        />
-        <select
-          className="txn-edit-input"
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          disabled={saving}
-        >
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="row-actions">
-        <button className="btn-text" type="button" onClick={onDone} disabled={saving}>
-          Cancelar
-        </button>
-        <button className="btn-text" type="button" onClick={save} disabled={saving || !description.trim()}>
-          {saving ? "Salvando…" : "Salvar"}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function subtotal(items: Transaction[]): string {
@@ -96,16 +40,18 @@ function subtotal(items: Transaction[]): string {
 export function TransactionsList({
   transactions,
   categories,
+  cards,
   month,
 }: {
   transactions: Transaction[];
   categories: Category[];
+  cards: CreditCard[];
   month: string;
 }) {
   const router = useRouter();
   const [categoryFilter, setCategoryFilter] = useState("");
   const [methodFilter, setMethodFilter] = useState<"" | PaymentMethod>("");
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Transaction | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<{ id: string; message: string } | null>(null);
 
@@ -124,11 +70,19 @@ export function TransactionsList({
     return categories.filter((c) => ids.has(c.id));
   }, [transactions, categories]);
 
-  const fixed = useMemo(() => filtered.filter((t) => t.is_recurring), [filtered]);
-  const variable = useMemo(() => filtered.filter((t) => !t.is_recurring), [filtered]);
+  // Installments are fixed until the last one: each exists only in its month.
+  const isFixed = (t: Transaction) => t.is_recurring || (t.installment_total ?? 1) > 1;
+  const fixed = useMemo(() => filtered.filter(isFixed), [filtered]);
+  const variable = useMemo(() => filtered.filter((t) => !isFixed(t)), [filtered]);
 
-  async function handleDelete(id: string) {
-    if (!confirm("Excluir este lançamento? Não dá para desfazer.")) return;
+  async function handleDelete(t: Transaction) {
+    const id = t.id;
+    const total = t.installment_total ?? 1;
+    const message =
+      total > 1
+        ? `Excluir esta compra e as ${total} parcelas dela (${t.purchase_total.formatted})? Não dá para desfazer.`
+        : "Excluir este lançamento? Não dá para desfazer.";
+    if (!confirm(message)) return;
     setDeletingId(id);
     setDeleteError(null);
     try {
@@ -144,9 +98,6 @@ export function TransactionsList({
   }
 
   function renderRow(t: Transaction) {
-    if (editingId === t.id) {
-      return <EditRow key={t.id} transaction={t} categories={categories} onDone={() => setEditingId(null)} />;
-    }
     return (
       <div className="txn" key={t.id}>
         <span className="txn-dot" style={{ background: t.category_color }} />
@@ -162,10 +113,10 @@ export function TransactionsList({
         </div>
         <div className="txn-amt">
           <div className="txn-value tab">{t.amount.formatted}</div>
-          {t.payment_method === "credito" && <span className="badge">fatura {formatYearMonthShort(month)}</span>}
+          {t.invoice_month && <span className="badge">fatura {formatYearMonthShort(t.invoice_month)}</span>}
         </div>
         <div className="row-actions">
-          <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditingId(t.id)}>
+          <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditing(t)}>
             <IconPencil />
           </button>
           <button
@@ -173,7 +124,7 @@ export function TransactionsList({
             type="button"
             aria-label="Excluir"
             disabled={deletingId === t.id}
-            onClick={() => handleDelete(t.id)}
+            onClick={() => handleDelete(t)}
           >
             <IconTrash />
           </button>
@@ -232,6 +183,20 @@ export function TransactionsList({
           {renderSection("Fixos", fixed)}
           {renderSection("Variáveis", variable)}
         </>
+      )}
+      {editing && (
+        <Modal open onClose={() => setEditing(null)}>
+          <NewTransactionForm
+            key={editing.id}
+            categories={categories}
+            cards={cards}
+            editing={editing}
+            onSuccess={() => {
+              setEditing(null);
+              router.refresh();
+            }}
+          />
+        </Modal>
       )}
     </div>
   );

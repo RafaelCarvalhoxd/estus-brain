@@ -47,6 +47,8 @@ type Deps struct {
 	TransactionLog *postgres.TransactionRepo
 	Dashboard      *service.DashboardService
 	Bills          *service.BillService
+	// CardSpending answers "quanto tá a fatura": invoices per card.
+	CardSpending   *service.CardSpendingService
 	Notes          *service.NoteService
 	NoteCategories *service.NoteCategoryService
 	Reminders      *service.ReminderService

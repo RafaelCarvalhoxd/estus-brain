@@ -10,12 +10,18 @@ export interface Reminder {
   title: string;
   due_at?: string;
   done: boolean;
+  /** Weekdays it repeats on, 0 = Sunday … 6 = Saturday; empty = no repeat. */
+  repeat_days: number[];
+  /** Day of the month it repeats on (1-31); absent = no monthly repeat. */
+  repeat_month_day?: number;
   created_at: string;
 }
 
 export interface CreateReminderInput {
   title: string;
   due_at?: string;
+  repeat_days?: number[];
+  repeat_month_day?: number;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

@@ -15,7 +15,7 @@ const NATURE_LABEL: Record<Category["nature"], string> = {
 
 // budget is what was typed, not cents: the action parses it, so "1.200,50"
 // and "" (no budget) both survive the trip unchanged.
-type FormState = { name: string; nature: Category["nature"]; color: string; budget: string };
+type FormState = { name: string; kind: Category["kind"]; nature: Category["nature"]; color: string; budget: string };
 
 // budgetOf pre-fills the field with the amount already set, in the plain
 // "1200,50" the field expects — never the formatted "R$ 1.200,50", which
@@ -65,6 +65,27 @@ function CategoryForm({
           onChange={(e) => setForm({ ...form, name: e.target.value })}
           disabled={saving}
         />
+      </div>
+      <div className="field">
+        <label>Tipo</label>
+        <div className="seg">
+          <button
+            type="button"
+            className={form.kind === "despesa" ? "active" : ""}
+            onClick={() => setForm({ ...form, kind: "despesa" })}
+            disabled={saving}
+          >
+            Despesa
+          </button>
+          <button
+            type="button"
+            className={form.kind === "receita" ? "active" : ""}
+            onClick={() => setForm({ ...form, kind: "receita" })}
+            disabled={saving}
+          >
+            Receita
+          </button>
+        </div>
       </div>
       <div className="row2">
         <div className="field">
@@ -143,7 +164,13 @@ function CategoryRow({ category }: { category: Category }) {
     return (
       <div className="category-manager-row category-manager-row-editing">
         <CategoryForm
-          initial={{ name: category.name, nature: category.nature, color: category.color, budget: budgetOf(category) }}
+          initial={{
+            name: category.name,
+            kind: category.kind,
+            nature: category.nature,
+            color: category.color,
+            budget: budgetOf(category),
+          }}
           onSaved={() => setEditing(false)}
           onCancel={() => setEditing(false)}
           save={({ budget, ...input }) => updateCategoryAction(category.id, input, budget)}
@@ -156,7 +183,9 @@ function CategoryRow({ category }: { category: Category }) {
     <div className="category-manager-row">
       <span className="dot" style={{ background: category.color }} />
       <span className="category-manager-name">{category.name}</span>
-      <span className="category-manager-nature">{NATURE_LABEL[category.nature]}</span>
+      <span className="category-manager-nature">
+        {category.kind === "receita" ? "Receita" : "Despesa"} · {NATURE_LABEL[category.nature]}
+      </span>
       <span className="category-manager-budget">
         {category.monthly_budget ? category.monthly_budget.formatted : "sem orçamento"}
       </span>
@@ -206,7 +235,7 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
             <h2>Nova categoria</h2>
           </div>
           <CategoryForm
-            initial={{ name: "", nature: "variavel", color: nextColor, budget: "" }}
+            initial={{ name: "", kind: "despesa", nature: "variavel", color: nextColor, budget: "" }}
             onSaved={() => setCreating(false)}
             save={({ budget, ...input }) => createCategoryAction(input, budget)}
           />

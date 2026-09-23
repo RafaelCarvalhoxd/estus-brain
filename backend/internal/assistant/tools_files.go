@@ -3,12 +3,16 @@ package assistant
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/go-pdf/fpdf"
 	"github.com/xuri/excelize/v2"
+
+	"github.com/rafael/estus-vault/backend/internal/domain"
 )
 
 func (r *Registry) addFiles() {
@@ -17,20 +21,30 @@ func (r *Registry) addFiles() {
 	if d.Documents != nil {
 		r.add(Tool{
 			Name: "documents_search", Title: "Buscar documentos", Module: "documentos", ReadOnly: true,
-			Description: "Procura arquivos guardados em Documentos pelo nome, em todas as pastas. Traz o id de cada um, para usar em documents_read ou edit_image.",
-			Input:       object(map[string]any{"query": str("Parte do nome do arquivo")}, "query"),
+			Description: "Procura arquivos guardados em Documentos pelo nome, em todas as pastas (vazio lista todos). Traz o id de cada um, para usar em documents_read, documents_move, documents_delete ou edit_image.",
+			Input: object(map[string]any{
+				"query":  str("Parte do nome do arquivo"),
+				"folder": str("Só nesta pasta (nome, caminho ou id; Início = raiz)"),
+			}),
 			run: typed(func(ctx context.Context, in struct {
-				Query string `json:"query"`
+				Query  string `json:"query"`
+				Folder string `json:"folder"`
 			}) (any, error) {
 				folders, err := d.Documents.ListFolders(ctx)
 				if err != nil {
 					return nil, err
 				}
-				names := map[string]string{}
+				paths := folderPaths(folders)
 				ids := []*string{nil}
 				for _, f := range folders {
-					names[f.ID] = f.Name
 					ids = append(ids, &f.ID)
+				}
+				if strings.TrimSpace(in.Folder) != "" {
+					id, err := findFolder(folders, in.Folder)
+					if err != nil {
+						return nil, err
+					}
+					ids = []*string{id}
 				}
 				type row struct {
 					ID     string `json:"id"`
@@ -50,9 +64,9 @@ func (r *Registry) addFiles() {
 						if q != "" && !strings.Contains(normalize(doc.Name), q) {
 							continue
 						}
-						folder := "Início"
+						folder := rootFolder
 						if id != nil {
-							folder = names[*id]
+							folder = paths[*id]
 						}
 						out = append(out, row{doc.ID, doc.Name, folder, doc.SizeBytes, doc.CreatedAt.In(r.deps.Location).Format(dayLayout)})
 					}
@@ -89,6 +103,7 @@ func (r *Registry) addFiles() {
 				"format":  enum("Formato de saída", "txt", "pdf", "xlsx"),
 				"content": str("Texto do arquivo, já escrito por você — para xlsx, mande uma string vazia"),
 				"rows":    array("Linhas da planilha — só para xlsx", array("célula", str("valor da célula"))),
+				"folder":  str("Pasta onde salvar (nome, caminho ou id); padrão Início"),
 				// content marked required (not just required for txt/pdf): a
 				// schema that only requires it conditionally let a small
 				// model (confirmed live with Apple Intelligence) omit it
@@ -100,12 +115,24 @@ func (r *Registry) addFiles() {
 				Format  string     `json:"format"`
 				Content string     `json:"content"`
 				Rows    [][]string `json:"rows"`
+				Folder  string     `json:"folder"`
 			}) (any, error) {
 				name := strings.TrimSpace(in.Name)
 				if name == "" {
 					return nil, invalid("nome é obrigatório")
 				}
-				var (data []byte
+				var folderID *string
+				if strings.TrimSpace(in.Folder) != "" {
+					folders, err := d.Documents.ListFolders(ctx)
+					if err != nil {
+						return nil, err
+					}
+					if folderID, err = findFolder(folders, in.Folder); err != nil {
+						return nil, err
+					}
+				}
+				var (
+					data             []byte
 					contentType, ext string
 					err              error
 				)
@@ -133,11 +160,173 @@ func (r *Registry) addFiles() {
 				if !strings.HasSuffix(strings.ToLower(name), ext) {
 					name += ext
 				}
-				doc, err := d.Documents.Save(ctx, nil, name, contentType, bytes.NewReader(data))
+				doc, err := d.Documents.Save(ctx, folderID, name, contentType, bytes.NewReader(data))
 				if err != nil {
 					return nil, fmt.Errorf("salvar arquivo: %w", err)
 				}
 				return map[string]any{"document_id": doc.ID, "nome": doc.Name}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_folders", Title: "Pastas de documentos", Module: "documentos", ReadOnly: true,
+			Description: "Lista as pastas de Documentos com id e caminho completo. Início é a raiz, sem id.",
+			Input:       object(map[string]any{}),
+			run: typed(func(ctx context.Context, _ struct{}) (any, error) {
+				folders, err := d.Documents.ListFolders(ctx)
+				if err != nil {
+					return nil, err
+				}
+				paths := folderPaths(folders)
+				type row struct {
+					ID   string `json:"id"`
+					Path string `json:"pasta"`
+				}
+				out := make([]row, len(folders))
+				for i, f := range folders {
+					out[i] = row{f.ID, paths[f.ID]}
+				}
+				sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+				return map[string]any{"pastas": out}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_folder_create", Title: "Nova pasta", Module: "documentos",
+			Description: "Cria uma pasta em Documentos, na raiz ou dentro de outra pasta.",
+			Input: object(map[string]any{
+				"name":   str("Nome da pasta"),
+				"parent": str("Pasta onde criar (nome, caminho ou id); padrão Início"),
+			}, "name"),
+			run: typed(func(ctx context.Context, in struct {
+				Name   string `json:"name"`
+				Parent string `json:"parent"`
+			}) (any, error) {
+				folders, err := d.Documents.ListFolders(ctx)
+				if err != nil {
+					return nil, err
+				}
+				parent, err := findFolder(folders, in.Parent)
+				if err != nil {
+					return nil, err
+				}
+				f, err := d.Documents.CreateFolder(ctx, parent, strings.TrimSpace(in.Name))
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{"id": f.ID, "pasta": folderPaths(append(folders, f))[f.ID]}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_folder_rename", Title: "Renomear pasta", Module: "documentos",
+			Description: "Renomeia uma pasta de Documentos.",
+			Input: object(map[string]any{
+				"folder": str("Pasta (nome, caminho ou id)"),
+				"name":   str("Novo nome"),
+			}, "folder", "name"),
+			run: typed(func(ctx context.Context, in struct {
+				Folder string `json:"folder"`
+				Name   string `json:"name"`
+			}) (any, error) {
+				folders, err := d.Documents.ListFolders(ctx)
+				if err != nil {
+					return nil, err
+				}
+				id, err := findFolder(folders, in.Folder)
+				if err != nil {
+					return nil, err
+				}
+				if id == nil {
+					return nil, invalid("Início não pode ser renomeado")
+				}
+				f, err := d.Documents.RenameFolder(ctx, *id, strings.TrimSpace(in.Name))
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{"id": f.ID, "nome": f.Name}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_folder_delete", Title: "Excluir pasta", Module: "documentos", Destructive: true,
+			Description: "Exclui uma pasta de Documentos. Só funciona com a pasta vazia — mova ou exclua o que estiver nela antes.",
+			Input:       object(map[string]any{"folder": str("Pasta (nome, caminho ou id)")}, "folder"),
+			run: typed(func(ctx context.Context, in struct {
+				Folder string `json:"folder"`
+			}) (any, error) {
+				folders, err := d.Documents.ListFolders(ctx)
+				if err != nil {
+					return nil, err
+				}
+				id, err := findFolder(folders, in.Folder)
+				if err != nil {
+					return nil, err
+				}
+				if id == nil {
+					return nil, invalid("Início não pode ser excluído")
+				}
+				if err := d.Documents.DeleteFolder(ctx, *id); err != nil {
+					if errors.Is(err, domain.ErrConflict) {
+						return nil, invalid("a pasta não está vazia; mova ou exclua o conteúdo antes")
+					}
+					return nil, err
+				}
+				return map[string]any{"ok": true}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_move", Title: "Mover ou renomear documento", Module: "documentos",
+			Description: "Move um documento para outra pasta e/ou muda o nome dele. Campo omitido fica como está.",
+			Input: object(map[string]any{
+				"document_id": str("Id do documento"),
+				"folder":      str("Pasta de destino (nome, caminho ou id; Início = raiz)"),
+				"name":        str("Novo nome do arquivo, com extensão"),
+			}, "document_id"),
+			run: typed(func(ctx context.Context, in struct {
+				DocumentID string `json:"document_id"`
+				Folder     string `json:"folder"`
+				Name       string `json:"name"`
+			}) (any, error) {
+				doc, err := d.Documents.Get(ctx, strings.TrimSpace(in.DocumentID))
+				if err != nil {
+					return nil, err
+				}
+				folders, err := d.Documents.ListFolders(ctx)
+				if err != nil {
+					return nil, err
+				}
+				folderID := doc.FolderID
+				if strings.TrimSpace(in.Folder) != "" {
+					if folderID, err = findFolder(folders, in.Folder); err != nil {
+						return nil, err
+					}
+				}
+				name := doc.Name
+				if strings.TrimSpace(in.Name) != "" {
+					name = strings.TrimSpace(in.Name)
+				}
+				moved, err := d.Documents.Move(ctx, doc.ID, folderID, name)
+				if err != nil {
+					return nil, err
+				}
+				folder := rootFolder
+				if moved.FolderID != nil {
+					folder = folderPaths(folders)[*moved.FolderID]
+				}
+				return map[string]any{"document_id": moved.ID, "nome": moved.Name, "pasta": folder}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "documents_delete", Title: "Excluir documento", Module: "documentos", Destructive: true,
+			Description: "Exclui um documento pelo id, com o arquivo.",
+			Input:       object(map[string]any{"document_id": str("Id do documento")}, "document_id"),
+			run: typed(func(ctx context.Context, in struct {
+				DocumentID string `json:"document_id"`
+			}) (any, error) {
+				return map[string]any{"ok": true}, d.Documents.Delete(ctx, strings.TrimSpace(in.DocumentID))
 			}),
 		})
 	}
@@ -145,7 +334,7 @@ func (r *Registry) addFiles() {
 	if d.Boards != nil {
 		r.add(Tool{
 			Name: "boards_list", Title: "Quadros", Module: "quadros", ReadOnly: true,
-			Description: "Lista os quadros (desenhos e fluxos) pelo nome e data da última edição.",
+			Description: "Lista os quadros (desenhos e fluxos) com id, nome e data da última edição.",
 			Input:       object(map[string]any{}),
 			run: typed(func(ctx context.Context, _ struct{}) (any, error) {
 				boards, err := d.Boards.List(ctx)
@@ -153,17 +342,139 @@ func (r *Registry) addFiles() {
 					return nil, err
 				}
 				type row struct {
+					ID      string `json:"id"`
 					Name    string `json:"nome"`
 					Updated string `json:"editado"`
 				}
 				out := make([]row, len(boards))
 				for i, b := range boards {
-					out[i] = row{b.Name, b.UpdatedAt.In(r.deps.Location).Format("2006-01-02 15:04")}
+					out[i] = row{b.ID, b.Name, b.UpdatedAt.In(r.deps.Location).Format("2006-01-02 15:04")}
 				}
 				return map[string]any{"quadros": out}, nil
 			}),
 		})
+
+		findBoard := func(ctx context.Context, query string) (domain.Board, error) {
+			boards, err := d.Boards.List(ctx)
+			if err != nil {
+				return domain.Board{}, err
+			}
+			b, ok, names := match(boards, query, func(b domain.Board) string { return b.ID }, func(b domain.Board) string { return b.Name })
+			if !ok {
+				return domain.Board{}, invalid("quadro %q não encontrado (ou ambíguo); quadros: %s", query, strings.Join(names, ", "))
+			}
+			return b, nil
+		}
+
+		r.add(Tool{
+			Name: "boards_create", Title: "Novo quadro", Module: "quadros",
+			Description: "Cria um quadro em branco com um nome. O desenho é feito no app.",
+			Input:       object(map[string]any{"name": str("Nome do quadro")}, "name"),
+			run: typed(func(ctx context.Context, in struct {
+				Name string `json:"name"`
+			}) (any, error) {
+				b, err := d.Boards.Create(ctx, in.Name)
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{"id": b.ID, "nome": b.Name}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "boards_rename", Title: "Renomear quadro", Module: "quadros",
+			Description: "Muda o nome de um quadro.",
+			Input: object(map[string]any{
+				"board": str("Quadro (nome ou id)"),
+				"name":  str("Novo nome"),
+			}, "board", "name"),
+			run: typed(func(ctx context.Context, in struct {
+				Board string `json:"board"`
+				Name  string `json:"name"`
+			}) (any, error) {
+				b, err := findBoard(ctx, in.Board)
+				if err != nil {
+					return nil, err
+				}
+				if err := d.Boards.Rename(ctx, b.ID, in.Name); err != nil {
+					return nil, err
+				}
+				return map[string]any{"id": b.ID, "nome": strings.TrimSpace(in.Name)}, nil
+			}),
+		})
+
+		r.add(Tool{
+			Name: "boards_delete", Title: "Excluir quadro", Module: "quadros", Destructive: true,
+			Description: "Exclui um quadro e o desenho dele.",
+			Input:       object(map[string]any{"board": str("Quadro (nome ou id)")}, "board"),
+			run: typed(func(ctx context.Context, in struct {
+				Board string `json:"board"`
+			}) (any, error) {
+				b, err := findBoard(ctx, in.Board)
+				if err != nil {
+					return nil, err
+				}
+				if err := d.Boards.Delete(ctx, b.ID); err != nil {
+					return nil, err
+				}
+				return map[string]any{"ok": true, "nome": b.Name}, nil
+			}),
+		})
 	}
+}
+
+const rootFolder = "Início"
+
+// folderPaths maps each folder id to its full path ("Casa/Contas"), so
+// nested folders with the same name stay distinguishable. A cycle or a
+// missing parent just stops the walk rather than looping.
+func folderPaths(folders []domain.DocumentFolder) map[string]string {
+	byID := make(map[string]domain.DocumentFolder, len(folders))
+	for _, f := range folders {
+		byID[f.ID] = f
+	}
+	out := make(map[string]string, len(folders))
+	for _, f := range folders {
+		parts := []string{f.Name}
+		seen := map[string]bool{f.ID: true}
+		for p := f.ParentID; p != nil && !seen[*p]; {
+			parent, ok := byID[*p]
+			if !ok {
+				break
+			}
+			seen[parent.ID] = true
+			parts = append([]string{parent.Name}, parts...)
+			p = parent.ParentID
+		}
+		out[f.ID] = strings.Join(parts, "/")
+	}
+	return out
+}
+
+// findFolder resolves a folder by id, full path or name; empty or "Início"
+// is the root (nil). Path is tried before bare name because two folders
+// may share a name under different parents.
+func findFolder(folders []domain.DocumentFolder, query string) (*string, error) {
+	q := strings.Trim(strings.TrimSpace(query), "/")
+	if q == "" || normalize(q) == normalize(rootFolder) {
+		return nil, nil
+	}
+	paths := folderPaths(folders)
+	for _, f := range folders {
+		if f.ID == q || normalize(paths[f.ID]) == normalize(q) {
+			return &f.ID, nil
+		}
+	}
+	f, ok, _ := match(folders, q, func(f domain.DocumentFolder) string { return f.ID }, func(f domain.DocumentFolder) string { return f.Name })
+	if !ok {
+		all := make([]string, 0, len(paths))
+		for _, p := range paths {
+			all = append(all, p)
+		}
+		sort.Strings(all)
+		return nil, invalid("pasta %q não encontrada (ou ambígua); pastas: %s", query, strings.Join(all, ", "))
+	}
+	return &f.ID, nil
 }
 
 // addOverview is the "how's my day" tool: one call gathering today across

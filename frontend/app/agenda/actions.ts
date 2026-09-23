@@ -8,9 +8,25 @@ export type CreateEventState = {
   message?: string;
 };
 
+// Moves an "HH:MM" by an hour, stopping at the edge of the day.
+function shiftHour(time: string, hours: number, limit: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const shifted = h + hours;
+  if (shifted > 23 || shifted < 0) return limit;
+  return `${String(shifted).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function toRange(date: string, startTime: string, endTime: string): { startsAt?: Date; endsAt?: Date; error?: string } {
   if (!date) return { error: "Selecione a data." };
-  if (!startTime || !endTime) return { error: "Informe o horário de início e fim." };
+  // Times are optional: none means the whole day, one alone gets an hour.
+  if (!startTime && !endTime) {
+    startTime = "00:00";
+    endTime = "23:59";
+  } else if (!endTime) {
+    endTime = shiftHour(startTime, 1, "23:59");
+  } else if (!startTime) {
+    startTime = shiftHour(endTime, -1, "00:00");
+  }
 
   const startsAt = new Date(`${date}T${startTime}:00`);
   const endsAt = new Date(`${date}T${endTime}:00`);

@@ -107,8 +107,18 @@ func (h *BillHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// Summary handles GET /api/bills/summary?month=YYYY-MM (default: this month).
 func (h *BillHandlers) Summary(w http.ResponseWriter, r *http.Request) {
-	summary, err := h.bills.Summary(r.Context())
+	ym := domain.YearMonthOf(time.Now())
+	if raw := r.URL.Query().Get("month"); raw != "" {
+		parsed, err := parseYearMonth(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: month must be YYYY-MM", domain.ErrValidation))
+			return
+		}
+		ym = parsed
+	}
+	summary, err := h.bills.Summary(r.Context(), ym)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -197,10 +207,11 @@ func (h *BillHandlers) Unpay(w http.ResponseWriter, r *http.Request) {
 }
 
 // EndSeries handles POST /api/bills/{id}/end-series: stops a recurring
-// bill's series from growing new occurrences, without deleting or altering
-// anything already materialized.
+// bill's series from growing new occurrences. ?delete_following=true also
+// deletes the unpaid occurrences after this one.
 func (h *BillHandlers) EndSeries(w http.ResponseWriter, r *http.Request) {
-	bill, err := h.bills.EndSeries(r.Context(), r.PathValue("id"))
+	deleteFollowing := r.URL.Query().Get("delete_following") == "true"
+	bill, err := h.bills.EndSeries(r.Context(), r.PathValue("id"), deleteFollowing)
 	if err != nil {
 		writeError(w, err)
 		return

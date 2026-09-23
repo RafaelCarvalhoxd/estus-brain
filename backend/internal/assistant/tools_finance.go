@@ -8,11 +8,13 @@ import (
 
 	"github.com/rafael/estus-vault/backend/internal/domain"
 	"github.com/rafael/estus-vault/backend/internal/service"
+	"github.com/rafael/estus-vault/backend/internal/store/postgres"
 )
 
 type txnInput struct {
 	Description    string  `json:"description"`
 	Amount         float64 `json:"amount"`
+	PerInstallment bool    `json:"per_installment"`
 	Category       string  `json:"category"`
 	CategoryNature string  `json:"category_nature"`
 	PaymentMethod  string  `json:"payment_method"`
@@ -25,14 +27,15 @@ type txnInput struct {
 var txnProps = func() map[string]any {
 	return map[string]any{
 		"description":     str("O que foi, ex.: \"Mercado\""),
-		"amount":          number("Valor total em reais, ex.: 45.9"),
+		"amount":          number("Valor em reais: o total da compra, ou o de cada parcela com per_installment"),
+		"per_installment": boolean("true quando amount é o valor de CADA parcela (ex.: 12x de 40 → amount 40, installments 12)"),
 		"category":        str("Nome da categoria. Prefira uma existente (finance_list_categories); um nome novo é criado sozinho. Vazio: eu escolho pela descrição"),
 		"category_nature": enum("Natureza de uma categoria nova; padrão variavel", "essencial", "variavel", "investimento"),
 		"payment_method":  enum("Forma de pagamento; padrão pix", "pix", "debito", "credito"),
 		"date":            str("Data da compra AAAA-MM-DD, ou hoje/ontem; padrão hoje"),
 		"credit_card":     str("Nome do cartão, obrigatório quando payment_method=credito"),
-		"installments":    integer("Número de parcelas no crédito; padrão 1"),
-		"recurring":       boolean("Gasto fixo que se repete todo mês"),
+		"installments":    integer("Número de parcelas no crédito; padrão 1. Cada parcela aparece no seu mês e entra na fatura daquele mês — não use recurring junto"),
+		"recurring":       boolean("Gasto fixo que se repete todo mês (assinatura, aluguel); não vale para compra parcelada"),
 	}
 }
 
@@ -43,8 +46,10 @@ type txnResult struct {
 	CategoryCreated bool   `json:"categoria_criada,omitempty"`
 	Payment         string `json:"pagamento"`
 	Date            string `json:"data"`
-	Month           string `json:"mes_competencia"`
+	Month           string `json:"mes"`
+	Invoice         string `json:"fatura,omitempty"`
 	Installments    int    `json:"parcelas"`
+	EachInstallment string `json:"valor_parcela,omitempty"`
 }
 
 func (r *Registry) resolveCategory(ctx context.Context, query string) (domain.Category, error) {
@@ -91,6 +96,7 @@ func (r *Registry) createCategory(ctx context.Context, existing []domain.Categor
 	c := domain.Category{
 		Name:   categoryName(name),
 		Nature: domain.NatureDiscretionary,
+		Kind:   domain.KindExpense,
 		Color:  nextCategoryColor(existing),
 	}
 	if n := domain.CategoryNature(normalize(nature)); n.Valid() {
@@ -126,23 +132,78 @@ func joinNames[T any](items []T, name func(T) string) string {
 	return strings.Join(out, ", ")
 }
 
+// resolveCard finds a card by name; with a single card on file, an empty
+// name means that one.
+func (r *Registry) resolveCard(ctx context.Context, query string) (domain.CreditCard, error) {
+	cards, err := r.deps.Cards.List(ctx)
+	if err != nil {
+		return domain.CreditCard{}, err
+	}
+	card, ok, names := match(cards, query, func(c domain.CreditCard) string { return c.ID }, func(c domain.CreditCard) string { return c.Name })
+	if !ok && len(cards) == 1 && strings.TrimSpace(query) == "" {
+		return cards[0], nil
+	}
+	if !ok {
+		return domain.CreditCard{}, invalid("cartão %q não encontrado; cartões: %s", query, strings.Join(names, ", "))
+	}
+	return card, nil
+}
+
+func parsePaymentMethod(raw string, fallback domain.PaymentMethod) (domain.PaymentMethod, error) {
+	method := domain.PaymentMethod(normalize(raw))
+	if method == "" {
+		return fallback, nil
+	}
+	if !method.Valid() {
+		return "", invalid("forma de pagamento %q inválida: use pix, debito ou credito", raw)
+	}
+	return method, nil
+}
+
+// purchaseCents is the whole purchase: amount as given, or one installment
+// times the number of installments.
+func purchaseCents(amount float64, perInstallment bool, installments int) domain.Cents {
+	if perInstallment {
+		return cents(amount) * domain.Cents(max(installments, 1))
+	}
+	return cents(amount)
+}
+
+func txnResultFor(input service.NewTransactionInput, cat domain.Category, created bool, txns []domain.Transaction) txnResult {
+	res := txnResult{
+		Description:     input.Description,
+		Amount:          money(input.AmountCents),
+		Category:        cat.Name,
+		CategoryCreated: created,
+		Payment:         string(input.PaymentMethod),
+		Date:            input.PurchaseDate.Format(dayLayout),
+		Month:           monthString(txns[0].CompetenceMonth),
+		Installments:    len(txns),
+	}
+	if txns[0].InvoiceMonth != nil {
+		res.Invoice = monthString(*txns[0].InvoiceMonth)
+	}
+	if len(txns) > 1 {
+		res.EachInstallment = money(txns[0].AmountCents)
+	}
+	return res
+}
+
 func (r *Registry) createTransaction(ctx context.Context, in txnInput) (txnResult, error) {
 	if strings.TrimSpace(in.Description) == "" {
 		return txnResult{}, invalid("informe a descrição")
 	}
-	if in.Amount <= 0 {
+	total := purchaseCents(in.Amount, in.PerInstallment, in.Installments)
+	if total <= 0 {
 		return txnResult{}, invalid("o valor precisa ser maior que zero")
 	}
 	cat, createdCategory, err := r.categoryFor(ctx, in.Category, in.Description, in.CategoryNature)
 	if err != nil {
 		return txnResult{}, err
 	}
-	method := domain.PaymentMethod(normalize(in.PaymentMethod))
-	if method == "" {
-		method = domain.PaymentPix
-	}
-	if method != domain.PaymentPix && method != domain.PaymentDebit && method != domain.PaymentCredit {
-		return txnResult{}, invalid("forma de pagamento %q inválida: use pix, debito ou credito", in.PaymentMethod)
+	method, err := parsePaymentMethod(in.PaymentMethod, domain.PaymentPix)
+	if err != nil {
+		return txnResult{}, err
 	}
 	date, err := r.parseDay(in.Date)
 	if err != nil {
@@ -150,41 +211,27 @@ func (r *Registry) createTransaction(ctx context.Context, in txnInput) (txnResul
 	}
 	input := service.NewTransactionInput{
 		Description:   strings.TrimSpace(in.Description),
-		AmountCents:   cents(in.Amount),
+		AmountCents:   total,
 		CategoryID:    cat.ID,
 		PaymentMethod: method,
 		PurchaseDate:  date,
 		Installments:  max(in.Installments, 1),
-		IsRecurring:   in.Recurring,
+		IsRecurring:   in.Recurring && in.Installments <= 1,
 	}
 	if method == domain.PaymentCredit {
-		cards, err := r.deps.Cards.List(ctx)
+		card, err := r.resolveCard(ctx, in.CreditCard)
 		if err != nil {
 			return txnResult{}, err
 		}
-		card, ok, names := match(cards, in.CreditCard, func(c domain.CreditCard) string { return c.ID }, func(c domain.CreditCard) string { return c.Name })
-		if !ok && len(cards) == 1 && strings.TrimSpace(in.CreditCard) == "" {
-			card, ok = cards[0], true
-		}
-		if !ok {
-			return txnResult{}, invalid("cartão %q não encontrado; cartões: %s", in.CreditCard, strings.Join(names, ", "))
-		}
 		input.CreditCardID = card.ID
+	} else {
+		input.Installments = 1
 	}
 	txns, err := r.deps.Transactions.Create(ctx, input)
 	if err != nil {
 		return txnResult{}, err
 	}
-	return txnResult{
-		Description:     input.Description,
-		Amount:          money(input.AmountCents),
-		Category:        cat.Name,
-		CategoryCreated: createdCategory,
-		Payment:         string(method),
-		Date:            date.Format(dayLayout),
-		Month:           monthString(txns[0].CompetenceMonth),
-		Installments:    len(txns),
-	}, nil
+	return txnResultFor(input, cat, createdCategory, txns), nil
 }
 
 func (r *Registry) addFinance() {
@@ -195,7 +242,7 @@ func (r *Registry) addFinance() {
 
 	r.add(Tool{
 		Name: "finance_list_categories", Title: "Categorias de gasto", Module: "financeiro", ReadOnly: true,
-		Description: "Lista as categorias de gasto, com orçamento mensal quando houver.",
+		Description: "Lista as categorias com tipo (despesa ou receita), natureza e orçamento mensal. Só despesas contam como gasto; receitas contam como entrada.",
 		Input:       object(map[string]any{}),
 		run: typed(func(ctx context.Context, _ struct{}) (any, error) {
 			cats, err := d.Categories.List(ctx)
@@ -204,12 +251,13 @@ func (r *Registry) addFinance() {
 			}
 			type row struct {
 				Name   string `json:"nome"`
+				Kind   string `json:"tipo"`
 				Nature string `json:"natureza"`
 				Budget string `json:"orcamento,omitempty"`
 			}
 			out := make([]row, len(cats))
 			for i, c := range cats {
-				out[i] = row{Name: c.Name, Nature: string(c.Nature)}
+				out[i] = row{Name: c.Name, Kind: string(c.Kind), Nature: string(c.Nature)}
 				if c.MonthlyBudgetCents != nil {
 					out[i].Budget = money(*c.MonthlyBudgetCents)
 				}
@@ -242,7 +290,7 @@ func (r *Registry) addFinance() {
 
 	r.add(Tool{
 		Name: "finance_create_transaction", Title: "Lançar gasto", Module: "financeiro",
-		Description: "Registra um gasto. A categoria pode ser uma existente, um nome novo (criado na hora) ou vazia (escolhida pela descrição). No crédito, a compra entra no mês em que a fatura do cartão vence — calculado a partir do dia de fechamento e do dia de vencimento do cartão, não simplesmente no mês seguinte — e pode ser parcelada.",
+		Description: "Registra um lançamento (gasto; numa categoria de receita, conta como entrada). A categoria pode ser uma existente, um nome novo (criado na hora) ou vazia (escolhida pela descrição). O lançamento aparece no mês da compra. No crédito ele também entra na fatura do cartão (pelo dia de fechamento e vencimento), que vira uma conta a pagar; o dinheiro só sai quando a fatura é paga. Parcelado: informe installments e o total em amount, ou o valor da parcela em amount com per_installment=true — não use recurring.",
 		Input:       object(txnProps(), "description", "amount"),
 		run: typed(func(ctx context.Context, in txnInput) (any, error) {
 			return r.createTransaction(ctx, in)
@@ -273,7 +321,7 @@ func (r *Registry) addFinance() {
 					failed = append(failed, fmt.Sprintf("item %d (%s): %v", i+1, item.Description, err))
 					continue
 				}
-				total += cents(item.Amount)
+				total += purchaseCents(item.Amount, item.PerInstallment, item.Installments)
 				done = append(done, res)
 			}
 			return map[string]any{"lancados": done, "total": money(total), "falhas": failed}, nil
@@ -282,7 +330,7 @@ func (r *Registry) addFinance() {
 
 	r.add(Tool{
 		Name: "finance_month_summary", Title: "Resumo do mês", Module: "financeiro", ReadOnly: true,
-		Description: "Quanto foi gasto num mês: total, comparação com o mês anterior e gasto por categoria com orçamento.",
+		Description: "Resumo financeiro de um mês. gasto = despesas lançadas no mês (inclui crédito). entradas = contas recebidas + lançamentos em categoria de receita. saidas = dinheiro que saiu de fato (débito, pix e faturas de cartão pagas; compra no crédito só sai quando a fatura é paga). saldo = entradas − saidas. fixos = recorrentes e parcelas (até a última) + contas recorrentes ainda a pagar; o resto é variável. Traz também gasto por categoria com orçamento e contas em aberto do mês.",
 		Input:       object(map[string]any{"month": str("Mês AAAA-MM, ou atual/passado/proximo; padrão atual")}),
 		run: typed(func(ctx context.Context, in struct {
 			Month string `json:"month"`
@@ -313,23 +361,48 @@ func (r *Registry) addFinance() {
 				}
 				cats = append(cats, row)
 			}
-			return map[string]any{
+			out := map[string]any{
 				"mes":             monthString(ym),
-				"total":           money(sum.TotalCents),
-				"total_centavos":  int64(sum.TotalCents),
+				"gasto":           money(sum.TotalCents),
+				"gasto_centavos":  int64(sum.TotalCents),
 				"mes_anterior":    money(sum.PreviousMonthCents),
 				"variacao":        money(sum.TotalCents - sum.PreviousMonthCents),
-				"fixos":           money(sum.RecurringCents),
+				"saidas":          money(sum.PaidOutCents),
+				"fixos_pagos":     money(sum.RecurringCents),
+				"fixos_a_pagar":   money(sum.OpenFixedCents),
 				"variaveis":       money(sum.VariableCents),
 				"por_categoria":   cats,
 				"num_lancamentos": len(sum.Transactions),
-			}, nil
+			}
+			fixed := sum.RecurringCents + sum.OpenFixedCents
+			out["fixos"] = money(fixed)
+			if all := fixed + sum.VariableCents; all > 0 {
+				pct := int((fixed*100 + all/2) / all)
+				out["pct_fixos"] = pct
+				out["pct_variaveis"] = 100 - pct
+			}
+			if d.Bills != nil {
+				received, err := d.Bills.ReceivedTotal(ctx, ym)
+				if err != nil {
+					return nil, err
+				}
+				out["entradas"] = money(received)
+				out["saldo"] = money(received - sum.PaidOutCents)
+				bs, err := d.Bills.Summary(ctx, ym)
+				if err != nil {
+					return nil, err
+				}
+				out["contas_a_pagar_em_aberto"] = money(bs.PayableOpenCents)
+				out["contas_a_receber_em_aberto"] = money(bs.ReceivableOpenCents)
+				out["saldo_das_contas"] = money(bs.ReceivableOpenCents - bs.PayableOpenCents)
+			}
+			return out, nil
 		}),
 	})
 
 	r.add(Tool{
 		Name: "finance_list_transactions", Title: "Lançamentos do mês", Module: "financeiro", ReadOnly: true,
-		Description: "Lista os lançamentos de um mês, com filtro opcional por categoria ou texto. Traz o id para editar ou excluir.",
+		Description: "Lista os lançamentos de um mês (pelo mês da compra; cada parcela no seu mês), com filtro opcional por categoria ou texto. Traz o id para editar ou excluir, a fatura em que a compra no crédito entra e o total da compra parcelada.",
 		Input: object(map[string]any{
 			"month":    str("Mês AAAA-MM, ou atual/passado; padrão atual"),
 			"category": str("Filtrar por nome de categoria"),
@@ -360,8 +433,19 @@ func (r *Registry) addFinance() {
 				Description string `json:"descricao"`
 				Amount      string `json:"valor"`
 				Category    string `json:"categoria"`
+				Income      bool   `json:"receita,omitempty"`
 				Payment     string `json:"pagamento"`
+				Card        string `json:"cartao,omitempty"`
+				Invoice     string `json:"fatura,omitempty"`
 				Installment string `json:"parcela,omitempty"`
+				Purchase    string `json:"total_da_compra,omitempty"`
+				Recurring   bool   `json:"recorrente,omitempty"`
+			}
+			cardNames := map[string]string{}
+			if cards, err := d.Cards.List(ctx); err == nil {
+				for _, c := range cards {
+					cardNames[c.ID] = c.Name
+				}
 			}
 			out := []row{}
 			var total domain.Cents
@@ -376,9 +460,20 @@ func (r *Registry) addFinance() {
 				if len(out) >= limit {
 					continue
 				}
-				item := row{t.ID, t.PurchaseDate.Format(dayLayout), t.Description, money(t.AmountCents), t.CategoryName, string(t.PaymentMethod), ""}
+				item := row{
+					ID: t.ID, Date: t.PurchaseDate.Format(dayLayout), Description: t.Description,
+					Amount: money(t.AmountCents), Category: t.CategoryName, Income: t.CategoryKind == domain.KindIncome,
+					Payment: string(t.PaymentMethod), Recurring: t.IsRecurring,
+				}
+				if t.CreditCardID != nil {
+					item.Card = cardNames[*t.CreditCardID]
+				}
+				if t.InvoiceMonth != nil {
+					item.Invoice = monthString(*t.InvoiceMonth)
+				}
 				if t.InstallmentTotal > 1 {
 					item.Installment = fmt.Sprintf("%d/%d", t.InstallmentNumber, t.InstallmentTotal)
+					item.Purchase = money(t.PurchaseTotalCents)
 				}
 				out = append(out, item)
 			}
@@ -388,42 +483,100 @@ func (r *Registry) addFinance() {
 
 	r.add(Tool{
 		Name: "finance_update_transaction", Title: "Editar lançamento", Module: "financeiro",
-		Description: "Muda a descrição e/ou a categoria de um lançamento (pelo id de finance_list_transactions).",
+		Description: "Edita um lançamento por completo (pelo id de finance_list_transactions): descrição, categoria, valor, data, forma de pagamento, cartão, parcelas e recorrência. Campos não enviados ficam como estão. Numa compra parcelada, a edição vale para a compra inteira (todas as parcelas) e amount é o total da compra.",
 		Input: object(map[string]any{
-			"id":          str("Id do lançamento"),
-			"description": str("Nova descrição (vazio mantém)"),
-			"category":    str("Nova categoria (vazio mantém)"),
+			"id":              str("Id do lançamento (qualquer parcela da compra)"),
+			"description":     str("Nova descrição"),
+			"category":        str("Nova categoria (existente)"),
+			"amount":          number("Novo valor: o total da compra, ou o de cada parcela com per_installment"),
+			"per_installment": boolean("true quando amount é o valor de cada parcela"),
+			"date":            str("Nova data da compra AAAA-MM-DD"),
+			"payment_method":  enum("Nova forma de pagamento", "pix", "debito", "credito"),
+			"credit_card":     str("Novo cartão (nome), para crédito"),
+			"installments":    integer("Novo número de parcelas (crédito)"),
+			"recurring":       boolean("Se repete todo mês"),
 		}, "id"),
 		run: typed(func(ctx context.Context, in struct {
-			ID          string `json:"id"`
-			Description string `json:"description"`
-			Category    string `json:"category"`
+			ID             string  `json:"id"`
+			Description    string  `json:"description"`
+			Category       string  `json:"category"`
+			Amount         float64 `json:"amount"`
+			PerInstallment bool    `json:"per_installment"`
+			Date           string  `json:"date"`
+			PaymentMethod  string  `json:"payment_method"`
+			CreditCard     string  `json:"credit_card"`
+			Installments   int     `json:"installments"`
+			Recurring      *bool   `json:"recurring"`
 		}) (any, error) {
 			current, err := r.findTransaction(ctx, in.ID)
 			if err != nil {
 				return nil, err
 			}
-			desc, catID := current.Description, current.CategoryID
-			if strings.TrimSpace(in.Description) != "" {
-				desc = strings.TrimSpace(in.Description)
+			input := service.NewTransactionInput{
+				Description:   current.Description,
+				AmountCents:   current.PurchaseTotalCents,
+				CategoryID:    current.CategoryID,
+				PaymentMethod: current.PaymentMethod,
+				PurchaseDate:  current.PurchaseDate,
+				Installments:  max(current.InstallmentTotal, 1),
+				IsRecurring:   current.IsRecurring,
+			}
+			if current.CreditCardID != nil {
+				input.CreditCardID = *current.CreditCardID
+			}
+			cat := domain.Category{ID: current.CategoryID, Name: current.CategoryName}
+			if v := strings.TrimSpace(in.Description); v != "" {
+				input.Description = v
 			}
 			if strings.TrimSpace(in.Category) != "" {
-				cat, err := r.resolveCategory(ctx, in.Category)
-				if err != nil {
+				if cat, err = r.resolveCategory(ctx, in.Category); err != nil {
 					return nil, err
 				}
-				catID = cat.ID
+				input.CategoryID = cat.ID
 			}
-			if err := d.Transactions.Update(ctx, in.ID, desc, catID); err != nil {
+			if input.PaymentMethod, err = parsePaymentMethod(in.PaymentMethod, input.PaymentMethod); err != nil {
 				return nil, err
 			}
-			return map[string]any{"ok": true, "descricao": desc}, nil
+			if in.Installments > 0 {
+				input.Installments = in.Installments
+			}
+			if in.Amount > 0 {
+				input.AmountCents = purchaseCents(in.Amount, in.PerInstallment, input.Installments)
+			}
+			if strings.TrimSpace(in.Date) != "" {
+				if input.PurchaseDate, err = r.parseDay(in.Date); err != nil {
+					return nil, err
+				}
+			}
+			if input.PaymentMethod == domain.PaymentCredit {
+				if strings.TrimSpace(in.CreditCard) != "" || input.CreditCardID == "" {
+					card, err := r.resolveCard(ctx, in.CreditCard)
+					if err != nil {
+						return nil, err
+					}
+					input.CreditCardID = card.ID
+				}
+			} else {
+				input.CreditCardID = ""
+				input.Installments = 1
+			}
+			if in.Recurring != nil {
+				input.IsRecurring = *in.Recurring
+			}
+			if input.Installments > 1 {
+				input.IsRecurring = false
+			}
+			txns, err := d.Transactions.Replace(ctx, in.ID, input)
+			if err != nil {
+				return nil, err
+			}
+			return txnResultFor(input, cat, false, txns), nil
 		}),
 	})
 
 	r.add(Tool{
 		Name: "finance_delete_transaction", Title: "Excluir lançamento", Module: "financeiro", Destructive: true,
-		Description: "Exclui um lançamento pelo id (de finance_list_transactions). Numa compra parcelada, exclui só aquela parcela.",
+		Description: "Exclui um lançamento pelo id (de finance_list_transactions). Numa compra parcelada, exclui a compra inteira: todas as parcelas. Um lançamento que veio do pagamento de uma conta só sai desfazendo o pagamento (bills_unpay).",
 		Input:       object(map[string]any{"id": str("Id do lançamento")}, "id"),
 		run: typed(func(ctx context.Context, in struct {
 			ID string `json:"id"`
@@ -434,22 +587,269 @@ func (r *Registry) addFinance() {
 			return map[string]any{"ok": true}, nil
 		}),
 	})
+
+	r.add(Tool{
+		Name: "finance_create_category", Title: "Nova categoria", Module: "financeiro",
+		Description: "Cria uma categoria. tipo despesa conta como gasto; receita conta como entrada.",
+		Input: object(map[string]any{
+			"name":   str("Nome, ex.: \"Pets\""),
+			"kind":   enum("Tipo; padrão despesa", "despesa", "receita"),
+			"nature": enum("Natureza; padrão variavel", "essencial", "variavel", "investimento"),
+			"color":  str("Cor em hex, ex.: #2a78d6; vazio escolhe uma"),
+			"budget": number("Orçamento mensal em reais (opcional)"),
+		}, "name"),
+		run: typed(func(ctx context.Context, in categoryInput) (any, error) {
+			cats, err := d.Categories.List(ctx)
+			if err != nil {
+				return nil, err
+			}
+			c := domain.Category{Name: strings.TrimSpace(in.Name), Kind: domain.KindExpense, Nature: domain.NatureDiscretionary, Color: nextCategoryColor(cats)}
+			if err := in.apply(&c); err != nil {
+				return nil, err
+			}
+			if err := c.Validate(); err != nil {
+				return nil, err
+			}
+			created, err := d.Categories.Create(ctx, c)
+			if err != nil {
+				return nil, err
+			}
+			if in.Budget != nil && *in.Budget > 0 {
+				b := cents(*in.Budget)
+				if created, err = d.Categories.UpdateBudget(ctx, created.ID, &b); err != nil {
+					return nil, err
+				}
+			}
+			return map[string]any{"ok": true, "nome": created.Name, "tipo": created.Kind}, nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "finance_update_category", Title: "Editar categoria", Module: "financeiro",
+		Description: "Edita uma categoria pelo nome: novo nome, tipo (despesa/receita), natureza, cor ou orçamento mensal (0 remove o orçamento). Campos não enviados ficam como estão.",
+		Input: object(map[string]any{
+			"category": str("Nome atual da categoria"),
+			"name":     str("Novo nome"),
+			"kind":     enum("Novo tipo", "despesa", "receita"),
+			"nature":   enum("Nova natureza", "essencial", "variavel", "investimento"),
+			"color":    str("Nova cor em hex"),
+			"budget":   number("Novo orçamento mensal em reais; 0 remove"),
+		}, "category"),
+		run: typed(func(ctx context.Context, in struct {
+			Category string `json:"category"`
+			categoryInput
+		}) (any, error) {
+			c, err := r.resolveCategory(ctx, in.Category)
+			if err != nil {
+				return nil, err
+			}
+			if v := strings.TrimSpace(in.Name); v != "" {
+				c.Name = v
+			}
+			if err := in.apply(&c); err != nil {
+				return nil, err
+			}
+			if err := c.Validate(); err != nil {
+				return nil, err
+			}
+			updated, err := d.Categories.Update(ctx, c.ID, c)
+			if err != nil {
+				return nil, err
+			}
+			if in.Budget != nil {
+				var b *domain.Cents
+				if *in.Budget > 0 {
+					v := cents(*in.Budget)
+					b = &v
+				}
+				if updated, err = d.Categories.UpdateBudget(ctx, c.ID, b); err != nil {
+					return nil, err
+				}
+			}
+			return map[string]any{"ok": true, "nome": updated.Name, "tipo": updated.Kind, "natureza": updated.Nature}, nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "finance_delete_category", Title: "Excluir categoria", Module: "financeiro", Destructive: true,
+		Description: "Exclui uma categoria pelo nome. Recusa se ainda houver lançamentos ou contas nela.",
+		Input:       object(map[string]any{"category": str("Nome da categoria")}, "category"),
+		run: typed(func(ctx context.Context, in struct {
+			Category string `json:"category"`
+		}) (any, error) {
+			c, err := r.resolveCategory(ctx, in.Category)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true}, d.Categories.Delete(ctx, c.ID)
+		}),
+	})
+
+	r.add(Tool{
+		Name: "finance_create_credit_card", Title: "Novo cartão", Module: "financeiro",
+		Description: "Cadastra um cartão de crédito com dia de fechamento e de vencimento da fatura (1 a 28).",
+		Input: object(map[string]any{
+			"name":        str("Nome do cartão"),
+			"closing_day": integer("Dia em que a fatura fecha"),
+			"due_day":     integer("Dia em que a fatura vence"),
+		}, "name", "closing_day", "due_day"),
+		run: typed(func(ctx context.Context, in struct {
+			Name       string `json:"name"`
+			ClosingDay int    `json:"closing_day"`
+			DueDay     int    `json:"due_day"`
+		}) (any, error) {
+			c := domain.CreditCard{Name: strings.TrimSpace(in.Name), ClosingDay: in.ClosingDay, DueDay: in.DueDay}
+			if err := c.Validate(); err != nil {
+				return nil, err
+			}
+			created, err := d.Cards.Create(ctx, c)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true, "nome": created.Name, "fecha_dia": created.ClosingDay, "vence_dia": created.DueDay}, nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "finance_update_credit_card", Title: "Editar cartão", Module: "financeiro",
+		Description: "Edita um cartão pelo nome: novo nome, dia de fechamento ou de vencimento. Compras já lançadas continuam na fatura em que estavam.",
+		Input: object(map[string]any{
+			"credit_card": str("Nome atual do cartão"),
+			"name":        str("Novo nome"),
+			"closing_day": integer("Novo dia de fechamento"),
+			"due_day":     integer("Novo dia de vencimento"),
+		}, "credit_card"),
+		run: typed(func(ctx context.Context, in struct {
+			CreditCard string `json:"credit_card"`
+			Name       string `json:"name"`
+			ClosingDay int    `json:"closing_day"`
+			DueDay     int    `json:"due_day"`
+		}) (any, error) {
+			c, err := r.resolveCard(ctx, in.CreditCard)
+			if err != nil {
+				return nil, err
+			}
+			if v := strings.TrimSpace(in.Name); v != "" {
+				c.Name = v
+			}
+			if in.ClosingDay > 0 {
+				c.ClosingDay = in.ClosingDay
+			}
+			if in.DueDay > 0 {
+				c.DueDay = in.DueDay
+			}
+			if err := c.Validate(); err != nil {
+				return nil, err
+			}
+			updated, err := d.Cards.Update(ctx, c.ID, c)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true, "nome": updated.Name, "fecha_dia": updated.ClosingDay, "vence_dia": updated.DueDay}, nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "finance_delete_credit_card", Title: "Excluir cartão", Module: "financeiro", Destructive: true,
+		Description: "Exclui um cartão pelo nome. Recusa se houver compras nele.",
+		Input:       object(map[string]any{"credit_card": str("Nome do cartão")}, "credit_card"),
+		run: typed(func(ctx context.Context, in struct {
+			CreditCard string `json:"credit_card"`
+		}) (any, error) {
+			c, err := r.resolveCard(ctx, in.CreditCard)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true}, d.Cards.Delete(ctx, c.ID)
+		}),
+	})
+
+	if d.CardSpending != nil {
+		r.add(Tool{
+			Name: "finance_card_invoices", Title: "Faturas dos cartões", Module: "financeiro", ReadOnly: true,
+			Description: "Fatura atual de cada cartão (a que recebe uma compra feita hoje): total, vencimento, se já foi paga, gasto por categoria e as faturas dos meses ao redor. Para pagar uma fatura, use bills_list e bills_pay.",
+			Input:       object(map[string]any{}),
+			run: typed(func(ctx context.Context, _ struct{}) (any, error) {
+				overviews, err := d.CardSpending.Overview(ctx)
+				if err != nil {
+					return nil, err
+				}
+				type invoice struct {
+					Month     string `json:"mes"`
+					Due       string `json:"vencimento"`
+					Total     string `json:"total"`
+					Purchases int    `json:"compras"`
+					Paid      bool   `json:"paga,omitempty"`
+				}
+				toInvoice := func(i service.CardInvoice) invoice {
+					return invoice{monthString(i.Month), i.DueDate.Format(dayLayout), money(i.TotalCents), i.Purchases, i.Paid}
+				}
+				type card struct {
+					Name       string            `json:"cartao"`
+					Current    invoice           `json:"fatura_atual"`
+					Months     []invoice         `json:"por_mes"`
+					Categories map[string]string `json:"por_categoria"`
+				}
+				out := make([]card, len(overviews))
+				for i, ov := range overviews {
+					c := card{Name: ov.Card.Name, Current: toInvoice(ov.Current), Categories: map[string]string{}}
+					for _, m := range ov.Months {
+						c.Months = append(c.Months, toInvoice(m))
+					}
+					for _, cat := range ov.Categories {
+						c.Categories[cat.Name] = money(cat.TotalCents)
+					}
+					out[i] = c
+				}
+				return map[string]any{"cartoes": out}, nil
+			}),
+		})
+	}
+}
+
+// categoryInput is the editable part of a category; empty fields are left
+// alone by apply.
+type categoryInput struct {
+	Name   string   `json:"name"`
+	Kind   string   `json:"kind"`
+	Nature string   `json:"nature"`
+	Color  string   `json:"color"`
+	Budget *float64 `json:"budget"`
+}
+
+func (in categoryInput) apply(c *domain.Category) error {
+	if v := normalize(in.Kind); v != "" {
+		c.Kind = domain.CategoryKind(v)
+		if !c.Kind.Valid() {
+			return invalid("tipo %q inválido: use despesa ou receita", in.Kind)
+		}
+	}
+	if v := normalize(in.Nature); v != "" {
+		c.Nature = domain.CategoryNature(v)
+		if !c.Nature.Valid() {
+			return invalid("natureza %q inválida: use essencial, variavel ou investimento", in.Nature)
+		}
+	}
+	if v := strings.TrimSpace(in.Color); v != "" {
+		c.Color = v
+	}
+	return nil
 }
 
 // findTransaction looks a transaction up by id across the recent months the
 // ledger is browsed in.
-func (r *Registry) findTransaction(ctx context.Context, id string) (domain.Transaction, error) {
+func (r *Registry) findTransaction(ctx context.Context, id string) (postgres.TransactionRow, error) {
 	month := domain.YearMonthOf(r.now())
 	for i := -12; i <= 13; i++ {
 		rows, err := r.deps.TransactionLog.ListByCompetenceMonth(ctx, month.Add(-i))
 		if err != nil {
-			return domain.Transaction{}, err
+			return postgres.TransactionRow{}, err
 		}
 		for _, t := range rows {
 			if t.ID == id {
-				return t.Transaction, nil
+				return t, nil
 			}
 		}
 	}
-	return domain.Transaction{}, fmt.Errorf("transaction %s: %w", id, domain.ErrNotFound)
+	return postgres.TransactionRow{}, fmt.Errorf("transaction %s: %w", id, domain.ErrNotFound)
 }

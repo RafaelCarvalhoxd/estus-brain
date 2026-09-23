@@ -17,10 +17,10 @@ func NewReminderRepo(db *DB) *ReminderRepo { return &ReminderRepo{db: db} }
 
 func (r *ReminderRepo) Create(ctx context.Context, rem domain.Reminder) (domain.Reminder, error) {
 	err := r.db.Pool.QueryRow(ctx, `
-		insert into reminders (id, title, due_at, done)
-		values (gen_random_uuid(), $1, $2, $3)
+		insert into reminders (id, title, due_at, done, repeat_days, repeat_month_day)
+		values (gen_random_uuid(), $1, $2, $3, $4, $5)
 		returning id, created_at`,
-		rem.Title, rem.DueAt, rem.Done,
+		rem.Title, rem.DueAt, rem.Done, toDBDays(rem.RepeatDays), toDBMonthDay(rem.RepeatMonthDay),
 	).Scan(&rem.ID, &rem.CreatedAt)
 	if err != nil {
 		return domain.Reminder{}, fmt.Errorf("create reminder: %w", err)
@@ -28,9 +28,54 @@ func (r *ReminderRepo) Create(ctx context.Context, rem domain.Reminder) (domain.
 	return rem, nil
 }
 
+const reminderColumns = `id, title, due_at, done, repeat_days, repeat_month_day, created_at`
+
+func scanReminder(row pgx.Row) (domain.Reminder, error) {
+	var rem domain.Reminder
+	var days []int16
+	var monthDay *int16
+	if err := row.Scan(&rem.ID, &rem.Title, &rem.DueAt, &rem.Done, &days, &monthDay, &rem.CreatedAt); err != nil {
+		return domain.Reminder{}, err
+	}
+	if monthDay != nil {
+		rem.RepeatMonthDay = int(*monthDay)
+	}
+	for _, d := range days {
+		rem.RepeatDays = append(rem.RepeatDays, time.Weekday(d))
+	}
+	return rem, nil
+}
+
+func toDBMonthDay(day int) *int16 {
+	if day == 0 {
+		return nil
+	}
+	d := int16(day)
+	return &d
+}
+
+func toDBDays(days []time.Weekday) []int16 {
+	out := make([]int16, len(days))
+	for i, d := range days {
+		out[i] = int16(d)
+	}
+	return out
+}
+
+func (r *ReminderRepo) Get(ctx context.Context, id string) (domain.Reminder, error) {
+	rem, err := scanReminder(r.db.Pool.QueryRow(ctx, `select `+reminderColumns+` from reminders where id = $1`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Reminder{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Reminder{}, fmt.Errorf("get reminder %s: %w", id, err)
+	}
+	return rem, nil
+}
+
 func (r *ReminderRepo) List(ctx context.Context) ([]domain.Reminder, error) {
 	rows, err := r.db.Pool.Query(ctx, `
-		select id, title, due_at, done, created_at
+		select `+reminderColumns+`
 		from reminders
 		order by done asc, due_at asc nulls last`)
 	if err != nil {
@@ -40,8 +85,8 @@ func (r *ReminderRepo) List(ctx context.Context) ([]domain.Reminder, error) {
 
 	var out []domain.Reminder
 	for rows.Next() {
-		var rem domain.Reminder
-		if err := rows.Scan(&rem.ID, &rem.Title, &rem.DueAt, &rem.Done, &rem.CreatedAt); err != nil {
+		rem, err := scanReminder(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan reminder: %w", err)
 		}
 		out = append(out, rem)
@@ -50,13 +95,12 @@ func (r *ReminderRepo) List(ctx context.Context) ([]domain.Reminder, error) {
 }
 
 func (r *ReminderRepo) SetDone(ctx context.Context, id string, done bool) (domain.Reminder, error) {
-	var rem domain.Reminder
-	err := r.db.Pool.QueryRow(ctx, `
+	rem, err := scanReminder(r.db.Pool.QueryRow(ctx, `
 		update reminders set done = $2
 		where id = $1
-		returning id, title, due_at, done, created_at`,
+		returning `+reminderColumns,
 		id, done,
-	).Scan(&rem.ID, &rem.Title, &rem.DueAt, &rem.Done, &rem.CreatedAt)
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Reminder{}, domain.ErrNotFound
 	}
@@ -66,14 +110,13 @@ func (r *ReminderRepo) SetDone(ctx context.Context, id string, done bool) (domai
 	return rem, nil
 }
 
-func (r *ReminderRepo) Update(ctx context.Context, id, title string, dueAt *time.Time) (domain.Reminder, error) {
-	var rem domain.Reminder
-	err := r.db.Pool.QueryRow(ctx, `
-		update reminders set title = $2, due_at = $3
+func (r *ReminderRepo) Update(ctx context.Context, id string, rem domain.Reminder) (domain.Reminder, error) {
+	rem, err := scanReminder(r.db.Pool.QueryRow(ctx, `
+		update reminders set title = $2, due_at = $3, repeat_days = $4, repeat_month_day = $5
 		where id = $1
-		returning id, title, due_at, done, created_at`,
-		id, title, dueAt,
-	).Scan(&rem.ID, &rem.Title, &rem.DueAt, &rem.Done, &rem.CreatedAt)
+		returning `+reminderColumns,
+		id, rem.Title, rem.DueAt, toDBDays(rem.RepeatDays), toDBMonthDay(rem.RepeatMonthDay),
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Reminder{}, domain.ErrNotFound
 	}

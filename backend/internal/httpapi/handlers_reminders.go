@@ -64,8 +64,8 @@ func (h *ReminderHandlers) SetDone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toReminderDTO(rem))
 }
 
-// Update handles PUT /api/reminders/{id} — title and due date only; use
-// PATCH to toggle done.
+// Update handles PUT /api/reminders/{id} — title, due date and repeat days;
+// use PATCH to toggle done.
 func (h *ReminderHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	var req createReminderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

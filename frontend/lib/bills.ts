@@ -38,6 +38,9 @@ export interface Bill {
   series_ended: boolean;
   payment_method?: BillPaymentMethod;
   credit_card_id?: string;
+  /** Set when this bill is that card's invoice: its amount is the sum of the
+   * card's purchases, and paying it records no new expense. */
+  invoice_card_id?: string;
   status: BillStatus;
 }
 
@@ -98,8 +101,11 @@ export function listBills(direction?: BillDirection, month?: string): Promise<Bi
   return billsFetch<Bill[]>(`/api/bills${query ? `?${query}` : ""}`, { cache: "no-store" });
 }
 
-export function getBillSummary(): Promise<BillSummary> {
-  return billsFetch<BillSummary>("/api/bills/summary", { cache: "no-store" });
+// getBillSummary is the open bills of yearMonth (default: this month); for
+// this month it also counts ones still unpaid from earlier months.
+export function getBillSummary(yearMonth?: string): Promise<BillSummary> {
+  const query = yearMonth ? `?month=${yearMonth}` : "";
+  return billsFetch<BillSummary>(`/api/bills/summary${query}`, { cache: "no-store" });
 }
 
 // getBillsReceived is the closest thing this app has to "entradas": the
@@ -152,8 +158,9 @@ export function deleteBill(id: string): Promise<void> {
 // endSeries stops a recurring bill's series from growing new occurrences
 // (Materialize skips it), without touching any occurrence already born.
 // resumeSeries undoes it, so the next month opened picks the series back up.
-export function endSeries(id: string): Promise<Bill> {
-  return billsFetch<Bill>(`/api/bills/${id}/end-series`, { method: "POST" });
+export function endSeries(id: string, deleteFollowing = false): Promise<Bill> {
+  const query = deleteFollowing ? "?delete_following=true" : "";
+  return billsFetch<Bill>(`/api/bills/${id}/end-series${query}`, { method: "POST" });
 }
 
 export function resumeSeries(id: string): Promise<Bill> {

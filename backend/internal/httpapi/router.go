@@ -20,6 +20,8 @@ type Modules struct {
 	Habits    *HabitHandlers
 	Assistant *AssistantHandlers
 	Telegram  *TelegramHandlers
+	// CardSpending is the Cartões dashboard.
+	CardSpending *CardSpendingHandlers
 	// MCP serves the Model Context Protocol; it checks its own token.
 	MCP http.Handler
 }
@@ -42,12 +44,16 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 	mux.HandleFunc("DELETE /api/categories/{id}", h.DeleteCategory)
 	mux.HandleFunc("PATCH /api/categories/{id}/budget", h.UpdateCategoryBudget)
 	mux.HandleFunc("GET /api/credit-cards", h.ListCreditCards)
+	if m.CardSpending != nil {
+		mux.HandleFunc("GET /api/credit-cards/spending", m.CardSpending.Overview)
+	}
 	mux.HandleFunc("POST /api/credit-cards", h.CreateCreditCard)
 	mux.HandleFunc("PUT /api/credit-cards/{id}", h.UpdateCreditCard)
 	mux.HandleFunc("DELETE /api/credit-cards/{id}", h.DeleteCreditCard)
 	mux.HandleFunc("GET /api/months/{month}", h.MonthSummary)
 	mux.HandleFunc("POST /api/transactions", h.CreateTransaction)
 	mux.HandleFunc("PATCH /api/transactions/{id}", h.UpdateTransaction)
+	mux.HandleFunc("PUT /api/transactions/{id}", h.ReplaceTransaction)
 	mux.HandleFunc("DELETE /api/transactions/{id}", h.DeleteTransaction)
 
 	if b := m.Bills; b != nil {

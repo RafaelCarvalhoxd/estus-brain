@@ -6,6 +6,10 @@ import { BillsBoard } from "@/components/BillsBoard";
 import { NewBillModal } from "@/components/NewBillModal";
 import "./bills.css";
 
+function formatSigned(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", signDisplay: "auto" });
+}
+
 export default async function BillsPage({
   searchParams,
 }: {
@@ -19,12 +23,13 @@ export default async function BillsPage({
   // (Promise.all, one per direction) would race — both reading "nothing for
   // this month yet" before either write commits, each creating its own
   // occurrence. A single request removes that race entirely.
-  const [bills, summary, categories, cards] = await Promise.all([
+  const [bills, categories, cards] = await Promise.all([
     listBills(undefined, month),
-    getBillSummary(),
     listCategories(),
     listCreditCards(),
   ]);
+  // After listBills: it is what creates this month's recurring bills.
+  const summary = await getBillSummary(month);
   const payable = bills.filter((b) => b.direction === "pagar");
   const receivable = bills.filter((b) => b.direction === "receber");
 
@@ -44,6 +49,15 @@ export default async function BillsPage({
         <div className="tile">
           <p className="tile-label">A receber em aberto</p>
           <p className="tile-figure tab">{summary.receivable_open.formatted}</p>
+        </div>
+        <div className="tile">
+          <p className="tile-label">Saldo das contas</p>
+          <p className="tile-figure tab">{formatSigned(summary.receivable_open.cents - summary.payable_open.cents)}</p>
+          <p className="tile-sub">
+            <span className={`pill ${summary.receivable_open.cents >= summary.payable_open.cents ? "good" : "bad"}`}>
+              a receber − a pagar
+            </span>
+          </p>
         </div>
         <div className="tile">
           <p className="tile-label">Atrasados</p>

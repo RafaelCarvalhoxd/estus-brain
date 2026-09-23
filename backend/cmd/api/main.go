@@ -61,6 +61,7 @@ func run() error {
 
 	billRepo := postgres.NewBillRepo(db)
 	billService := service.NewBillService(billRepo, categoryRepo, cardRepo)
+	dashboardService.WithOpenFixedBills(billService.OpenFixedTotal)
 	billHandlers := httpapi.NewBillHandlers(billService)
 
 	noteRepo := postgres.NewNoteRepo(db)
@@ -69,8 +70,15 @@ func run() error {
 	noteCategoryService := service.NewNoteCategoryService(noteCategoryRepo)
 	noteHandlers := httpapi.NewNoteHandlers(noteService, noteCategoryService)
 
+	location, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		return fmt.Errorf("ASSISTANT_TZ: %w", err)
+	}
+
+	cardSpendingService := service.NewCardSpendingService(postgres.NewCardSpendingRepo(db), cardRepo, location)
+
 	reminderRepo := postgres.NewReminderRepo(db)
-	reminderService := service.NewReminderService(reminderRepo)
+	reminderService := service.NewReminderService(reminderRepo, location)
 	reminderHandlers := httpapi.NewReminderHandlers(reminderService)
 
 	eventRepo := postgres.NewEventRepo(db)
@@ -107,23 +115,18 @@ func run() error {
 	// The vault module needs VAULT_ENCRYPTION_KEY to exist at all — treat its
 	// absence as "module disabled" rather than a fatal boot error, so the
 	// rest of the app still comes up on a fresh checkout before it's
-	// configured. Access control for /senhas isn't app-level: it's the mTLS
-	// edge in front of the whole deployment.
+	// configured.
 	var vaultHandlers *httpapi.VaultHandlers
 	vaultRepo := postgres.NewVaultRepo(db)
 	vaultService, vaultErr := service.NewVaultService(vaultRepo)
 	if vaultErr != nil {
 		slog.Warn("vault module disabled: set VAULT_ENCRYPTION_KEY to enable /senhas", "vault_error", vaultErr)
 	} else {
-		vaultHandlers = httpapi.NewVaultHandlers(vaultService)
+		vaultHandlers = httpapi.NewVaultHandlers(vaultService, cfg.AppPassword)
 	}
 
 	// The assistant: every action as a tool, shared by the chat, MCP and the
 	// AI engines. The vault stays out of it.
-	location, err := time.LoadLocation(cfg.Timezone)
-	if err != nil {
-		return fmt.Errorf("ASSISTANT_TZ: %w", err)
-	}
 	mcpToken, err := assistant.LoadOrCreateToken(cfg.AssistantDir, cfg.MCPToken)
 	if err != nil {
 		return fmt.Errorf("assistant token: %w", err)
@@ -154,6 +157,7 @@ func run() error {
 		TransactionLog: transactionRepo,
 		Dashboard:      dashboardService,
 		Bills:          billService,
+		CardSpending:   cardSpendingService,
 		Notes:          noteService,
 		NoteCategories: noteCategoryService,
 		Reminders:      reminderService,
@@ -199,19 +203,20 @@ func run() error {
 	}()
 
 	router := httpapi.NewRouter(handlers, httpapi.Modules{
-		Bills:     billHandlers,
-		Vault:     vaultHandlers,
-		Notes:     noteHandlers,
-		Reminders: reminderHandlers,
-		Events:    eventHandlers,
-		Documents: documentHandlers,
-		Training:  trainingHandlers,
-		Diet:      dietHandlers,
-		Boards:    boardHandlers,
-		Habits:    habitHandlers,
-		Assistant: assistantHandlers,
-		Telegram:  httpapi.NewTelegramHandlers(telegramBot),
-		MCP:       mcpHandler,
+		Bills:        billHandlers,
+		Vault:        vaultHandlers,
+		Notes:        noteHandlers,
+		Reminders:    reminderHandlers,
+		Events:       eventHandlers,
+		Documents:    documentHandlers,
+		Training:     trainingHandlers,
+		Diet:         dietHandlers,
+		Boards:       boardHandlers,
+		Habits:       habitHandlers,
+		Assistant:    assistantHandlers,
+		Telegram:     httpapi.NewTelegramHandlers(telegramBot),
+		MCP:          mcpHandler,
+		CardSpending: httpapi.NewCardSpendingHandlers(cardSpendingService),
 	})
 
 	srv := &http.Server{

@@ -25,14 +25,17 @@ func (p PaymentMethod) Valid() bool {
 // the dashboard must be able to sum any single month correctly without
 // knowing about the others.
 type Transaction struct {
-	ID                 string
-	Description        string
-	AmountCents        Cents
-	CategoryID         string
-	PaymentMethod      PaymentMethod
-	PurchaseDate       time.Time
-	CreditCardID       *string
-	CompetenceMonth    YearMonth
+	ID              string
+	Description     string
+	AmountCents     Cents
+	CategoryID      string
+	PaymentMethod   PaymentMethod
+	PurchaseDate    time.Time
+	CreditCardID    *string
+	CompetenceMonth YearMonth
+	// InvoiceMonth is the card invoice a credit purchase is billed on; nil
+	// for débito and pix.
+	InvoiceMonth       *YearMonth
 	InstallmentGroupID *string
 	InstallmentNumber  int // 1-based; 0 when not an installment
 	InstallmentTotal   int // 1 when not an installment
@@ -47,7 +50,8 @@ func NewInstallmentPurchase(desc string, total Cents, categoryID string, card Cr
 	if installments < 1 {
 		installments = 1
 	}
-	firstCompetence := CompetenceMonth(purchaseDate, PaymentCredit, &card)
+	firstCompetence := CompetenceMonth(purchaseDate)
+	firstInvoice := InvoiceMonth(purchaseDate, card)
 	parts := total.Split(installments)
 
 	var groupID *string
@@ -67,6 +71,7 @@ func NewInstallmentPurchase(desc string, total Cents, categoryID string, card Cr
 			PurchaseDate:       purchaseDate,
 			CreditCardID:       &card.ID,
 			CompetenceMonth:    firstCompetence.Add(i),
+			InvoiceMonth:       ptrTo(firstInvoice.Add(i)),
 			InstallmentGroupID: groupID,
 			InstallmentNumber:  i + 1,
 			InstallmentTotal:   installments,
@@ -74,3 +79,5 @@ func NewInstallmentPurchase(desc string, total Cents, categoryID string, card Cr
 	}
 	return txns
 }
+
+func ptrTo[T any](v T) *T { return &v }

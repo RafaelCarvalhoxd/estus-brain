@@ -13,14 +13,15 @@ func (r *Registry) addHabits() {
 		return
 	}
 
-	find := func(ctx context.Context, query string) (domain.Habit, error) {
+	// find skips archived habits unless withArchived: only editing reaches them.
+	find := func(ctx context.Context, query string, withArchived bool) (domain.Habit, error) {
 		habits, err := d.Habits.List(ctx)
 		if err != nil {
 			return domain.Habit{}, err
 		}
 		var active []domain.Habit
 		for _, h := range habits {
-			if !h.Archived {
+			if withArchived || !h.Archived {
 				active = append(active, h)
 			}
 		}
@@ -90,7 +91,7 @@ func (r *Registry) addHabits() {
 			Count *int   `json:"count"`
 			Add   *int   `json:"add"`
 		}) (any, error) {
-			h, err := find(ctx, in.Habit)
+			h, err := find(ctx, in.Habit, false)
 			if err != nil {
 				return nil, err
 			}
@@ -154,6 +155,136 @@ func (r *Registry) addHabits() {
 			return map[string]any{"habito": h.Name, "tipo": string(h.Kind), "meta": h.Target}, nil
 		}),
 	})
+	r.add(Tool{
+		Name: "habits_list", Title: "Todos os hábitos", Module: "habitos", ReadOnly: true,
+		Description: "Lista todos os hábitos, inclusive os arquivados, com tipo, meta, dias e cor.",
+		Input:       object(map[string]any{}),
+		run: typed(func(ctx context.Context, _ struct{}) (any, error) {
+			habits, err := d.Habits.List(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]map[string]any, len(habits))
+			for i, h := range habits {
+				out[i] = habitRow(h)
+			}
+			return map[string]any{"habitos": out}, nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "habits_update", Title: "Editar hábito", Module: "habitos",
+		Description: "Altera um hábito (nome ou id): nome, tipo, meta, unidade, dias, cor, ou arquiva/desarquiva. Só muda o que for enviado.",
+		Input: object(map[string]any{
+			"habit":    str("Nome ou id do hábito"),
+			"name":     str("Novo nome"),
+			"kind":     enum("check (feito ou não) ou count (contar até a meta)", "check", "count"),
+			"target":   integer("Nova meta diária, só para count (1-1000)"),
+			"unit":     str("Nova unidade da meta, ex.: copos"),
+			"days":     array("Novos dias da semana, 0=domingo … 6=sábado", integer("Dia da semana")),
+			"color":    str("Nova cor #rrggbb"),
+			"archived": boolean("true arquiva (some de hoje, guarda o histórico); false desarquiva"),
+		}, "habit"),
+		run: typed(func(ctx context.Context, in struct {
+			Habit    string  `json:"habit"`
+			Name     *string `json:"name"`
+			Kind     *string `json:"kind"`
+			Target   *int    `json:"target"`
+			Unit     *string `json:"unit"`
+			Days     []int   `json:"days"`
+			Color    *string `json:"color"`
+			Archived *bool   `json:"archived"`
+		}) (any, error) {
+			h, err := find(ctx, in.Habit, true)
+			if err != nil {
+				return nil, err
+			}
+			next, err := habitEdit(h, in.Name, in.Kind, in.Unit, in.Color, in.Target, in.Days, in.Archived)
+			if err != nil {
+				return nil, err
+			}
+			// Validate first: it normalizes (a check habit's target becomes 1) what we echo back.
+			if err := next.Validate(); err != nil {
+				return nil, err
+			}
+			if err := d.Habits.Update(ctx, h.ID, next); err != nil {
+				return nil, err
+			}
+			return habitRow(next), nil
+		}),
+	})
+
+	r.add(Tool{
+		Name: "habits_delete", Title: "Excluir hábito", Module: "habitos", Destructive: true,
+		Description: "Exclui um hábito e todo o seu histórico. Para só tirar da rotina, prefira arquivar com habits_update.",
+		Input:       object(map[string]any{"habit": str("Nome ou id do hábito")}, "habit"),
+		run: typed(func(ctx context.Context, in struct {
+			Habit string `json:"habit"`
+		}) (any, error) {
+			h, err := find(ctx, in.Habit, true)
+			if err != nil {
+				return nil, err
+			}
+			if err := d.Habits.Delete(ctx, h.ID); err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true, "habito": h.Name}, nil
+		}),
+	})
+}
+
+func habitRow(h domain.Habit) map[string]any {
+	days := domain.MaskToDays(h.Weekdays)
+	names := make([]string, len(days))
+	for i, d := range days {
+		names[i] = weekdayNames[d]
+	}
+	out := map[string]any{"id": h.ID, "habito": h.Name, "tipo": string(h.Kind), "dias": strings.Join(names, ", "), "cor": h.Color}
+	if h.Kind == domain.HabitCount {
+		out["meta"] = h.Target
+		out["unidade"] = h.Unit
+	}
+	if h.Archived {
+		out["arquivado"] = true
+	}
+	return out
+}
+
+// habitEdit merges the sent fields over the current habit.
+func habitEdit(h domain.Habit, name, kind, unit, color *string, target *int, days []int, archived *bool) (domain.Habit, error) {
+	if name != nil {
+		h.Name = *name
+	}
+	if kind != nil {
+		switch normalize(*kind) {
+		case "check":
+			h.Kind = domain.HabitCheck
+		case "count":
+			h.Kind = domain.HabitCount
+		default:
+			return h, invalid("tipo %q inválido, use check ou count", *kind)
+		}
+	}
+	if target != nil {
+		h.Target = *target
+	}
+	if unit != nil {
+		h.Unit = *unit
+	}
+	if color != nil {
+		h.Color = strings.TrimSpace(*color)
+	}
+	if days != nil {
+		mask, err := domain.DaysToMask(days)
+		if err != nil {
+			return h, err
+		}
+		h.Weekdays = mask
+	}
+	if archived != nil {
+		h.Archived = *archived
+	}
+	return h, nil
 }
 
 func itoa(n int) string { return fmtInt(n) }

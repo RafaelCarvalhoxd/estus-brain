@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"context"
 	"errors"
 	"testing"
@@ -173,6 +174,32 @@ func (f *fakeBills) Update(_ context.Context, b domain.Bill) (domain.Bill, error
 // Delete actually removes the row, so TestDeleteEndsTheSeriesWhenDeletingTheLatestActiveOccurrence
 // can materialize afterwards and see whether the (now former) latest
 // occurrence's SeriesEnded stuck on what remains of the series.
+func (f *fakeBills) SyncInvoices(context.Context, domain.YearMonth) error { return nil }
+
+func (f *fakeBills) DeleteUnpaidAfter(_ context.Context, id string) (int, error) {
+	var ref *domain.Bill
+	for i := range f.bills {
+		if f.bills[i].ID == id {
+			ref = &f.bills[i]
+		}
+	}
+	if ref == nil || ref.SeriesID == nil {
+		return 0, nil
+	}
+	series, due := *ref.SeriesID, ref.DueDate
+	kept := f.bills[:0]
+	deleted := 0
+	for _, b := range f.bills {
+		if b.SeriesID != nil && *b.SeriesID == series && b.DueDate.After(due) && b.PaidAt == nil {
+			deleted++
+			continue
+		}
+		kept = append(kept, b)
+	}
+	f.bills = kept
+	return deleted, nil
+}
+
 func (f *fakeBills) Delete(_ context.Context, id string) error {
 	for i, b := range f.bills {
 		if b.ID == id {
@@ -185,7 +212,7 @@ func (f *fakeBills) Delete(_ context.Context, id string) error {
 func (f *fakeBills) ReceivedTotalForMonth(context.Context, domain.YearMonth) (domain.Cents, error) {
 	return 0, nil
 }
-func (f *fakeBills) OpenTotals(context.Context) (domain.Cents, domain.Cents, int, error) {
+func (f *fakeBills) OpenTotals(context.Context, domain.YearMonth, time.Time) (domain.Cents, domain.Cents, int, error) {
 	return 0, 0, 0, nil
 }
 
@@ -399,7 +426,7 @@ func TestEndSeriesRefusesAOneOffBill(t *testing.T) {
 	f := &fakeBills{bills: []domain.Bill{{ID: "b1"}}}
 	s := serviceWith(f)
 
-	if _, err := s.EndSeries(context.Background(), "b1"); !errors.Is(err, domain.ErrValidation) {
+	if _, err := s.EndSeries(context.Background(), "b1", false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("EndSeries numa conta avulsa = %v, want domain.ErrValidation", err)
 	}
 	if _, err := s.ResumeSeries(context.Background(), "b1"); !errors.Is(err, domain.ErrValidation) {
@@ -835,14 +862,86 @@ func TestServicePayBuildsTheExpenseFromThePaymentInput(t *testing.T) {
 	if expense.CategoryID != "cat-1" {
 		t.Errorf("expense.CategoryID = %q, want cat-1", expense.CategoryID)
 	}
-	wantMonth := domain.YearMonth{Year: 2026, Month: 10}
+	// The expense counts in the month it was paid; the card invoice it lands
+	// on is the month that invoice is due.
+	wantMonth := domain.YearMonth{Year: 2026, Month: 9}
 	if expense.CompetenceMonth != wantMonth {
-		t.Errorf("expense.CompetenceMonth = %v, want %v (o mês de vencimento da fatura, não o mês do pagamento)", expense.CompetenceMonth, wantMonth)
+		t.Errorf("expense.CompetenceMonth = %v, want %v (o mês do pagamento)", expense.CompetenceMonth, wantMonth)
+	}
+	if want := (domain.YearMonth{Year: 2026, Month: 10}); expense.InvoiceMonth == nil || *expense.InvoiceMonth != want {
+		t.Errorf("expense.InvoiceMonth = %v, want %v (o mês de vencimento da fatura)", expense.InvoiceMonth, want)
 	}
 	if !expense.IsRecurring {
 		t.Error("expense.IsRecurring deveria ser true: a conta pertence a uma série")
 	}
 	if f.paidExpense == nil || f.paidExpense.CompetenceMonth != wantMonth {
 		t.Error("o repositório não recebeu o mesmo lançamento devolvido pelo serviço")
+	}
+}
+
+func TestEndSeriesCanDeleteTheFollowingUnpaidOccurrences(t *testing.T) {
+	sep := seriesBill("sep", 2026, time.September, 10, 18000)
+	oct := seriesBill("oct", 2026, time.October, 10, 18000)
+	nov := seriesBill("nov", 2026, time.November, 10, 18000)
+	dec := seriesBill("dec", 2026, time.December, 10, 18000)
+	paidAt := time.Date(2026, time.September, 20, 0, 0, 0, 0, time.UTC)
+	dec.PaidAt = &paidAt
+	f := &fakeBills{bills: []domain.Bill{sep, oct, nov, dec}}
+	s := serviceWith(f)
+	ctx := context.Background()
+
+	if _, err := s.EndSeries(ctx, "oct", true); err != nil {
+		t.Fatalf("end series: %v", err)
+	}
+	var ids []string
+	for _, b := range f.bills {
+		ids = append(ids, b.ID)
+		if !b.SeriesEnded {
+			t.Errorf("%s: series not ended", b.ID)
+		}
+	}
+	// November goes; December is paid, so it stays.
+	if want := "sep,oct,dec"; strings.Join(ids, ",") != want {
+		t.Fatalf("bills = %v, want %s", ids, want)
+	}
+}
+
+func TestEndSeriesKeepsTheFollowingOccurrencesByDefault(t *testing.T) {
+	f := &fakeBills{bills: []domain.Bill{
+		seriesBill("sep", 2026, time.September, 10, 18000),
+		seriesBill("oct", 2026, time.October, 10, 18000),
+	}}
+	if _, err := serviceWith(f).EndSeries(context.Background(), "sep", false); err != nil {
+		t.Fatalf("end series: %v", err)
+	}
+	if len(f.bills) != 2 {
+		t.Fatalf("got %d bills, want 2", len(f.bills))
+	}
+}
+
+func TestCardInvoiceIsMarkedPaidWithoutAnExpense(t *testing.T) {
+	card := "card-1"
+	invoice := domain.Bill{
+		ID: "inv", Description: "Fatura Nubank", AmountCents: 50000,
+		DueDate:   time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC),
+		Direction: domain.BillPayable, InvoiceCardID: &card,
+	}
+	f := &fakeBills{bills: []domain.Bill{invoice}}
+	s := serviceWith(f)
+	ctx := context.Background()
+	paidAt := time.Date(2026, time.October, 9, 0, 0, 0, 0, time.UTC)
+
+	if _, _, err := s.Pay(ctx, "inv", PaymentInput{PaidAt: paidAt, AmountCents: 50000, CategoryID: "cat-1", PaymentMethod: domain.PaymentPix}); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("Pay on an invoice: err = %v, want ErrValidation", err)
+	}
+	paid, err := s.MarkPaid(ctx, "inv", paidAt)
+	if err != nil {
+		t.Fatalf("MarkPaid: %v", err)
+	}
+	if paid.PaidAt == nil || paid.TransactionID != nil {
+		t.Fatalf("paid = %+v, want paid with no transaction", paid)
+	}
+	if err := s.Delete(ctx, "inv"); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("Delete on an invoice: err = %v, want ErrValidation", err)
 	}
 }

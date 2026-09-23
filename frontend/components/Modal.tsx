@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { IconClose } from "./icons";
 
 export function Modal({
@@ -24,9 +25,12 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  // Modals only open after a click, so there is no server render to match.
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  // Portaled to <body>: a panel's backdrop-filter makes it the containing
+  // block for position: fixed, which would trap the overlay inside it.
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className={`modal-shell${wide ? " is-wide" : ""}`} onClick={(e) => e.stopPropagation()}>
         <button className="icon-btn modal-close" type="button" aria-label="Fechar" onClick={onClose}>
@@ -34,6 +38,7 @@ export function Modal({
         </button>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

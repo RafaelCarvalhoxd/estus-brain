@@ -33,26 +33,15 @@ func (m YearMonth) FirstDay() time.Time {
 	return time.Date(m.Year, time.Month(m.Month), 1, 0, 0, 0, 0, time.UTC)
 }
 
-// CompetenceMonth is the single rule the whole app is designed around: a
-// purchase counts against the month the money actually leaves the account.
-// Debit and Pix leave it the day they happen. A credit purchase leaves it
-// when the invoice that charges it is due, which is what card is for: the
-// purchase joins the invoice closing on or after it, and that invoice's due
-// date names the month.
-//
-// This deliberately replaced an earlier rule that sent every credit purchase
-// to the month after the purchase, ignoring the closing day. That rule was
-// simpler but wrong: on a card closing on the 25th and due on the 15th, a
-// purchase on the 28th really is charged almost two months later, and hiding
-// that made the budget lie. Do not "simplify" it back.
-//
-// card is nil for debit and Pix. A credit purchase with a nil card is a
-// programming error — the service refuses credit without a card long before
-// this point — so it falls back to the purchase month rather than inventing
-// a date.
-func CompetenceMonth(purchaseDate time.Time, method PaymentMethod, card *CreditCard) YearMonth {
-	if method != PaymentCredit || card == nil {
-		return YearMonthOf(purchaseDate)
-	}
+// CompetenceMonth is the month an expense counts in: the month it was made,
+// whatever the payment method. A card purchase's invoice month is separate
+// (InvoiceMonth).
+func CompetenceMonth(purchaseDate time.Time) YearMonth {
+	return YearMonthOf(purchaseDate)
+}
+
+// InvoiceMonth is the month of the invoice a card purchase is billed on:
+// the invoice that closes on or after the purchase, named by its due date.
+func InvoiceMonth(purchaseDate time.Time, card CreditCard) YearMonth {
 	return YearMonthOf(card.DueDateFor(card.ClosingDateFor(purchaseDate)))
 }

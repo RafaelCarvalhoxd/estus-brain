@@ -26,6 +26,7 @@ function formatTimeRange(startsAt: string, endsAt: string): string {
   const end = new Date(endsAt);
   const startLabel = start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const endLabel = end.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (startLabel === "00:00" && endLabel === "23:59") return "Dia todo";
   return `${startLabel} – ${endLabel}`;
 }
 
@@ -177,12 +178,12 @@ export function NewEventForm({
         </div>
         <div className="row2">
           <div className="field">
-            <label htmlFor="e-start">Início</label>
-            <input id="e-start" name="start_time" type="time" required />
+            <label htmlFor="e-start">Início (opcional)</label>
+            <input id="e-start" name="start_time" type="time" />
           </div>
           <div className="field">
-            <label htmlFor="e-end">Fim</label>
-            <input id="e-end" name="end_time" type="time" required />
+            <label htmlFor="e-end">Fim (opcional)</label>
+            <input id="e-end" name="end_time" type="time" />
           </div>
         </div>
         <div className="field">

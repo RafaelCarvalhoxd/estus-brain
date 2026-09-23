@@ -41,11 +41,11 @@ func (r *BillRepo) Get(ctx context.Context, id string) (domain.Bill, error) {
 	err := r.db.Pool.QueryRow(ctx, `
 		select id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month
 		from bills where id = $1`, id,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID, &b.InvoiceCardID, &b.InvoiceMonth)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -59,7 +59,7 @@ func (r *BillRepo) List(ctx context.Context, direction *domain.BillDirection, on
 	query := `
 		select id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month
 		from bills
 		where ($1::text is null or direction = $1)
 		and (not $2 or paid_at is null)
@@ -94,7 +94,7 @@ func (r *BillRepo) ListByMonth(ctx context.Context, ym domain.YearMonth, directi
 	rows, err := r.db.Pool.Query(ctx, `
 		select id, description, amount_cents, due_date, direction, category_id,
 			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month
 		from bills
 		where due_date >= $1 and due_date < $2
 			and ($3::text is null or direction = $3)
@@ -114,7 +114,7 @@ func (r *BillRepo) LatestPerSeries(ctx context.Context) ([]domain.Bill, error) {
 		select distinct on (series_id)
 			id, description, amount_cents, due_date, direction, category_id,
 			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month
 		from bills
 		where series_id is not null
 		order by series_id, due_date desc`)
@@ -133,7 +133,7 @@ func scanBills(rows pgx.Rows) ([]domain.Bill, error) {
 		var b domain.Bill
 		if err := rows.Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 			&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-			&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID); err != nil {
+			&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID, &b.InvoiceCardID, &b.InvoiceMonth); err != nil {
 			return nil, fmt.Errorf("scan bill: %w", err)
 		}
 		out = append(out, b)
@@ -148,11 +148,11 @@ func (r *BillRepo) MarkPaid(ctx context.Context, id string, paidAt time.Time) (d
 		where id = $1
 		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id`,
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month`,
 		id, paidAt,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID, &b.InvoiceCardID, &b.InvoiceMonth)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -199,11 +199,11 @@ func (r *BillRepo) Pay(ctx context.Context, id string, paidAt time.Time, expense
 		where id = $1 and paid_at is null
 		returning id, description, amount_cents, due_date, direction, category_id,
 			paid_at, series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id`,
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month`,
 		id, paidAt, int64(expense.AmountCents), expense.ID,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID,
 		&b.PaidAt, &b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID, &b.InvoiceCardID, &b.InvoiceMonth)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -271,13 +271,13 @@ func (r *BillRepo) Update(ctx context.Context, b domain.Bill) (domain.Bill, erro
 		where id = $1
 		returning id, description, amount_cents, due_date, direction, category_id, paid_at,
 			series_id, amount_estimated, payment_method, transaction_id, created_at,
-			series_ended, amount_varies, credit_card_id`,
+			series_ended, amount_varies, credit_card_id, invoice_card_id, invoice_month`,
 		b.ID, b.Description, b.AmountCents, b.DueDate, b.Direction, b.CategoryID,
 		b.SeriesID, b.AmountEstimated, b.PaymentMethod,
 		b.AmountVaries, b.SeriesEnded, b.CreditCardID,
 	).Scan(&b.ID, &b.Description, &b.AmountCents, &b.DueDate, &b.Direction, &b.CategoryID, &b.PaidAt,
 		&b.SeriesID, &b.AmountEstimated, &b.PaymentMethod, &b.TransactionID, &b.CreatedAt,
-		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID)
+		&b.SeriesEnded, &b.AmountVaries, &b.CreditCardID, &b.InvoiceCardID, &b.InvoiceMonth)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
 	}
@@ -322,6 +322,72 @@ func (r *BillRepo) SetSeriesEnded(ctx context.Context, id string, ended bool) (d
 	return r.Get(ctx, id)
 }
 
+// DeleteUnpaidAfter removes the occurrences of id's series that fall due
+// after it and are still unpaid. Paid ones stay: they carry the expense
+// transaction that paid them.
+func (r *BillRepo) DeleteUnpaidAfter(ctx context.Context, id string) (int, error) {
+	tag, err := r.db.Pool.Exec(ctx, `
+		delete from bills b
+		using bills ref
+		where ref.id = $1
+			and b.series_id = ref.series_id
+			and b.due_date > ref.due_date
+			and b.paid_at is null`,
+		id,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete bills after %s: %w", id, err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+// SyncInvoices makes each card's invoice bill, for every due month from
+// `from` on, equal the sum of that card's credit purchases competing for
+// the month: it creates missing invoices, updates unpaid ones and deletes
+// unpaid ones left with no purchase. Paid invoices are never touched, and
+// months before `from` are left as they are.
+func (r *BillRepo) SyncInvoices(ctx context.Context, from domain.YearMonth) error {
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin sync invoices: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		insert into bills (description, amount_cents, due_date, direction, invoice_card_id, invoice_month)
+		select 'Fatura ' || c.name, t.cents,
+			make_date(extract(year from t.month)::int, extract(month from t.month)::int, c.due_day),
+			'pagar', c.id, t.month
+		from (
+			select credit_card_id as card_id, invoice_month as month, sum(amount_cents) as cents
+			from transactions
+			where credit_card_id is not null and payment_method = 'credito' and invoice_month >= $1
+			group by credit_card_id, invoice_month
+		) t
+		join credit_cards c on c.id = t.card_id
+		on conflict (invoice_card_id, invoice_month) where invoice_card_id is not null
+		do update set amount_cents = excluded.amount_cents, description = excluded.description, due_date = excluded.due_date
+		where bills.paid_at is null`,
+		from.FirstDay()); err != nil {
+		return fmt.Errorf("upsert invoices: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		delete from bills b
+		where b.invoice_card_id is not null and b.paid_at is null and b.invoice_month >= $1
+			and not exists (
+				select 1 from transactions t
+				where t.credit_card_id = b.invoice_card_id and t.payment_method = 'credito'
+					and t.invoice_month = b.invoice_month
+			)`,
+		from.FirstDay()); err != nil {
+		return fmt.Errorf("delete empty invoices: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit sync invoices: %w", err)
+	}
+	return nil
+}
+
 func (r *BillRepo) Delete(ctx context.Context, id string) error {
 	tag, err := r.db.Pool.Exec(ctx, `delete from bills where id = $1`, id)
 	if err != nil {
@@ -333,15 +399,18 @@ func (r *BillRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// ReceivedTotalForMonth sums receivable bills actually received (paid_at
-// set) within the given month — the closest thing this app has to
-// "entradas", since there's no separate income ledger.
+// ReceivedTotalForMonth is the month's "entradas": receivable bills
+// received (paid_at set) within it, plus débito/pix transactions in a
+// receita category.
 func (r *BillRepo) ReceivedTotalForMonth(ctx context.Context, ym domain.YearMonth) (domain.Cents, error) {
 	var total int64
 	err := r.db.Pool.QueryRow(ctx, `
-		select coalesce(sum(amount_cents), 0) from bills
-		where direction = 'receber'
-		and paid_at >= $1 and paid_at < $2`,
+		select
+			(select coalesce(sum(amount_cents), 0) from bills
+				where direction = 'receber' and paid_at >= $1 and paid_at < $2)
+			+ (select coalesce(sum(amount_cents), 0) from transactions
+				where competence_month = $1 and payment_method <> 'credito'
+					and category_id in (select id from categories where kind = 'receita'))`,
 		ym.FirstDay(), ym.Add(1).FirstDay(),
 	).Scan(&total)
 	if err != nil {
@@ -359,42 +428,30 @@ func (r *BillRepo) ReceivedTotalForMonth(ctx context.Context, ym domain.YearMont
 // still counted (the bound is an upper limit on due_date, not a floor): it
 // really is open. Only bills due beyond the current month — which only exist
 // because the owner looked ahead — are excluded.
-func (r *BillRepo) OpenTotals(ctx context.Context) (payableCents, receivableCents domain.Cents, overdueCount int, err error) {
-	endOfCurrentMonth := domain.YearMonthOf(time.Now()).Add(1).FirstDay()
-	rows, err := r.db.Pool.Query(ctx, `
-		select direction, coalesce(sum(amount_cents), 0)
-		from bills
-		where paid_at is null and due_date < $1
-		group by direction`, endOfCurrentMonth)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("open totals: %w", err)
+//
+// It covers the unpaid bills due in ym. When ym is today's month it also
+// keeps the ones still unpaid from earlier months: they are open now.
+// Overdue counts those among them already past their due date.
+func (r *BillRepo) OpenTotals(ctx context.Context, ym domain.YearMonth, today time.Time) (payableCents, receivableCents domain.Cents, overdueCount int, err error) {
+	from := ym.FirstDay()
+	if !domain.YearMonthOf(today).Before(ym) && !ym.Before(domain.YearMonthOf(today)) {
+		from = time.Time{}
 	}
-	for rows.Next() {
-		var direction string
-		var total int64
-		if err := rows.Scan(&direction, &total); err != nil {
-			rows.Close()
-			return 0, 0, 0, fmt.Errorf("scan open totals: %w", err)
-		}
-		switch domain.BillDirection(direction) {
-		case domain.BillPayable:
-			payableCents = domain.Cents(total)
-		case domain.BillReceivable:
-			receivableCents = domain.Cents(total)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return 0, 0, 0, fmt.Errorf("open totals: %w", err)
-	}
-	rows.Close()
+	to := ym.Add(1).FirstDay()
+	todayDate := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
 
+	var payable, receivable int64
 	err = r.db.Pool.QueryRow(ctx, `
-		select count(*) from bills
-		where paid_at is null and due_date < current_date`,
-	).Scan(&overdueCount)
+		select
+			coalesce(sum(amount_cents) filter (where direction = 'pagar'), 0),
+			coalesce(sum(amount_cents) filter (where direction = 'receber'), 0),
+			count(*) filter (where due_date < $3)
+		from bills
+		where paid_at is null and due_date >= $1 and due_date < $2`,
+		from, to, todayDate,
+	).Scan(&payable, &receivable, &overdueCount)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("overdue count: %w", err)
+		return 0, 0, 0, fmt.Errorf("open totals for %v: %w", ym, err)
 	}
-	return payableCents, receivableCents, overdueCount, nil
+	return domain.Cents(payable), domain.Cents(receivable), overdueCount, nil
 }

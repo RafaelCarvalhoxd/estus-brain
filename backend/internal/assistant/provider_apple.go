@@ -24,8 +24,8 @@ func (p *appleProvider) Status(ctx context.Context) ProviderStatus {
 		// Image Playground itself was tried (making this process a real
 		// foreground app) and pulled back out — unreliable even working, and
 		// it took over the Mac's Dock the whole time. SupportsImageGen is
-		// still true: generate_image reaches OpenAI or Draw Things directly,
-		// the same way it does from every other engine.
+		// still true: generate_image reaches OpenAI directly, the same way
+		// it does from every other engine.
 		Capabilities: Capabilities{SupportsVoice: true, SupportsImageGen: true},
 	}
 	h, err := p.chat.bridge.ensure(ctx)

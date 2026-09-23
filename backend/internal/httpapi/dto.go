@@ -17,12 +17,13 @@ type categoryDTO struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
 	Nature        string    `json:"nature"`
+	Kind          string    `json:"kind"`
 	Color         string    `json:"color"`
 	MonthlyBudget *moneyDTO `json:"monthly_budget,omitempty"`
 }
 
 func toCategoryDTO(c domain.Category) categoryDTO {
-	dto := categoryDTO{ID: c.ID, Name: c.Name, Nature: string(c.Nature), Color: c.Color}
+	dto := categoryDTO{ID: c.ID, Name: c.Name, Nature: string(c.Nature), Kind: string(c.Kind), Color: c.Color}
 	if c.MonthlyBudgetCents != nil {
 		m := toMoneyDTO(*c.MonthlyBudgetCents)
 		dto.MonthlyBudget = &m
@@ -37,11 +38,17 @@ type updateCategoryBudgetRequest struct {
 type categoryRequest struct {
 	Name   string `json:"name"`
 	Nature string `json:"nature"`
-	Color  string `json:"color"`
+	// Kind is despesa or receita; empty means despesa.
+	Kind  string `json:"kind"`
+	Color string `json:"color"`
 }
 
 func (r categoryRequest) toDomain() domain.Category {
-	return domain.Category{Name: r.Name, Nature: domain.CategoryNature(r.Nature), Color: r.Color}
+	kind := domain.CategoryKind(r.Kind)
+	if kind == "" {
+		kind = domain.KindExpense
+	}
+	return domain.Category{Name: r.Name, Nature: domain.CategoryNature(r.Nature), Kind: kind, Color: r.Color}
 }
 
 type creditCardRequest struct {
@@ -75,15 +82,21 @@ func toMoneyDTO(c domain.Cents) moneyDTO {
 }
 
 type transactionDTO struct {
-	ID                string   `json:"id"`
-	Description       string   `json:"description"`
-	Amount            moneyDTO `json:"amount"`
-	CategoryID        string   `json:"category_id"`
-	CategoryName      string   `json:"category_name"`
-	CategoryColor     string   `json:"category_color"`
-	PaymentMethod     string   `json:"payment_method"`
-	PurchaseDate      string   `json:"purchase_date"`
-	CompetenceMonth   string   `json:"competence_month"`
+	ID              string   `json:"id"`
+	Description     string   `json:"description"`
+	Amount          moneyDTO `json:"amount"`
+	CategoryID      string   `json:"category_id"`
+	CategoryName    string   `json:"category_name"`
+	CategoryColor   string   `json:"category_color"`
+	CategoryKind    string   `json:"category_kind"`
+	PaymentMethod   string   `json:"payment_method"`
+	PurchaseDate    string   `json:"purchase_date"`
+	CompetenceMonth string   `json:"competence_month"`
+	// InvoiceMonth is the card invoice a credit purchase is billed on.
+	InvoiceMonth *string `json:"invoice_month,omitempty"`
+	CreditCardID *string `json:"credit_card_id,omitempty"`
+	// PurchaseTotal is the whole purchase, all installments together.
+	PurchaseTotal     moneyDTO `json:"purchase_total"`
 	IsRecurring       bool     `json:"is_recurring"`
 	InstallmentNumber int      `json:"installment_number,omitempty"`
 	InstallmentTotal  int      `json:"installment_total,omitempty"`
@@ -97,12 +110,16 @@ func toTransactionDTO(t postgres.TransactionRow) transactionDTO {
 		CategoryID:        t.CategoryID,
 		CategoryName:      t.CategoryName,
 		CategoryColor:     t.CategoryColor,
+		CategoryKind:      string(t.CategoryKind),
 		PaymentMethod:     string(t.PaymentMethod),
 		PurchaseDate:      t.PurchaseDate.Format("2006-01-02"),
 		CompetenceMonth:   yearMonthISO(t.CompetenceMonth),
 		IsRecurring:       t.IsRecurring,
 		InstallmentNumber: t.InstallmentNumber,
 		InstallmentTotal:  t.InstallmentTotal,
+		InvoiceMonth:      invoiceMonthISO(t.InvoiceMonth),
+		CreditCardID:      t.CreditCardID,
+		PurchaseTotal:     toMoneyDTO(t.PurchaseTotalCents),
 	}
 }
 
@@ -133,6 +150,8 @@ type monthSummaryDTO struct {
 	PreviousMonth    moneyDTO                `json:"previous_month"`
 	Recurring        moneyDTO                `json:"recurring"`
 	Variable         moneyDTO                `json:"variable"`
+	PaidOut          moneyDTO                `json:"paid_out"`
+	OpenFixed        moneyDTO                `json:"open_fixed"`
 	OpenInstallments moneyDTO                `json:"open_installments"`
 	OpenInvoice      moneyDTO                `json:"open_invoice"`
 	Categories       []categorySliceDTO      `json:"categories"`
@@ -172,6 +191,8 @@ func toMonthSummaryDTO(s service.MonthSummary) monthSummaryDTO {
 		PreviousMonth:    toMoneyDTO(s.PreviousMonthCents),
 		Recurring:        toMoneyDTO(s.RecurringCents),
 		Variable:         toMoneyDTO(s.VariableCents),
+		PaidOut:          toMoneyDTO(s.PaidOutCents),
+		OpenFixed:        toMoneyDTO(s.OpenFixedCents),
 		OpenInstallments: toMoneyDTO(s.OpenInstallmentCents),
 		OpenInvoice:      toMoneyDTO(s.OpenInvoiceCents),
 		Categories:       categories,
@@ -215,4 +236,12 @@ func (r createTransactionRequest) toInput() (service.NewTransactionInput, error)
 		Installments:  installments,
 		IsRecurring:   r.IsRecurring,
 	}, nil
+}
+
+func invoiceMonthISO(m *domain.YearMonth) *string {
+	if m == nil {
+		return nil
+	}
+	s := yearMonthISO(*m)
+	return &s
 }

@@ -22,9 +22,11 @@ type billStore interface {
 	Unpay(ctx context.Context, id string) (domain.Bill, error)
 	Update(ctx context.Context, b domain.Bill) (domain.Bill, error)
 	SetSeriesEnded(ctx context.Context, id string, ended bool) (domain.Bill, error)
+	DeleteUnpaidAfter(ctx context.Context, id string) (int, error)
+	SyncInvoices(ctx context.Context, from domain.YearMonth) error
 	Delete(ctx context.Context, id string) error
 	ReceivedTotalForMonth(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
-	OpenTotals(ctx context.Context) (domain.Cents, domain.Cents, int, error)
+	OpenTotals(ctx context.Context, ym domain.YearMonth, today time.Time) (domain.Cents, domain.Cents, int, error)
 }
 
 // categoryStore is the part of *postgres.CategoryRepo the service uses, so
@@ -43,10 +45,24 @@ type BillService struct {
 	bills      billStore
 	categories categoryStore
 	cards      cardStore
+	now        func() time.Time
 }
 
 func NewBillService(repo *postgres.BillRepo, categories *postgres.CategoryRepo, cards *postgres.CreditCardRepo) *BillService {
-	return &BillService{bills: repo, categories: categories, cards: cards}
+	return &BillService{bills: repo, categories: categories, cards: cards, now: time.Now}
+}
+
+// errInvoiceIsDerived answers edits to a card invoice: its amount comes from
+// the card's purchases, so the purchases are what change it.
+var errInvoiceIsDerived = fmt.Errorf("%w: a fatura do cartão é a soma dos lançamentos no cartão; altere os lançamentos", domain.ErrValidation)
+
+// syncInvoices brings the card invoices up to date before any read, from
+// the current month on.
+func (s *BillService) syncInvoices(ctx context.Context) error {
+	if err := s.bills.SyncInvoices(ctx, domain.YearMonthOf(s.now())); err != nil {
+		return fmt.Errorf("sync card invoices: %w", err)
+	}
+	return nil
 }
 
 type NewBillInput struct {
@@ -138,7 +154,14 @@ func (s *BillService) Create(ctx context.Context, in NewBillInput) (domain.Bill,
 	return created, nil
 }
 
+func (s *BillService) Get(ctx context.Context, id string) (domain.Bill, error) {
+	return s.bills.Get(ctx, id)
+}
+
 func (s *BillService) List(ctx context.Context, direction *domain.BillDirection, onlyOpen bool) ([]domain.Bill, error) {
+	if err := s.syncInvoices(ctx); err != nil {
+		return nil, err
+	}
 	bills, err := s.bills.List(ctx, direction, onlyOpen)
 	if err != nil {
 		return nil, fmt.Errorf("list bills: %w", err)
@@ -155,6 +178,9 @@ func (s *BillService) List(ctx context.Context, direction *domain.BillDirection,
 func (s *BillService) ListByMonth(ctx context.Context, ym domain.YearMonth, direction *domain.BillDirection) ([]domain.Bill, error) {
 	if _, err := s.Materialize(ctx, ym); err != nil {
 		return nil, fmt.Errorf("materialize %v before listing: %w", ym, err)
+	}
+	if err := s.syncInvoices(ctx); err != nil {
+		return nil, err
 	}
 	bills, err := s.bills.ListByMonth(ctx, ym, direction)
 	if err != nil {
@@ -175,7 +201,8 @@ func (s *BillService) MarkPaid(ctx context.Context, id string, paidAt time.Time)
 	if err != nil {
 		return domain.Bill{}, err
 	}
-	if bill.Direction == domain.BillPayable {
+	// An invoice is the exception: its purchases are already the expenses.
+	if bill.Direction == domain.BillPayable && !bill.IsInvoice() {
 		return domain.Bill{}, fmt.Errorf("%w: uma conta a pagar é quitada confirmando o pagamento, não marcada como paga diretamente — assim a despesa é registrada", domain.ErrValidation)
 	}
 	paid, err := s.bills.MarkPaid(ctx, id, paidAt)
@@ -208,6 +235,9 @@ func (s *BillService) Pay(ctx context.Context, id string, in PaymentInput) (doma
 	if bill.Direction != domain.BillPayable {
 		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("%w: only a payable bill records an expense", domain.ErrValidation)
 	}
+	if bill.IsInvoice() {
+		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("%w: a fatura do cartão é marcada como paga sem novo lançamento, porque as compras já são as despesas", domain.ErrValidation)
+	}
 	if in.AmountCents <= 0 {
 		return domain.Bill{}, domain.Transaction{}, fmt.Errorf("%w: amount must be positive", domain.ErrValidation)
 	}
@@ -238,9 +268,13 @@ func (s *BillService) Pay(ctx context.Context, id string, in PaymentInput) (doma
 		PaymentMethod:    in.PaymentMethod,
 		PurchaseDate:     in.PaidAt,
 		CreditCardID:     in.CreditCardID,
-		CompetenceMonth:  domain.CompetenceMonth(in.PaidAt, in.PaymentMethod, card),
+		CompetenceMonth:  domain.CompetenceMonth(in.PaidAt),
 		InstallmentTotal: 1,
 		IsRecurring:      bill.Recurring(),
+	}
+	if card != nil {
+		invoice := domain.InvoiceMonth(in.PaidAt, *card)
+		expense.InvoiceMonth = &invoice
 	}
 	paid, err := s.bills.Pay(ctx, id, in.PaidAt, expense)
 	if err != nil {
@@ -268,6 +302,9 @@ func (s *BillService) Update(ctx context.Context, id string, in NewBillInput) (d
 	current, err := s.bills.Get(ctx, id)
 	if err != nil {
 		return domain.Bill{}, err
+	}
+	if current.IsInvoice() {
+		return domain.Bill{}, errInvoiceIsDerived
 	}
 	bill := domain.Bill{
 		ID:              id,
@@ -324,6 +361,9 @@ func (s *BillService) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	if bill.IsInvoice() {
+		return errInvoiceIsDerived
+	}
 	if bill.Recurring() && !bill.SeriesEnded {
 		latest, err := s.bills.LatestPerSeries(ctx)
 		if err != nil {
@@ -346,7 +386,10 @@ func (s *BillService) Delete(ctx context.Context, id string) error {
 // history — every occurrence already materialized is untouched, and
 // deleting one is a plain delete again, not a signal Materialize would
 // undo the next time the month is opened.
-func (s *BillService) EndSeries(ctx context.Context, id string) (domain.Bill, error) {
+//
+// With deleteFollowing, the unpaid occurrences after id are also deleted,
+// so id becomes the series' last one.
+func (s *BillService) EndSeries(ctx context.Context, id string, deleteFollowing bool) (domain.Bill, error) {
 	bill, err := s.bills.Get(ctx, id)
 	if err != nil {
 		return domain.Bill{}, err
@@ -354,7 +397,14 @@ func (s *BillService) EndSeries(ctx context.Context, id string) (domain.Bill, er
 	if !bill.Recurring() {
 		return domain.Bill{}, fmt.Errorf("%w: only a recurring bill's series can be ended", domain.ErrValidation)
 	}
-	return s.bills.SetSeriesEnded(ctx, id, true)
+	ended, err := s.bills.SetSeriesEnded(ctx, id, true)
+	if err != nil || !deleteFollowing {
+		return ended, err
+	}
+	if _, err := s.bills.DeleteUnpaidAfter(ctx, id); err != nil {
+		return domain.Bill{}, err
+	}
+	return ended, nil
 }
 
 // ResumeSeries undoes EndSeries: the next materialization picks the series
@@ -370,8 +420,30 @@ func (s *BillService) ResumeSeries(ctx context.Context, id string) (domain.Bill,
 	return s.bills.SetSeriesEnded(ctx, id, false)
 }
 
-func (s *BillService) Summary(ctx context.Context) (BillSummary, error) {
-	payable, receivable, overdue, err := s.bills.OpenTotals(ctx)
+// OpenFixedTotal sums the recurring payable bills due in ym that are still
+// unpaid. Paying one records an expense marked recurring, so paid ones are
+// already in the month's fixed spending and are left out here.
+func (s *BillService) OpenFixedTotal(ctx context.Context, ym domain.YearMonth) (domain.Cents, error) {
+	payable := domain.BillPayable
+	bills, err := s.ListByMonth(ctx, ym, &payable)
+	if err != nil {
+		return 0, err
+	}
+	var total domain.Cents
+	for _, b := range bills {
+		if b.Recurring() && b.PaidAt == nil {
+			total += b.AmountCents
+		}
+	}
+	return total, nil
+}
+
+// Summary is the open bills of ym; see BillRepo.OpenTotals.
+func (s *BillService) Summary(ctx context.Context, ym domain.YearMonth) (BillSummary, error) {
+	if err := s.syncInvoices(ctx); err != nil {
+		return BillSummary{}, err
+	}
+	payable, receivable, overdue, err := s.bills.OpenTotals(ctx, ym, s.now())
 	if err != nil {
 		return BillSummary{}, fmt.Errorf("bill summary: %w", err)
 	}

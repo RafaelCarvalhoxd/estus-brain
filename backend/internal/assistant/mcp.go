@@ -15,7 +15,21 @@ import (
 
 const serverInstructions = `Ferramentas do Estus Brain, o app pessoal do dono: finanças (gastos, categorias, cartões), contas a pagar e receber, notas, lembretes, agenda, hábitos, treino, dieta, documentos e quadros.
 Valores em reais; datas AAAA-MM-DD e horários no fuso de São Paulo. Para listar ou editar algo por id, liste antes.
-Antes de qualquer ferramenta que exclui (confirm), pergunte à pessoa e só chame com confirm=true depois do sim.`
+Antes de qualquer ferramenta que exclui (confirm), pergunte à pessoa e só chame com confirm=true depois do sim.
+` + appRules
+
+// appRules is how the app works, for any model using the tools — the chat's
+// system prompt and MCP clients read the same text, so they agree with the
+// screens.
+const appRules = `Como o app funciona:
+- Lançamento aparece no mês da compra. No crédito, também entra na fatura do cartão (pelo dia de fechamento e de vencimento); cada cartão tem uma conta a pagar "Fatura <cartão>" por mês, que é a soma das compras e se atualiza sozinha. Pagar a fatura (bills_pay) não cria despesa nova.
+- Parcelado: installments com o total em amount, ou o valor da parcela com per_installment=true. Cada parcela aparece no seu mês. Não marque recurring junto. Excluir ou editar uma parcela vale para a compra inteira.
+- Categorias têm tipo: despesa conta como gasto; receita conta como entrada.
+- Saídas do mês = dinheiro que saiu de fato: débito, pix e faturas pagas. Compra no crédito só sai quando a fatura é paga. Entradas = contas recebidas + lançamentos em receita. Saldo = entradas − saídas.
+- Fixos = lançamentos recorrentes, parcelas (até a última) e contas a pagar recorrentes; o resto é variável.
+- Contas: "já paguei X" é bills_pay (registra a despesa); conta a receber é bills_mark_received. Conta recorrente se repete todo mês até bills_end_series (delete_following exclui as seguintes não pagas).
+- Lembretes podem repetir em dias da semana ou num dia do mês; concluir um repetido o move para a próxima vez.
+- Agenda: horário é opcional; sem horário o evento ocupa o dia todo.`
 
 // MCPServer exposes every tool over the Model Context Protocol, for AI apps
 // the owner connects (Claude Desktop, Claude Code, Codex…) and for the chat's

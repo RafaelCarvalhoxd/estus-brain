@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { createBillAction, type BillFormState } from "@/app/financeiro/contas/actions";
 import type { Category, CreditCard } from "@/lib/types";
 import type { BillDirection, BillPaymentMethod } from "@/lib/bills";
+import { CategorySelect } from "./CategorySelect";
 
 const initialState: BillFormState = { status: "idle" };
 
@@ -18,6 +19,7 @@ export function BillForm({
 }) {
   const [state, formAction, pending] = useActionState(createBillAction, initialState);
   const [direction, setDirection] = useState<BillDirection>("pagar");
+  const [categoryId, setCategoryId] = useState("");
   const [recurring, setRecurring] = useState(false);
   const [amountVaries, setAmountVaries] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<BillPaymentMethod | "">("");
@@ -69,14 +71,15 @@ export function BillForm({
 
         <div className="field">
           <label htmlFor="b-cat">Categoria{needsSeriesFields ? "" : " (opcional)"}</label>
-          <select id="b-cat" name="category_id" defaultValue="">
-            <option value="">Sem categoria</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <CategorySelect
+            id="b-cat"
+            name="category_id"
+            categories={categories}
+            value={categoryId}
+            onChange={setCategoryId}
+            emptyLabel="Sem categoria"
+            emptySelectable
+          />
         </div>
 
         <div className="field toggle-row">

@@ -69,8 +69,15 @@ type Bill struct {
 	// TransactionID is the expense this bill created when it was settled, so
 	// undoing the payment removes exactly that one.
 	TransactionID *string
+	// InvoiceCardID marks the bill as that card's invoice for InvoiceMonth
+	// (first day of the due month). Its amount follows the card's purchases,
+	// and paying it records no expense.
+	InvoiceCardID *string
+	InvoiceMonth  *time.Time
 	CreatedAt     time.Time
 }
+
+func (b Bill) IsInvoice() bool { return b.InvoiceCardID != nil }
 
 // Status is derived from PaidAt and DueDate rather than stored, so a bill
 // that ages past its due date without being touched becomes "atrasado"

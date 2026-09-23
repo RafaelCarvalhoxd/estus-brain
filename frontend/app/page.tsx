@@ -135,7 +135,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   // ---- Financeiro ----
   if (finance.status === "fulfilled" && received.status === "fulfilled") {
     const entradas = received.value.cents;
-    const saidas = finance.value.total.cents;
+    // Money that actually left: card purchases count once their invoice is paid.
+    const saidas = finance.value.paid_out.cents;
     const saldo = entradas - saidas;
     status.financeiro = { text: `Saldo do mês ${formatSigned(saldo)}`, alert: saldo < 0 };
     dash.finance = {

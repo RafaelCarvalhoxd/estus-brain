@@ -17,7 +17,7 @@ func NewCategoryRepo(db *DB) *CategoryRepo { return &CategoryRepo{db: db} }
 
 func scanCategory(row scanner, c *domain.Category) error {
 	var budget *int64
-	if err := row.Scan(&c.ID, &c.Name, &c.Nature, &c.Color, &budget, &c.CreatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.Nature, &c.Color, &budget, &c.CreatedAt, &c.Kind); err != nil {
 		return err
 	}
 	if budget != nil {
@@ -36,7 +36,7 @@ type scanner interface {
 
 func (r *CategoryRepo) List(ctx context.Context) ([]domain.Category, error) {
 	rows, err := r.db.Pool.Query(ctx, `
-		select id, name, nature, color, monthly_budget_cents, created_at
+		select id, name, nature, color, monthly_budget_cents, created_at, kind
 		from categories
 		order by name`)
 	if err != nil {
@@ -58,7 +58,7 @@ func (r *CategoryRepo) List(ctx context.Context) ([]domain.Category, error) {
 func (r *CategoryRepo) Get(ctx context.Context, id string) (domain.Category, error) {
 	var c domain.Category
 	row := r.db.Pool.QueryRow(ctx, `
-		select id, name, nature, color, monthly_budget_cents, created_at
+		select id, name, nature, color, monthly_budget_cents, created_at, kind
 		from categories where id = $1`, id,
 	)
 	if err := scanCategory(row, &c); err != nil {
@@ -71,11 +71,14 @@ func (r *CategoryRepo) Get(ctx context.Context, id string) (domain.Category, err
 }
 
 func (r *CategoryRepo) Create(ctx context.Context, c domain.Category) (domain.Category, error) {
+	if c.Kind == "" {
+		c.Kind = domain.KindExpense
+	}
 	err := r.db.Pool.QueryRow(ctx, `
-		insert into categories (id, name, nature, color)
-		values (gen_random_uuid(), $1, $2, $3)
+		insert into categories (id, name, nature, color, kind)
+		values (gen_random_uuid(), $1, $2, $3, $4)
 		returning id, created_at`,
-		c.Name, c.Nature, c.Color,
+		c.Name, c.Nature, c.Color, c.Kind,
 	).Scan(&c.ID, &c.CreatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -93,10 +96,10 @@ func (r *CategoryRepo) Create(ctx context.Context, c domain.Category) (domain.Ca
 // recreating it (and losing its id, which transactions and bills point to).
 func (r *CategoryRepo) Update(ctx context.Context, id string, c domain.Category) (domain.Category, error) {
 	row := r.db.Pool.QueryRow(ctx, `
-		update categories set name = $2, nature = $3, color = $4
+		update categories set name = $2, nature = $3, color = $4, kind = $5
 		where id = $1
-		returning id, name, nature, color, monthly_budget_cents, created_at`,
-		id, c.Name, c.Nature, c.Color,
+		returning id, name, nature, color, monthly_budget_cents, created_at, kind`,
+		id, c.Name, c.Nature, c.Color, c.Kind,
 	)
 	var out domain.Category
 	if err := scanCategory(row, &out); err != nil {
@@ -143,7 +146,7 @@ func (r *CategoryRepo) UpdateBudget(ctx context.Context, id string, budgetCents 
 	row := r.db.Pool.QueryRow(ctx, `
 		update categories set monthly_budget_cents = $2
 		where id = $1
-		returning id, name, nature, color, monthly_budget_cents, created_at`,
+		returning id, name, nature, color, monthly_budget_cents, created_at, kind`,
 		id, raw,
 	)
 	if err := scanCategory(row, &c); err != nil {

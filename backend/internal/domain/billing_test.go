@@ -10,7 +10,7 @@ func date(y int, m time.Month, d int) time.Time {
 }
 
 // As duas tabelas de "Casos conferidos" da spec, literais.
-func TestCompetenceMonthFollowsTheInvoiceDueDate(t *testing.T) {
+func TestInvoiceMonthFollowsTheInvoiceDueDate(t *testing.T) {
 	closes25due15 := CreditCard{ClosingDay: 25, DueDay: 15}
 	closes10due20 := CreditCard{ClosingDay: 10, DueDay: 20}
 	cases := []struct {
@@ -32,26 +32,17 @@ func TestCompetenceMonthFollowsTheInvoiceDueDate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := CompetenceMonth(tc.purchase, PaymentCredit, &tc.card); got != tc.want {
-				t.Errorf("CompetenceMonth = %v, want %v", got, tc.want)
+			if got := InvoiceMonth(tc.purchase, tc.card); got != tc.want {
+				t.Errorf("InvoiceMonth = %v, want %v", got, tc.want)
 			}
 		})
 	}
 }
 
-func TestCompetenceMonthLeavesDebitAndPixOnTheMonthOfThePurchase(t *testing.T) {
-	purchase := date(2026, time.September, 28)
-	for _, method := range []PaymentMethod{PaymentDebit, PaymentPix} {
-		if got := CompetenceMonth(purchase, method, nil); got != (YearMonth{2026, 9}) {
-			t.Errorf("CompetenceMonth(%s) = %v, want setembro", method, got)
-		}
-	}
-}
-
-// Crédito sem cartão é erro de programação — o serviço já recusa antes de
-// chegar aqui. A regra não inventa uma data: devolve o mês da compra.
-func TestCompetenceMonthWithoutACardFallsBackToThePurchaseMonth(t *testing.T) {
-	if got := CompetenceMonth(date(2026, time.September, 28), PaymentCredit, nil); got != (YearMonth{2026, 9}) {
+// A compra no cartão aparece no mês em que foi feita; só a fatura vai
+// para o mês do vencimento.
+func TestCompetenceMonthIsThePurchaseMonth(t *testing.T) {
+	if got := CompetenceMonth(date(2026, time.September, 28)); got != (YearMonth{2026, 9}) {
 		t.Errorf("CompetenceMonth = %v, want setembro", got)
 	}
 }
@@ -109,8 +100,12 @@ func TestSingleInstallmentHasNoGroupID(t *testing.T) {
 	if txns[0].InstallmentGroupID != nil {
 		t.Errorf("a non-installment purchase should not have an InstallmentGroupID")
 	}
-	// 26/08 é depois do fechamento: fecha 10/09, vence 20/09.
-	if txns[0].CompetenceMonth != (YearMonth{2026, 9}) {
-		t.Errorf("competence = %v, want setembro", txns[0].CompetenceMonth)
+	// A compra aparece em agosto, quando foi feita. 26/08 é depois do
+	// fechamento: fecha 10/09, vence 20/09, então a fatura é de setembro.
+	if txns[0].CompetenceMonth != (YearMonth{2026, 8}) {
+		t.Errorf("competence = %v, want agosto", txns[0].CompetenceMonth)
+	}
+	if txns[0].InvoiceMonth == nil || *txns[0].InvoiceMonth != (YearMonth{2026, 9}) {
+		t.Errorf("invoice = %v, want setembro", txns[0].InvoiceMonth)
 	}
 }

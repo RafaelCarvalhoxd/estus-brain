@@ -121,6 +121,7 @@ export async function createBillAction(
 export async function markBillPaidAction(id: string): Promise<void> {
   await markBillPaid(id);
   revalidatePath("/financeiro/contas");
+  revalidatePath("/financeiro/cartoes");
 }
 
 export type PayBillFields = {
@@ -255,8 +256,8 @@ export async function deleteBillAction(id: string): Promise<void> {
 // restart a recurring bill, replacing the old (unimplementable once
 // Materialize runs on every month view) idea that deleting the last
 // occurrence "ends" a series.
-export async function endSeriesAction(id: string): Promise<void> {
-  await endSeries(id);
+export async function endSeriesAction(id: string, deleteFollowing = false): Promise<void> {
+  await endSeries(id, deleteFollowing);
   revalidatePath("/financeiro/contas");
 }
 

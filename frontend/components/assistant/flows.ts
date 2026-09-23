@@ -83,7 +83,7 @@ function billsCard(r: any, title: string, empty: string): { text: string; card?:
       columns: ["Conta", "Valor", "Vencimento", "Status"],
       rows: rows.map((b) => [b.descricao, b.valor, fmtDay(b.vencimento), statusLabel[b.status] ?? b.status]),
       action: open.length === rows.length
-        ? { label: "Marcar como paga", tool: "bills_mark_paid", args: rows.map((b) => ({ id: b.id })) }
+        ? { label: "Marcar como paga", tool: "bills_pay", args: rows.map((b) => ({ id: b.id })) }
         : undefined,
     },
   };
@@ -162,7 +162,7 @@ export const FLOWS: Flow[] = [
         lines: [
           `${r.descricao}: ${r.valor}`,
           `${r.categoria}, ${r.pagamento}${r.parcelas > 1 ? ` em ${r.parcelas}x` : ""}`,
-          `Conta no mês de ${monthLabel(r.mes_competencia)}`,
+          `Aparece em ${monthLabel(r.mes)}${r.fatura ? `, na fatura de ${monthLabel(r.fatura)}` : ""}`,
         ],
       },
     }),
@@ -205,7 +205,7 @@ export const FLOWS: Flow[] = [
     keywords: ["quanto gastei", "gastos do mes", "total", "resumo financeiro", "gastei este mes"],
     run: () => ({ tool: "finance_month_summary", args: {} }),
     present: (r) => ({
-      text: `Em ${monthLabel(r.mes)} você gastou ${r.total}, contra ${r.mes_anterior} no mês anterior.`,
+      text: `Em ${monthLabel(r.mes)} você gastou ${r.gasto}, contra ${r.mes_anterior} no mês anterior.`,
       card: {
         kind: "table",
         title: "Por categoria",
@@ -325,7 +325,7 @@ export const FLOWS: Flow[] = [
       { name: "id", label: "Conta", type: "select", required: true, source: "openBills" },
       { name: "paid_on", label: "Pago em", type: "date", initial: () => todayISO() },
     ],
-    run: (v) => ({ tool: "bills_mark_paid", args: v }),
+    run: (v) => ({ tool: "bills_pay", args: v }),
     present: (r) => ({ text: `${r.descricao} marcada como ${r.tipo === "receber" ? "recebida" : "paga"}.`, card: { kind: "done", title: "Conta quitada", lines: [`${r.descricao}: ${r.valor}`] } }),
   },
 

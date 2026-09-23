@@ -11,6 +11,7 @@ import {
   type CreateReminderState,
 } from "@/app/lembretes/actions";
 import { IconPencil, IconTrash } from "./icons";
+import { RepeatPicker, formatRepeat, repeatValueOf, toRepeat } from "./RepeatPicker";
 
 function formatDueAt(dueAt?: string): string | null {
   if (!dueAt) return null;
@@ -40,13 +41,14 @@ function EditReminderRow({ reminder, onDone }: { reminder: Reminder; onDone: () 
   const [title, setTitle] = useState(reminder.title);
   const [date, setDate] = useState(toDateInputValue(reminder.due_at));
   const [time, setTime] = useState(toTimeInputValue(reminder.due_at));
+  const [repeat, setRepeat] = useState(repeatValueOf(reminder));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     setSaving(true);
     setError(null);
-    const result = await updateReminderAction(reminder.id, title, date, time);
+    const result = await updateReminderAction(reminder.id, title, date, time, toRepeat(repeat));
     setSaving(false);
     if (result.error) {
       setError(result.error);
@@ -80,6 +82,7 @@ function EditReminderRow({ reminder, onDone }: { reminder: Reminder; onDone: () 
           disabled={saving}
         />
       </div>
+      <RepeatPicker value={repeat} onChange={setRepeat} disabled={saving} />
       {error && <p className="form-error">{error}</p>}
       <div className="row-actions">
         <button className="btn-text" type="button" onClick={onDone} disabled={saving}>
@@ -97,6 +100,7 @@ function ReminderRow({ reminder, bucket }: { reminder: Reminder; bucket: string 
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const due = formatDueAt(reminder.due_at);
+  const repeat = formatRepeat(reminder);
 
   if (editing) {
     return <EditReminderRow reminder={reminder} onDone={() => setEditing(false)} />;
@@ -110,11 +114,14 @@ function ReminderRow({ reminder, bucket }: { reminder: Reminder; bucket: string 
         checked={reminder.done}
         disabled={isPending}
         onChange={(e) => startTransition(() => toggleReminderAction(reminder.id, e.target.checked))}
-        aria-label={reminder.done ? "Marcar como não concluído" : "Marcar como concluído"}
+        aria-label={
+          reminder.done ? "Marcar como não concluído" : repeat ? "Concluir e passar para a próxima vez" : "Marcar como concluído"
+        }
       />
       <div className="reminder-body">
         <span className={`reminder-title ${reminder.done ? "reminder-title-done" : ""}`}>{reminder.title}</span>
         {due && <span className={`badge ${bucket === "atrasado" ? "badge-bad" : ""}`}>{due}</span>}
+        {repeat && <span className="badge">Repete: {repeat}</span>}
       </div>
       <div className="row-actions">
         <button className="icon-btn" type="button" aria-label="Editar lembrete" onClick={() => setEditing(true)}>
@@ -152,6 +159,7 @@ const initialReminderFormState: CreateReminderState = { status: "idle" };
 
 export function NewReminderForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [state, formAction, pending] = useActionState(createReminderAction, initialReminderFormState);
+  const [repeat, setRepeat] = useState(repeatValueOf());
 
   useEffect(() => {
     if (state.status === "success") onSuccess?.();
@@ -177,6 +185,10 @@ export function NewReminderForm({ onSuccess }: { onSuccess?: () => void } = {}) 
             <label htmlFor="r-time">Horário (opcional)</label>
             <input id="r-time" name="due_time" type="time" />
           </div>
+        </div>
+        <div className="field">
+          <label>Repetir (opcional)</label>
+          <RepeatPicker value={repeat} onChange={setRepeat} named />
         </div>
         <button className="btn-block" type="submit" disabled={pending}>
           {pending ? "Salvando…" : "Adicionar lembrete"}

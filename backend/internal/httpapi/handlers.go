@@ -208,6 +208,27 @@ func (h *Handlers) CreateTransaction(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ReplaceTransaction handles PUT /api/transactions/{id}: the whole purchase
+// is rewritten from a body shaped like the create request.
+func (h *Handlers) ReplaceTransaction(w http.ResponseWriter, r *http.Request) {
+	var req createTransactionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	input, err := req.toInput()
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: purchase_date must be YYYY-MM-DD", domain.ErrValidation))
+		return
+	}
+	txns, err := h.transactions.Replace(r.Context(), r.PathValue("id"), input)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"created": len(txns)})
+}
+
 type updateTransactionRequest struct {
 	Description string `json:"description"`
 	CategoryID  string `json:"category_id"`

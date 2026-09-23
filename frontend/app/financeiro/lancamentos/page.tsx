@@ -26,7 +26,7 @@ export default async function LancamentosPage({
         action={<NewTransactionModal categories={categories} cards={cards} />}
       />
 
-      <TransactionsList transactions={summary.transactions} categories={categories} month={month} />
+      <TransactionsList transactions={summary.transactions} categories={categories} cards={cards} month={month} />
     </>
   );
 }

@@ -26,14 +26,14 @@ import (
 var subjectWords = map[string][]string{
 	"habitos":    {"habito", "habitos", "rotina", "todo dia", "todos os dias", "diariamente", "sequencia", "streak"},
 	"treino":     {"treino", "treinar", "treinei", "exercicio", "serie de", "repeticoes", "academia", "musculacao"},
-	"dieta":      {"dieta", "refeicao", "refeicoes", "almoco", "jantar", "cafe da manha", "caloria", "macro", "proteina", "comi", "comer"},
+	"dieta":      {"dieta", "refeicao", "refeicoes", "almoco", "jantar", "cafe da manha", "caloria", "macro", "proteina", "comi", "comer", "meta de", "metas"},
 	"notas":      {"nota", "notas", "anota", "anotar", "anotacao", "caderno", "escrever sobre"},
 	"lembretes":  {"lembr", "me avisa", "nao me deixa esquecer"},
 	"agenda":     {"agenda", "compromisso", "reuniao", "evento", "calendario", "marcado para"},
-	"documentos": {"documento", "documentos", "arquivo", "comprovante", "pdf", "onde esta meu"},
+	"documentos": {"documento", "documentos", "arquivo", "comprovante", "pdf", "onde esta meu", "pasta"},
 	"quadros":    {"quadro", "quadros", "lousa", "diagrama", "fluxo de"},
-	"contas":     {"conta de", "contas", "boleto", "fatura", "vencimento", "vence", "a pagar", "a receber", "paguei"},
-	"financeiro": {"gasto", "gastos", "gastei", "gastar", "comprei", "compra", "despesa", "cartao", "categoria", "orcamento", "quanto custou", "quanto gastei", "paguei", "pix", "debito", "credito", "mercado", "dinheiro", "reais", "transferencia", "recebi"},
+	"contas":     {"conta de", "contas", "boleto", "fatura", "vencimento", "vence", "a pagar", "a receber", "paguei", "recorrente", "repeticao", "recebido", "saldo das contas"},
+	"financeiro": {"gasto", "gastos", "gastei", "gastar", "comprei", "compra", "despesa", "cartao", "categoria", "orcamento", "quanto custou", "quanto gastei", "paguei", "pix", "debito", "credito", "mercado", "dinheiro", "reais", "transferencia", "recebi", "fatura", "parcela", "parcelado", "saldo", "entrada", "saida", "receita", "fixo", "variave"},
 }
 
 // fallbackModules is what an unrecognised message gets: the everyday case,

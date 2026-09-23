@@ -206,7 +206,7 @@ export function HomeDashboard({ data }: { data: DashData }) {
                 <b>{finance.entradas}</b>
               </div>
               <div>
-                <span>Saídas</span>
+                <span>Pago</span>
                 <b>{finance.saidas}</b>
               </div>
             </div>
@@ -331,7 +331,7 @@ export function HomeDashboard({ data }: { data: DashData }) {
               {fmt(vault.count)}
               <small> {vault.count === 1 ? "senha" : "senhas"}</small>
             </p>
-            <p className="dash-sub">Protegido por mTLS</p>
+            <p className="dash-sub">Revelar pede a senha do app</p>
           </>
         )}
       </Card>

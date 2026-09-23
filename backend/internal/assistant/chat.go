@@ -573,6 +573,7 @@ func (c *Chat) systemPrompt(module string, sentAt time.Time) string {
 	b.WriteString("Nunca diga que fez algo sem ter chamado a ferramenta que faz aquilo. ")
 	b.WriteString("Se uma ferramenta devolver erro, explique em palavras simples por que não deu certo e o que a pessoa precisa informar ou corrigir (ex.: categoria que não existe: mostre as que existem). Nunca termine sem responder. ")
 	b.WriteString("Antes de excluir qualquer coisa, confirme com a pessoa. Nunca invente ids: liste antes. Valores em R$ no formato brasileiro. ")
+	b.WriteString(appRules + "\n")
 	b.WriteString("Não fale sobre senhas: o cofre de senhas não está disponível para você.")
 	if name, ok := moduleNames[module]; ok {
 		fmt.Fprintf(&b, "\nA pessoa está no módulo de %s: priorize esse assunto.", name)

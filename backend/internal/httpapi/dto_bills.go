@@ -21,7 +21,9 @@ type billDTO struct {
 	SeriesEnded     bool                  `json:"series_ended"`
 	PaymentMethod   *domain.PaymentMethod `json:"payment_method,omitempty"`
 	CreditCardID    *string               `json:"credit_card_id,omitempty"`
-	Status          string                `json:"status"`
+	// InvoiceCardID is set when the bill is that card's invoice.
+	InvoiceCardID *string `json:"invoice_card_id,omitempty"`
+	Status        string  `json:"status"`
 }
 
 func toBillDTO(b domain.Bill, now time.Time) billDTO {
@@ -38,6 +40,7 @@ func toBillDTO(b domain.Bill, now time.Time) billDTO {
 		SeriesEnded:     b.SeriesEnded,
 		PaymentMethod:   b.PaymentMethod,
 		CreditCardID:    b.CreditCardID,
+		InvoiceCardID:   b.InvoiceCardID,
 		Status:          b.Status(now),
 	}
 	if b.PaidAt != nil {

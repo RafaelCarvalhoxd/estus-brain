@@ -10,6 +10,14 @@ import (
 
 type DashboardService struct {
 	transactions *postgres.TransactionRepo
+	// openFixed, when set, adds the month's unpaid recurring bills to its
+	// fixed spending.
+	openFixed func(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
+}
+
+// WithOpenFixedBills counts unpaid recurring bills as fixed spending.
+func (s *DashboardService) WithOpenFixedBills(f func(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)) {
+	s.openFixed = f
 }
 
 func NewDashboardService(t *postgres.TransactionRepo) *DashboardService {
@@ -45,10 +53,16 @@ type WeekBucket struct {
 }
 
 type MonthSummary struct {
-	Month                domain.YearMonth
-	TotalCents           domain.Cents
-	PreviousMonthCents   domain.Cents
-	RecurringCents       domain.Cents
+	Month              domain.YearMonth
+	TotalCents         domain.Cents
+	PreviousMonthCents domain.Cents
+	RecurringCents     domain.Cents
+	// PaidOutCents is what actually left the account this month, the
+	// balance's outflow.
+	PaidOutCents domain.Cents
+	// OpenFixedCents is the month's recurring bills still to be paid: fixed
+	// spending that is not an expense yet.
+	OpenFixedCents       domain.Cents
 	VariableCents        domain.Cents
 	OpenInstallmentCents domain.Cents
 	OpenInvoiceCents     domain.Cents
@@ -70,6 +84,16 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 	recurring, err := s.transactions.RecurringTotal(ctx, ym)
 	if err != nil {
 		return MonthSummary{}, err
+	}
+	paidOut, err := s.transactions.PaidOutTotal(ctx, ym)
+	if err != nil {
+		return MonthSummary{}, err
+	}
+	var openFixed domain.Cents
+	if s.openFixed != nil {
+		if openFixed, err = s.openFixed(ctx, ym); err != nil {
+			return MonthSummary{}, err
+		}
 	}
 	openInstallments, err := s.transactions.OpenInstallmentsTotal(ctx, ym)
 	if err != nil {
@@ -119,6 +143,8 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 		TotalCents:           total,
 		PreviousMonthCents:   previousTotal,
 		RecurringCents:       recurring,
+		PaidOutCents:         paidOut,
+		OpenFixedCents:       openFixed,
 		VariableCents:        total - recurring,
 		OpenInstallmentCents: openInstallments,
 		OpenInvoiceCents:     openInvoice,
@@ -132,6 +158,9 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 func weeklyBuckets(rows []postgres.TransactionRow) []WeekBucket {
 	buckets := make([]domain.Cents, 5)
 	for _, r := range rows {
+		if r.CategoryKind == domain.KindIncome {
+			continue
+		}
 		day := r.PurchaseDate.Day()
 		if r.PaymentMethod == domain.PaymentCredit && r.CardDueDay != nil {
 			day = *r.CardDueDay

@@ -7,8 +7,8 @@ import (
 )
 
 // CreditCard models a real card's billing cycle: when its invoice closes and
-// when that invoice has to be paid. Both matter to the budget, because
-// CompetenceMonth books a purchase in the month its invoice is due.
+// when that invoice has to be paid. InvoiceMonth uses both to pick the
+// invoice a purchase is billed on.
 type CreditCard struct {
 	ID         string
 	Name       string

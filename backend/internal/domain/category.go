@@ -26,10 +26,21 @@ func (n CategoryNature) Valid() bool {
 	return false
 }
 
+// CategoryKind says which way the money goes.
+type CategoryKind string
+
+const (
+	KindExpense CategoryKind = "despesa"
+	KindIncome  CategoryKind = "receita"
+)
+
+func (k CategoryKind) Valid() bool { return k == KindExpense || k == KindIncome }
+
 type Category struct {
 	ID                 string
 	Name               string
 	Nature             CategoryNature
+	Kind               CategoryKind
 	Color              string // hex, used by the frontend chart legend
 	MonthlyBudgetCents *Cents // nil = no budget set
 	CreatedAt          time.Time
@@ -41,6 +52,9 @@ func (c Category) Validate() error {
 	}
 	if !c.Nature.Valid() {
 		return fmt.Errorf("%w: invalid nature %q", ErrValidation, c.Nature)
+	}
+	if !c.Kind.Valid() {
+		return fmt.Errorf("%w: invalid kind %q (despesa or receita)", ErrValidation, c.Kind)
 	}
 	if strings.TrimSpace(c.Color) == "" {
 		return fmt.Errorf("%w: color is required", ErrValidation)

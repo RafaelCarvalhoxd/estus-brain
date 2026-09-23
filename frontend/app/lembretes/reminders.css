@@ -70,3 +70,45 @@
   flex-direction: column;
   gap: 14px;
 }
+
+.repeat-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.repeat-month-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.repeat-picker .repeat-month-day input {
+  width: 72px;
+}
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.weekday-chip {
+  min-width: 44px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+  color: var(--ink-mute);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.weekday-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--page);
+}
+.weekday-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

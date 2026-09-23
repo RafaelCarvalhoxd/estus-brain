@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Category } from "@/lib/types";
 import { updateCategoryBudget, createCategory, updateCategory, deleteCategory, type CategoryInput } from "@/lib/api";
 
 function parseAmountToCents(raw: string): number | null {
@@ -49,12 +50,13 @@ function revalidateCategories() {
 export async function createCategoryAction(
   input: CategoryInput,
   rawBudget = "",
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; category?: Category }> {
   if (!input.name.trim()) return { error: "Nome é obrigatório." };
   const budget = readBudget(rawBudget);
   if ("error" in budget) return budget;
+  let created: Category;
   try {
-    const created = await createCategory(input);
+    created = await createCategory(input);
     if (budget.cents !== null) {
       await updateCategoryBudget(created.id, budget.cents);
     }
@@ -62,7 +64,7 @@ export async function createCategoryAction(
     return { error: err instanceof Error ? err.message : "Falha ao salvar." };
   }
   revalidateCategories();
-  return {};
+  return { category: created };
 }
 
 export async function updateCategoryAction(

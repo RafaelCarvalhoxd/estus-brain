@@ -4,6 +4,7 @@ import { getBillSummary, getBillsReceived } from "@/lib/bills";
 import { currentYearMonth } from "@/lib/month";
 import { TopBar } from "@/components/TopBar";
 import { CategoryPieChart } from "@/components/CategoryPieChart";
+import { FixedVariableSplit } from "@/components/FixedVariableSplit";
 
 function formatSigned(cents: number): string {
   const value = cents / 100;
@@ -18,15 +19,14 @@ export default async function FinanceDashboardPage({
   const params = await searchParams;
   const month = params.month ?? currentYearMonth();
 
-  const [summary, billSummary, received] = await Promise.all([
-    getMonthSummary(month),
-    getBillSummary(),
-    getBillsReceived(month),
-  ]);
+  // The month summary materializes the month's recurring bills, so the bill
+  // totals are read only after it.
+  const [summary, received] = await Promise.all([getMonthSummary(month), getBillsReceived(month)]);
+  const billSummary = await getBillSummary(month);
 
-  const saidas = summary.total.cents;
-  const entradas = received.cents;
-  const saldo = entradas - saidas;
+  // Only money that actually moved: card purchases wait for their invoice
+  // to be paid, and open bills don't count until settled.
+  const saldo = received.cents - summary.paid_out.cents;
 
   return (
     <>
@@ -40,24 +40,15 @@ export default async function FinanceDashboardPage({
         </div>
         <div className="tile">
           <p className="tile-label">Saídas</p>
-          <p className="tile-figure tab">{summary.total.formatted}</p>
-          <p className="tile-sub">gasto no mês</p>
-        </div>
-        <div className="tile">
-          <p className="tile-label">Gastos fixos</p>
-          <p className="tile-figure tab">{summary.recurring.formatted}</p>
-          <p className="tile-sub">do total do mês</p>
-        </div>
-        <div className="tile">
-          <p className="tile-label">Gastos variáveis</p>
-          <p className="tile-figure tab">{summary.variable.formatted}</p>
-          <p className="tile-sub">do total do mês</p>
+          <p className="tile-figure tab">{summary.paid_out.formatted}</p>
+          <p className="tile-sub">débito, pix e faturas pagas</p>
         </div>
         <div className="tile">
           <p className="tile-label">Saldo</p>
           <p className="tile-figure tab">{formatSigned(saldo)}</p>
           <p className="tile-sub">
             <span className={`pill ${saldo >= 0 ? "good" : "bad"}`}>{saldo >= 0 ? "positivo" : "negativo"}</span>
+            entradas − saídas
           </p>
         </div>
 
@@ -89,6 +80,13 @@ export default async function FinanceDashboardPage({
           )}
         </div>
       </section>
+
+      <FixedVariableSplit
+        recurring={summary.recurring}
+        openFixed={summary.open_fixed}
+        variable={summary.variable}
+        received={received}
+      />
 
       <CategoryPieChart categories={summary.categories} />
     </>

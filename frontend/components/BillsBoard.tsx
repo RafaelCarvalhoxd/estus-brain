@@ -14,6 +14,7 @@ import {
   unpayBillAction,
 } from "@/app/financeiro/contas/actions";
 import { Modal } from "./Modal";
+import { CategorySelect } from "./CategorySelect";
 import { IconPencil, IconTrash } from "./icons";
 import { dayKeyIn, TZ } from "@/lib/week";
 
@@ -99,16 +100,13 @@ function PayBillModal({
           </div>
           <div className="field">
             <label htmlFor="p-cat">Categoria</label>
-            <select id="p-cat" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={saving}>
-              <option value="" disabled>
-                Selecione
-              </option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <CategorySelect
+              id="p-cat"
+              categories={categories}
+              value={categoryId}
+              onChange={setCategoryId}
+              disabled={saving}
+            />
           </div>
           <div className="field">
             <label htmlFor="p-metodo">Forma de pagamento</label>
@@ -261,19 +259,15 @@ function EditBillRow({
           onChange={(e) => setDueDate(e.target.value)}
           disabled={saving}
         />
-        <select
+        <CategorySelect
           className="txn-edit-input"
+          categories={categories}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={setCategoryId}
           disabled={saving}
-        >
-          <option value="">Sem categoria</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          emptyLabel="Sem categoria"
+          emptySelectable
+        />
         {bill.recurring && (
           <select
             className="txn-edit-input"
@@ -335,6 +329,7 @@ function BillColumn({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [seriesActionId, setSeriesActionId] = useState<string | null>(null);
+  const [endingBill, setEndingBill] = useState<Bill | null>(null);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [unpayingId, setUnpayingId] = useState<string | null>(null);
   const [unpayError, setUnpayError] = useState<{ id: string; message: string } | null>(null);
@@ -378,10 +373,11 @@ function BillColumn({
     }
   }
 
-  async function handleEndSeries(id: string) {
+  async function handleEndSeries(id: string, deleteFollowing: boolean) {
     setSeriesActionId(id);
     try {
-      await endSeriesAction(id);
+      await endSeriesAction(id, deleteFollowing);
+      setEndingBill(null);
       router.refresh();
     } finally {
       setSeriesActionId(null);
@@ -413,6 +409,7 @@ function BillColumn({
               <div className="bill-title">{bill.description}</div>
               <div className="bill-meta">
                 Vence em {formatDueDate(bill.due_date)}
+                {bill.invoice_card_id ? " · soma das compras no cartão" : ""}
                 {bill.recurring ? " · recorrente" : ""}
                 {bill.recurring && bill.series_ended ? " · Repetição encerrada" : ""}
               </div>
@@ -423,7 +420,14 @@ function BillColumn({
               {bill.amount.formatted}
               {bill.amount_estimated && <span className="bill-estimated">· estimado</span>}
             </span>
-            {!bill.paid_at && direction === "pagar" && (
+            {!bill.paid_at && bill.invoice_card_id && (
+              <form action={markBillPaidAction.bind(null, bill.id)}>
+                <button className="btn-outline" type="submit">
+                  Marcar como paga
+                </button>
+              </form>
+            )}
+            {!bill.paid_at && direction === "pagar" && !bill.invoice_card_id && (
               <button className="btn-outline" type="button" onClick={() => setPayingBill(bill)}>
                 Marcar como pago
               </button>
@@ -451,7 +455,7 @@ function BillColumn({
                   className="btn-text"
                   type="button"
                   disabled={seriesActionId === bill.id}
-                  onClick={() => handleEndSeries(bill.id)}
+                  onClick={() => setEndingBill(bill)}
                 >
                   Encerrar repetição
                 </button>
@@ -466,18 +470,22 @@ function BillColumn({
                   Retomar repetição
                 </button>
               )}
-              <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditingId(bill.id)}>
-                <IconPencil />
-              </button>
-              <button
-                className="icon-btn bad"
-                type="button"
-                aria-label="Excluir"
-                disabled={deletingId === bill.id}
-                onClick={() => handleDelete(bill)}
-              >
-                <IconTrash />
-              </button>
+              {!bill.invoice_card_id && (
+                <>
+                  <button className="icon-btn" type="button" aria-label="Editar" onClick={() => setEditingId(bill.id)}>
+                    <IconPencil />
+                  </button>
+                  <button
+                    className="icon-btn bad"
+                    type="button"
+                    aria-label="Excluir"
+                    disabled={deletingId === bill.id}
+                    onClick={() => handleDelete(bill)}
+                  >
+                    <IconTrash />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ),
@@ -490,6 +498,37 @@ function BillColumn({
           onClose={() => setPayingBill(null)}
           onPaid={() => setPayingBill(null)}
         />
+      )}
+      {endingBill && (
+        <Modal open onClose={() => setEndingBill(null)}>
+          <div className="panel">
+            <div className="panel-head">
+              <h2>Encerrar repetição</h2>
+            </div>
+            <p className="empty-note">
+              {endingBill.description} para de se repetir depois de {formatDueDate(endingBill.due_date)}. As contas já pagas
+              ficam no histórico.
+            </p>
+            <div className="form-grid">
+              <button
+                className="btn-block"
+                type="button"
+                disabled={seriesActionId === endingBill.id}
+                onClick={() => handleEndSeries(endingBill.id, false)}
+              >
+                Só encerrar
+              </button>
+              <button
+                className="btn-outline bad"
+                type="button"
+                disabled={seriesActionId === endingBill.id}
+                onClick={() => handleEndSeries(endingBill.id, true)}
+              >
+                Encerrar e excluir as seguintes não pagas
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

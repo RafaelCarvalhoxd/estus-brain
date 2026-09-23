@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  CardOverview,
   Category,
   CreditCard,
   MonthSummary,
@@ -11,8 +12,7 @@ import type {
 // build instead of leaking the backend's internal address into the
 // browser bundle. The browser never talks to the Go API directly — every
 // request goes through a Next.js server component or server action, which
-// is what lets the Go service live entirely behind the mTLS edge with no
-// public listener of its own.
+// is what lets the Go service live with no public listener of its own.
 const API_URL = process.env.API_URL ?? "http://localhost:8080";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -40,6 +40,10 @@ export function listCreditCards(): Promise<CreditCard[]> {
   return apiFetch<CreditCard[]>("/api/credit-cards", { cache: "no-store" });
 }
 
+export function getCardSpending(): Promise<CardOverview[]> {
+  return apiFetch<CardOverview[]>("/api/credit-cards/spending", { cache: "no-store" });
+}
+
 export function getMonthSummary(yearMonth: string): Promise<MonthSummary> {
   return apiFetch<MonthSummary>(`/api/months/${yearMonth}`, { cache: "no-store" });
 }
@@ -58,6 +62,14 @@ export function updateTransaction(id: string, description: string, categoryId: s
   });
 }
 
+// replaceTransaction rewrites the whole purchase (every installment of it).
+export function replaceTransaction(id: string, input: CreateTransactionInput): Promise<unknown> {
+  return apiFetch(`/api/transactions/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 export function deleteTransaction(id: string): Promise<unknown> {
   return apiFetch(`/api/transactions/${id}`, { method: "DELETE" });
 }
@@ -72,6 +84,7 @@ export function updateCategoryBudget(id: string, monthlyBudgetCents: number | nu
 export interface CategoryInput {
   name: string;
   nature: Category["nature"];
+  kind: Category["kind"];
   color: string;
 }
 
