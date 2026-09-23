@@ -19,7 +19,6 @@ type Modules struct {
 	Boards    *BoardHandlers
 	Habits    *HabitHandlers
 	Assistant *AssistantHandlers
-	Telegram  *TelegramHandlers
 	// CardSpending is the Cartões dashboard.
 	CardSpending *CardSpendingHandlers
 	// MCP serves the Model Context Protocol; it checks its own token.
@@ -140,13 +139,6 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("POST /api/assistant/attachments", a.UploadAttachment)
 		mux.HandleFunc("POST /api/assistant/voice/transcribe", a.Transcribe)
 		mux.HandleFunc("POST /api/assistant/voice/speak", a.Speak)
-	}
-	if tg := m.Telegram; tg != nil {
-		mux.HandleFunc("GET /api/assistant/telegram/settings", tg.Settings)
-		mux.HandleFunc("PUT /api/assistant/telegram/settings", tg.UpdateSettings)
-		mux.HandleFunc("POST /api/assistant/telegram/pair", tg.Pair)
-		mux.HandleFunc("DELETE /api/assistant/telegram/pair", tg.Unpair)
-		mux.HandleFunc("POST /api/assistant/telegram/test", tg.Test)
 	}
 	if m.MCP != nil {
 		mux.Handle("/mcp", m.MCP)

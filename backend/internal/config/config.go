@@ -24,8 +24,6 @@ type Config struct {
 	// MultiUser switches off the engines that run on the owner's own
 	// Claude/ChatGPT subscription login — those are for personal use only.
 	MultiUser bool
-	// TelegramBotToken is used when no token was saved on the settings screen.
-	TelegramBotToken string
 	// AppPassword is the owner's password: the frontend asks for it to log
 	// in, and revealing a vault password asks for it again. Empty means no
 	// password can be revealed.
@@ -34,15 +32,14 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		Port:             getEnv("PORT", "8080"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		DocumentsDir:     getEnv("DOCUMENTS_DIR", "data/documents"),
-		AssistantDir:     getEnv("ASSISTANT_DIR", "data/assistant"),
-		MCPToken:         os.Getenv("MCP_TOKEN"),
-		Timezone:         getEnv("ASSISTANT_TZ", "America/Sao_Paulo"),
-		MultiUser:        os.Getenv("ASSISTANT_MULTI_USER") == "true",
-		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		AppPassword:      os.Getenv("APP_PASSWORD"),
+		Port:         getEnv("PORT", "8080"),
+		DatabaseURL:  os.Getenv("DATABASE_URL"),
+		DocumentsDir: getEnv("DOCUMENTS_DIR", "data/documents"),
+		AssistantDir: getEnv("ASSISTANT_DIR", "data/assistant"),
+		MCPToken:     os.Getenv("MCP_TOKEN"),
+		Timezone:     getEnv("ASSISTANT_TZ", "America/Sao_Paulo"),
+		MultiUser:    os.Getenv("ASSISTANT_MULTI_USER") == "true",
+		AppPassword:  os.Getenv("APP_PASSWORD"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")

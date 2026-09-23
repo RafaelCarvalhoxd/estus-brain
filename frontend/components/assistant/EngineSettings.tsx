@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import type { AssistantSettings, Capabilities, ProviderStatus } from "./types";
 import { IconClose } from "../icons";
-import { TelegramSettings } from "./TelegramSettings";
 
 // Where the owner picks and configures the AI engines, and finds what to
 // paste into Claude Desktop, Claude Code or Codex to use Estus Brain from
@@ -64,7 +63,7 @@ function Snippet({ title, text, hint, token, reveal }: { title: string; text: st
 }
 
 export function EngineSettings({ settings, onClose, onChanged }: { settings: AssistantSettings | null; onClose: () => void; onChanged: () => void }) {
-  const [tab, setTab] = useState<"engines" | "mcp" | "telegram">("engines");
+  const [tab, setTab] = useState<"engines" | "mcp">("engines");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [reveal, setReveal] = useState(false);
@@ -111,9 +110,6 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
             </button>
             <button type="button" role="tab" aria-selected={tab === "mcp"} className={tab === "mcp" ? "active" : ""} onClick={() => setTab("mcp")}>
               Usar por fora (MCP)
-            </button>
-            <button type="button" role="tab" aria-selected={tab === "telegram"} className={tab === "telegram" ? "active" : ""} onClick={() => setTab("telegram")}>
-              Telegram
             </button>
           </div>
           {error && <p className="form-error">{error}</p>}
@@ -204,8 +200,6 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
               </div>
             </div>
           )}
-
-          {tab === "telegram" && <TelegramSettings />}
         </div>
       </div>
     </div>

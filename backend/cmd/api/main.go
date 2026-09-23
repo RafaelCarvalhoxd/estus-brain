@@ -21,7 +21,6 @@ import (
 	"github.com/rafael/estus-vault/backend/internal/httpapi"
 	"github.com/rafael/estus-vault/backend/internal/service"
 	"github.com/rafael/estus-vault/backend/internal/store/postgres"
-	"github.com/rafael/estus-vault/backend/internal/telegram"
 )
 
 func main() {
@@ -177,31 +176,6 @@ func run() error {
 	mcpHandler := tools.MCPHandler(func() []string { return []string{mcpToken} })
 	slog.Info("assistant ready", "tools", len(tools.Tools()), "mcp", "/mcp")
 
-	// Telegram: the owner's chat with the assistant, plus daily reports and
-	// alerts. It long-polls, so it needs no public address.
-	telegramBot := telegram.New(telegram.Config{
-		Store: postgres.NewTelegramRepo(db),
-		Chat:  chat,
-		Data: telegram.ServiceData{
-			ReminderSvc:     reminderService,
-			EventSvc:        eventService,
-			BillSvc:         billService,
-			TrainingSvc:     trainingService,
-			HabitSvc:        habitService,
-			TransactionRepo: transactionRepo,
-		},
-		Voice:    chat.Voice(),
-		Tools:    tools,
-		Location: location,
-		VaultKey: chatCfg.VaultKey,
-		EnvToken: cfg.TelegramBotToken,
-	})
-	botDone := make(chan struct{})
-	go func() {
-		defer close(botDone)
-		telegramBot.Run(ctx)
-	}()
-
 	router := httpapi.NewRouter(handlers, httpapi.Modules{
 		Bills:        billHandlers,
 		Vault:        vaultHandlers,
@@ -214,7 +188,6 @@ func run() error {
 		Boards:       boardHandlers,
 		Habits:       habitHandlers,
 		Assistant:    assistantHandlers,
-		Telegram:     httpapi.NewTelegramHandlers(telegramBot),
 		MCP:          mcpHandler,
 		CardSpending: httpapi.NewCardSpendingHandlers(cardSpendingService),
 	})
@@ -240,15 +213,6 @@ func run() error {
 		defer shutdownCancel()
 		serveErr = srv.Shutdown(shutdownCtx)
 	case serveErr = <-errCh:
-	}
-	// Let the bot finish its last writes before the deferred closes take the
-	// database and the AI engines away from it.
-	cancel()
-	select {
-	case <-botDone:
-		slog.Info("telegram bot stopped")
-	case <-time.After(10 * time.Second):
-		slog.Warn("telegram bot did not stop in time")
 	}
 	return serveErr
 }

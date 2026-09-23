@@ -111,22 +111,3 @@ export interface AssistantSettings {
   voice?: { available: boolean; detail: string };
 }
 
-/** The Telegram bot as the settings screen sees it (never the token). */
-export interface TelegramView {
-  has_token: boolean;
-  from_env: boolean;
-  can_store_token: boolean;
-  bot_username: string;
-  paired: boolean;
-  owner_name: string;
-  pairing_code?: string;
-  pairing_expires_at?: string;
-  morning_enabled: boolean;
-  morning_time: string;
-  evening_enabled: boolean;
-  evening_time: string;
-  reminders_enabled: boolean;
-  events_enabled: boolean;
-  events_minutes_before: number;
-  status: { state: "off" | "unpaired" | "ok" | "error"; message: string };
-}

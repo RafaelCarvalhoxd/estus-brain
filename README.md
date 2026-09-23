@@ -238,40 +238,6 @@ Detalhes que valem saber:
 - O `.app` guarda o caminho absoluto do repo: se mover o projeto de pasta,
   rode `scripts/make-app.sh` de novo.
 
-## Telegram
-
-Converse com o Estus Brain pelo Telegram e receba dele o resumo da manhã, o
-fechamento da noite, lembretes na hora (com botão "Concluído") e aviso antes
-dos compromissos.
-
-1. No Telegram, fale com o [@BotFather](https://t.me/BotFather), mande
-   `/newbot` e copie o token.
-2. Em Conversa → Motor de IA e conexões → Telegram, cole o token e salve. O
-   token fica cifrado com `VAULT_ENCRYPTION_KEY`; sem ela, defina
-   `TELEGRAM_BOT_TOKEN` no `.env` do backend.
-3. Clique em "Gerar código" e mande `/start <código>` para o bot (ou use
-   "Abrir no Telegram"). O código vale 10 minutos e cai depois de 5 tentativas
-   erradas. A partir daí só o seu chat é atendido.
-4. Ajuste os avisos e use "Mandar teste".
-
-No Telegram: `/hoje` e `/noite` mandam os resumos na hora (sem IA), `/nova`
-começa outra conversa e `/ajuda` lista os comandos. O resto vai para o motor
-de IA escolhido, numa conversa "Telegram" que também aparece no chat web.
-
-`/acoes` abre as **ações prontas** em botões — as mesmas ferramentas que a IA
-usa (lançar gasto, contas, lembretes, agenda, hábitos, treino, dieta, notas,
-documentos), então funcionam sem motor de IA nenhum. A primeira tela traz as
-mais usadas e os módulos; uma ação que precisa de detalhes pergunta um de cada
-vez (dá para responder por áudio), opções viram botões, excluir pede
-confirmação, e `/cancelar` sai. Ficando 10 minutos sem resposta, a ação é
-esquecida — e ela também se perde se o backend reiniciar no meio.
-
-O bot busca as mensagens sozinho (long polling): não precisa de domínio nem
-HTTPS e funciona igual no Mac e num servidor. Com a máquina dormindo nada sai;
-ao acordar, o resumo da manhã ainda vai se for antes do meio-dia, o da noite
-até meia-noite, e lembretes com até 12 h de atraso. Não rode o mesmo bot em
-duas máquinas ao mesmo tempo — o Telegram só entrega para uma.
-
 ## Voz
 
 Converse com o Estus falando. Tudo é processado no próprio Mac, pela ponte
@@ -283,8 +249,6 @@ e funciona com qualquer motor de IA (ou sem nenhum, só com os atalhos).
   novo (ou só pare de falar por 2 segundos; o limite é 2 minutos). A frase vira
   sua mensagem e a resposta aparece em texto e é lida em voz alta — "■ Parar voz"
   interrompe. Perguntas digitadas continuam só em texto.
-- **No Telegram:** mande um áudio (até 3 minutos). O bot responde "🎙️ Entendi:
-  …", faz o que foi pedido e responde em texto.
 
 Requisitos: macOS 26+ e a ponte compilada (`cd apple-bridge && swift build -c release`).
 Na primeira transcrição o macOS baixa o modelo de fala pt-BR. A voz padrão é

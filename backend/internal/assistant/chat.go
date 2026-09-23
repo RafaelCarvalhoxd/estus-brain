@@ -158,7 +158,7 @@ func (c *Chat) Close() {
 	c.bridge.stop()
 }
 
-// Voice is the Mac's speech, shared by the web chat and the Telegram bot.
+// Voice is the Mac's speech, shared by the web chat and other channels.
 func (c *Chat) Voice() *Voice { return c.voice }
 
 var defaultModels = map[string]string{
@@ -389,10 +389,6 @@ type SendRequest struct {
 	AttachmentID string `json:"attachment_id"`
 	// Title names a conversation Send creates; empty uses the message's start.
 	Title string `json:"-"`
-	// SentAt is when the person actually wrote the message, for a channel
-	// that can deliver it late (Telegram queues up to 24h while the bot is
-	// off). Zero means "now": the web chat has no such delay.
-	SentAt time.Time `json:"-"`
 }
 
 var ErrNoProvider = errors.New("no AI engine selected")
@@ -458,7 +454,7 @@ func (c *Chat) Send(ctx context.Context, req SendRequest, emit func(Event)) erro
 	}
 
 	chatReq := ChatRequest{
-		System:  c.systemPrompt(req.Module, req.SentAt),
+		System:  c.systemPrompt(req.Module),
 		Message: message,
 		Module:  req.Module,
 		Model:   c.model(settings, providerID),
@@ -553,13 +549,12 @@ var moduleNames = map[string]string{
 
 var weekdaysPT = []string{"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"}
 
-func (c *Chat) systemPrompt(module string, sentAt time.Time) string {
+func (c *Chat) systemPrompt(module string) string {
 	now := c.tools.now()
 	var b strings.Builder
 	b.WriteString("Você é o assistente do Estus Brain, o app pessoal do dono (finanças, contas, notas, lembretes, agenda, hábitos, treino, dieta, documentos e quadros). ")
 	b.WriteString("Responda sempre em português do Brasil, de forma direta e curta; use listas curtas quando ajudar e Markdown simples.\n")
 	fmt.Fprintf(&b, "Agora: %s, %s às %s (horário de São Paulo).\n", weekdaysPT[now.Weekday()], now.Format("2006-01-02"), now.Format("15:04"))
-	b.WriteString(sendTimeLine(sentAt, now))
 	b.WriteString("Você pode conversar sobre qualquer assunto. Quando a pergunta envolver os dados da pessoa, use as ferramentas do Estus Brain em vez de supor. ")
 	b.WriteString("Para lançar, cadastrar ou editar, faça direto quando as informações estiverem claras; se faltar algo essencial (valor, data), pergunte. ")
 	b.WriteString("Gasto sem categoria dita: escolha a categoria existente que melhor encaixa (liste antes); só quando nenhuma serve, passe um nome novo e curto — a categoria é criada sozinha. Avise na resposta quando criar uma categoria nova. ")

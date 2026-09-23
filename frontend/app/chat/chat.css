@@ -785,6 +785,9 @@
   color: var(--ink-mute);
   line-height: 1.5;
 }
+.es-hint.is-ok {
+  color: var(--good);
+}
 .es-engines {
   display: flex;
   flex-direction: column;
@@ -942,60 +945,6 @@ label.es-engine {
   .cx-tool.is-running .cx-tool-dot {
     animation: none;
   }
-}
-
-/* Telegram tab */
-.es-status {
-  margin: 0 0 14px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--mist);
-  color: var(--ink-soft);
-  font-size: 13px;
-}
-.es-status.is-ok {
-  background: var(--good-wash);
-  color: var(--good);
-}
-.es-status.is-error {
-  background: var(--bad-wash);
-  color: var(--bad);
-}
-.es-hint.is-ok {
-  color: var(--good);
-}
-.es-row {
-  align-items: center;
-  justify-content: space-between;
-}
-.es-notice {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 0;
-  border-top: 1px solid var(--hairline);
-  font-size: 13.5px;
-}
-.es-notice input {
-  width: 7.5em;
-  max-width: 100%;
-  padding: 5px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--hairline);
-  background: var(--page);
-  color: var(--ink);
-  font: inherit;
-}
-.es-notice-minutes {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-}
-.es-notice-minutes input {
-  width: 5em;
 }
 
 /* voice */
