@@ -788,84 +788,6 @@
 .es-hint.is-ok {
   color: var(--good);
 }
-.es-engines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.es-engine {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 11px;
-  border: 1px solid var(--hairline);
-}
-label.es-engine {
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-}
-.es-engine.is-on {
-  border-color: color-mix(in oklab, var(--brain-glow) 55%, var(--hairline));
-  background: color-mix(in oklab, var(--brain-glow) 8%, transparent);
-}
-.es-engine.is-off .es-engine-pick b {
-  color: var(--ink-soft);
-}
-.es-engine-pick {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  cursor: pointer;
-}
-.es-engine input[type="radio"] {
-  margin-top: 3px;
-  accent-color: var(--brain-glow);
-}
-.es-engine b {
-  display: block;
-  font-size: 13.5px;
-}
-.es-engine b em {
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink-mute);
-  margin-left: 6px;
-}
-.es-engine span {
-  font-size: 12px;
-  color: var(--ink-mute);
-}
-.es-engine span.is-ok {
-  color: color-mix(in oklab, var(--good) 75%, var(--ink));
-}
-.es-engine-gaps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-.es-engine-gaps em {
-  font-style: normal;
-  font-size: 10.5px;
-  color: var(--ink-mute);
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  padding: 2px 8px;
-}
-.es-engine-config {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-left: 26px;
-}
-.es-engine-config:empty {
-  display: none;
-}
 .es-inline {
   display: flex;
   gap: 6px;
@@ -919,6 +841,30 @@ label.es-engine {
   font: 11.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* The agent form: label above input, one field per row. */
+.es-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.es-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.es-field input,
+.es-field select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
 }
 
 @media (max-width: 860px) {
@@ -1063,15 +1009,6 @@ label.es-engine {
 }
 .cx-attach-error {
   color: var(--bad);
-}
-.cx-vision-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-mute);
-}
-.cx-vision-hint button {
-  font-size: 12.5px;
 }
 .cx-attach-tag {
   display: flex;

@@ -79,9 +79,7 @@ export interface ConversationSummary {
   updated_at: string;
 }
 
-/** What this engine's own model can do — a fact for the settings screen,
- * not a switch. Only supports_image_gen is wired to anything today
- * (generate_image); the other two are informational, ahead of file upload. */
+/** What the agent's model can do, as the settings screen shows it. */
 export interface Capabilities {
   supports_image_gen: boolean;
   supports_vision: boolean;
@@ -94,20 +92,17 @@ export interface ProviderStatus {
   kind: "login" | "api" | "local";
   available: boolean;
   detail: string;
-  needs_key?: boolean;
-  has_key?: boolean;
   model: string;
   models?: string[];
   capabilities: Capabilities;
 }
 
 export interface AssistantSettings {
+  /** "agent" when the chat answers through the external agent, "none" for shortcuts only. */
   provider: string;
-  ollama_url: string;
   providers: ProviderStatus[];
+  agent: { url: string; model: string; has_token: boolean };
   mcp: { url: string; token: string };
   can_store_keys: boolean;
-  multi_user: boolean;
-  voice?: { available: boolean; detail: string };
 }
 

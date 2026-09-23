@@ -1,32 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AssistantSettings, Capabilities, ProviderStatus } from "./types";
+import type { AssistantSettings } from "./types";
 import { IconClose } from "../icons";
 
-// Where the owner picks and configures the AI engines, and finds what to
-// paste into Claude Desktop, Claude Code or Codex to use Estus Brain from
-// outside (MCP).
-
-const KIND_LABEL = { login: "Sua conta", api: "API key", local: "Local" } as const;
-
-// Shows only what's missing — an engine with everything gets no line at all,
-// so the list stays useful instead of repeating "✓ tudo" on every row.
-function CapabilityGaps({ capabilities: c }: { capabilities: Capabilities }) {
-  const gaps = [
-    !c.supports_image_gen && "Não gera imagem",
-    !c.supports_vision && "Não vê imagem",
-    !c.supports_voice && "Sem chat de voz",
-  ].filter(Boolean) as string[];
-  if (gaps.length === 0) return null;
-  return (
-    <span className="es-engine-gaps">
-      {gaps.map((g) => (
-        <em key={g}>{g}</em>
-      ))}
-    </span>
-  );
-}
+// Where the owner points the chat at an external agent, and finds what to
+// paste into that agent's own MCP config to use Estus Brain from outside.
 
 function Copy({ text, label = "Copiar" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -63,9 +42,9 @@ function Snippet({ title, text, hint, token, reveal }: { title: string; text: st
 }
 
 export function EngineSettings({ settings, onClose, onChanged }: { settings: AssistantSettings | null; onClose: () => void; onChanged: () => void }) {
-  const [tab, setTab] = useState<"engines" | "mcp">("engines");
+  const [tab, setTab] = useState<"agent" | "mcp">("agent");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [reveal, setReveal] = useState(false);
   const [origin, setOrigin] = useState("");
 
@@ -77,11 +56,11 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const save = async (key: string, body: Record<string, unknown>) => {
-    setSaving(key);
+  const save = async (body: Record<string, unknown>) => {
+    setSaving(true);
     setError(null);
     const res = await fetch("/api/assistant/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    setSaving(null);
+    setSaving(false);
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       setError(data?.error ?? "Não foi possível salvar.");
@@ -92,61 +71,36 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
 
   const token = settings?.mcp.token ?? "";
   const shown = reveal ? token : token ? `${token.slice(0, 10)}…${token.slice(-4)}` : "";
-  const appURL = `${origin}/mcp`;
+  const mcpURL = `${origin}/mcp`;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-shell is-wide es" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Motor de IA e conexões">
+      <div className="modal-shell is-wide es" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Agente e conexões">
         <div className="panel">
           <button className="icon-btn modal-close" type="button" aria-label="Fechar" onClick={onClose}>
             <IconClose />
           </button>
           <div className="panel-head">
-            <h2>Motor de IA e conexões</h2>
+            <h2>Agente e conexões</h2>
           </div>
           <div className="seg es-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={tab === "engines"} className={tab === "engines" ? "active" : ""} onClick={() => setTab("engines")}>
-              Motores no chat
+            <button type="button" role="tab" aria-selected={tab === "agent"} className={tab === "agent" ? "active" : ""} onClick={() => setTab("agent")}>
+              Agente
             </button>
             <button type="button" role="tab" aria-selected={tab === "mcp"} className={tab === "mcp" ? "active" : ""} onClick={() => setTab("mcp")}>
-              Usar por fora (MCP)
+              MCP
             </button>
           </div>
           {error && <p className="form-error">{error}</p>}
 
-          {tab === "engines" &&
-            (settings === null ? (
-              <p className="es-hint">Verificando os motores…</p>
-            ) : (
-              <div className="es-engines">
-                <label className={`es-engine${settings.provider === "none" ? " is-on" : ""}`}>
-                  <input type="radio" name="engine" checked={settings.provider === "none"} onChange={() => void save("provider", { provider: "none" })} />
-                  <div>
-                    <b>Só atalhos</b>
-                    <span>Respostas prontas, sem IA nenhuma.</span>
-                  </div>
-                </label>
-                {settings.providers.map((p) => (
-                  <EngineRow key={p.id} p={p} selected={settings.provider === p.id} saving={saving} settings={settings} save={save} />
-                ))}
-                {settings.voice && (
-                  <p className={`es-hint${settings.voice.available ? " is-ok" : ""}`}>
-                    <b>Voz:</b> {settings.voice.detail}
-                  </p>
-                )}
-                {settings.multi_user && <p className="es-hint">Modo multiusuário: os motores que usam a sua assinatura pessoal ficam desligados.</p>}
-                <p className="es-hint">
-                  &quot;Sua conta&quot; usa o Claude Code ou o Codex já logados neste servidor, na sua assinatura. É para uso pessoal: se abrir o app
-                  para outras pessoas, use API keys, Ollama ou Apple Intelligence (defina ASSISTANT_MULTI_USER=true).
-                </p>
-              </div>
-            ))}
+          {tab === "agent" &&
+            (settings === null ? <p className="es-hint">Verificando o agente…</p> : <AgentForm settings={settings} saving={saving} save={save} onTest={onChanged} />)}
 
           {tab === "mcp" && settings && (
             <div className="es-mcp">
               <p className="es-hint">
-                O Estus Brain expõe as mesmas ferramentas do chat (lançar gastos, contas, notas, lembretes, agenda, hábitos…) pelo protocolo MCP. Conecte
-                seu Claude ou ChatGPT e peça as coisas de lá. O cofre de senhas nunca é exposto.
+                O agente lê e grava no Estus por aqui: gastos, contas, notas, lembretes, agenda, hábitos… O cofre de senhas nunca é exposto. Configure
+                este endereço e o token no MCP do seu agente.
               </p>
               <div className="es-token">
                 <span>Token</span>
@@ -159,45 +113,18 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
               <Snippet
                 token={token}
                 reveal={reveal}
-                title="Claude Code"
-                hint="Neste servidor, ou em outra máquina trocando o endereço."
-                text={`claude mcp add --transport http estus-brain ${settings.mcp.url} --header "Authorization: Bearer ${token}"`}
+                title="Hermes Agent"
+                hint="Em ~/.hermes/config.yaml, na seção mcp_servers."
+                text={`mcp_servers:\n  estus:\n    url: "${settings.mcp.url}"\n    headers:\n      Authorization: "Bearer ${token}"`}
               />
               <Snippet
                 token={token}
                 reveal={reveal}
-                title="Codex (GPT)"
-                hint="Em ~/.codex/config.toml; exporte ESTUS_MCP_TOKEN com o token."
-                text={`[mcp_servers.estus-brain]\nurl = "${settings.mcp.url}"\nbearer_token_env_var = "ESTUS_MCP_TOKEN"`}
+                title="OpenClaw e outros"
+                hint="Qualquer agente com MCP por HTTP: este endereço, com o token no cabeçalho Authorization."
+                text={`URL: ${settings.mcp.url}\nAuthorization: Bearer ${token}`}
               />
-              <Snippet
-                token={token}
-                reveal={reveal}
-                title="Claude Desktop"
-                hint="Compile o relay com `go build -o estus-mcp ./cmd/estus-mcp` (em backend/) e aponte para o app."
-                text={JSON.stringify(
-                  {
-                    mcpServers: {
-                      "estus-brain": {
-                        command: "/caminho/para/estus-mcp",
-                        env: { ESTUS_MCP_URL: appURL, ESTUS_MCP_TOKEN: token },
-                      },
-                    },
-                  },
-                  null,
-                  2,
-                )}
-              />
-              <div className="es-snippet">
-                <div className="es-snippet-head">
-                  <b>Claude.ai e ChatGPT na web</b>
-                </div>
-                <p className="es-hint">
-                  Os conectores web chamam o MCP a partir da nuvem deles, então o endereço precisa ser público. O /mcp não pede a senha do app, só o
-                  token. Enquanto o login OAuth não existe, dá para usar o endereço com o token embutido; trate esse link como uma senha:
-                </p>
-                <pre>{`https://SEU-ENDERECO-PUBLICO/mcp?token=${reveal ? token : "…"}`}</pre>
-              </div>
+              <p className="es-hint">Agente em outra máquina: troque o endereço por {mcpURL}.</p>
             </div>
           )}
         </div>
@@ -206,86 +133,87 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
   );
 }
 
-function EngineRow({
-  p,
-  selected,
-  saving,
+function AgentForm({
   settings,
+  saving,
   save,
+  onTest,
 }: {
-  p: ProviderStatus;
-  selected: boolean;
-  saving: string | null;
   settings: AssistantSettings;
-  save: (key: string, body: Record<string, unknown>) => Promise<void>;
+  saving: boolean;
+  save: (body: Record<string, unknown>) => Promise<void>;
+  onTest: () => void;
 }) {
-  const [model, setModel] = useState(p.model);
-  const [key, setKey] = useState("");
-  const [ollamaURL, setOllamaURL] = useState(settings.ollama_url);
+  const status = settings.providers.find((p) => p.id === "agent");
+  const [url, setURL] = useState(settings.agent.url);
+  const [model, setModel] = useState(settings.agent.model);
+  const [token, setToken] = useState("");
+  const on = settings.provider === "agent";
+  const dirty = url !== settings.agent.url || model !== settings.agent.model || token.trim() !== "";
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const body: Record<string, unknown> = { agent_url: url, agent_model: model, provider: "agent" };
+    if (token.trim()) body.agent_token = token;
+    await save(body);
+    setToken("");
+  };
 
   return (
-    <div className={`es-engine${selected ? " is-on" : ""}${p.available ? "" : " is-off"}`}>
-      <label className="es-engine-pick">
-        <input type="radio" name="engine" checked={selected} disabled={!p.available} onChange={() => void save("provider", { provider: p.id })} />
-        <div>
-          <b>
-            {p.name} <em>{KIND_LABEL[p.kind]}</em>
-          </b>
-          <span className={p.available ? "is-ok" : ""}>{p.detail}</span>
-          <CapabilityGaps capabilities={p.capabilities} />
-        </div>
+    <form className="es-agent" onSubmit={(e) => void submit(e)}>
+      <p className={`es-hint${status?.available ? " is-ok" : ""}`}>
+        <b>{status?.available ? "Conectado." : "Não conectado."}</b> {status?.detail}
+      </p>
+      <label className="es-field">
+        <span>Endereço</span>
+        <input value={url} placeholder="http://127.0.0.1:8642" onChange={(e) => setURL(e.target.value)} />
       </label>
-      <div className="es-engine-config">
-        {p.id !== "apple" && (
-          <div className="es-inline">
-            {p.models && p.models.length > 0 ? (
-              <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Modelo">
-                {!p.models.includes(model) && model && <option value={model}>{model}</option>}
-                {p.models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input value={model} placeholder={p.id === "codex" ? "padrão da conta" : "modelo"} onChange={(e) => setModel(e.target.value)} aria-label="Modelo" />
-            )}
-            {model !== p.model && (
-              <button type="button" className="btn-outline" disabled={saving === `model-${p.id}`} onClick={() => void save(`model-${p.id}`, { models: { [p.id]: model } })}>
-                Salvar modelo
-              </button>
-            )}
-          </div>
+      <label className="es-field">
+        <span>Token</span>
+        <input
+          type="password"
+          value={token}
+          autoComplete="off"
+          placeholder={settings.agent.has_token ? "Token salvo — cole outro para trocar" : "API_SERVER_KEY do Hermes ou token do Gateway"}
+          onChange={(e) => setToken(e.target.value)}
+          disabled={!settings.can_store_keys}
+        />
+      </label>
+      {!settings.can_store_keys && <p className="es-hint">Para salvar o token aqui, defina VAULT_ENCRYPTION_KEY. Ou use AGENT_TOKEN no .env.</p>}
+      <label className="es-field">
+        <span>Modelo</span>
+        {status?.models && status.models.length > 0 ? (
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
+            <option value="">O primeiro que o agente oferece</option>
+            {status.models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input value={model} placeholder="hermes-agent ou openclaw/default" onChange={(e) => setModel(e.target.value)} />
         )}
-        {p.needs_key && (
-          <div className="es-inline">
-            <input type="password" value={key} placeholder={p.has_key ? "Chave salva — cole outra para trocar" : "Cole a API key"} onChange={(e) => setKey(e.target.value)} aria-label="API key" autoComplete="off" />
-            <button
-              type="button"
-              className="btn-outline"
-              disabled={!key.trim() || saving === `key-${p.id}` || !settings.can_store_keys}
-              onClick={() => void save(`key-${p.id}`, { keys: { [p.id]: key } }).then(() => setKey(""))}
-            >
-              Salvar chave
-            </button>
-            {p.has_key && (
-              <button type="button" className="btn-text" onClick={() => void save(`key-${p.id}`, { keys: { [p.id]: "" } })}>
-                Remover
-              </button>
-            )}
-          </div>
+      </label>
+      <div className="es-inline">
+        <button type="submit" className="btn-primary" disabled={saving || (!dirty && on)}>
+          {saving ? "Salvando…" : "Salvar e ligar"}
+        </button>
+        <button type="button" className="btn-outline" onClick={onTest}>
+          Testar conexão
+        </button>
+        {on && (
+          <button type="button" className="btn-text" onClick={() => void save({ provider: "none" })}>
+            Desligar
+          </button>
         )}
-        {p.id === "ollama" && (
-          <div className="es-inline">
-            <input value={ollamaURL} onChange={(e) => setOllamaURL(e.target.value)} aria-label="Endereço do Ollama" />
-            {ollamaURL !== settings.ollama_url && (
-              <button type="button" className="btn-outline" onClick={() => void save("ollama", { ollama_url: ollamaURL })}>
-                Salvar endereço
-              </button>
-            )}
-          </div>
+        {settings.agent.has_token && (
+          <button type="button" className="btn-text" onClick={() => void save({ agent_token: "" })}>
+            Remover token
+          </button>
         )}
       </div>
-    </div>
+      <p className="es-hint">Voz: o ditado e a leitura usam o próprio navegador. No Chrome, o ditado passa pelo servidor do Google.</p>
+    </form>
   );
 }

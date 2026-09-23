@@ -6,8 +6,8 @@ import type { AssistantSettings, CardData, ChatItem, ConversationSummary, Module
 import { FLOWS, MODULES, expensePrefill, flowById, matchFlows, type Flow, type FlowField, type OptionSource } from "./flows";
 import { Markdown } from "./Markdown";
 import { EngineSettings } from "./EngineSettings";
-import { useVoiceRecorder } from "./useVoiceRecorder";
-import { IconClose, IconMic, IconPaperclip, IconPlus, IconStop, IconTrash } from "../icons";
+import { speakText, stopSpeech, useDictation } from "./browserVoice";
+import { IconClose, IconMic, IconPaperclip, IconPlus, IconTrash } from "../icons";
 
 // The chat: pick a module, tap a ready-made question or fill a short form,
 // and the answer comes back as a sentence and a card — no AI needed. With an
@@ -194,13 +194,6 @@ export function ChatApp({
 
   const engine = settings?.providers.find((p) => p.id === settings.provider && p.available) ?? null;
   const moduleColor = MODULES.find((m) => m.key === module)?.color ?? "var(--brain-glow)";
-  // A reliable, checkable signal to suggest switching — unlike guessing from
-  // a reply's wording: this attachment is a photo, and the active engine's
-  // own capabilities (not a guess) say it can't see one.
-  const visionSwitchTarget =
-    attachment && attachment.content_type.startsWith("image/") && engine && !engine.capabilities.supports_vision
-      ? settings?.providers.find((p) => p.available && p.capabilities.supports_vision)
-      : undefined;
 
   const update = (id: string, patch: Partial<ChatItem> | ((item: ChatItem) => Partial<ChatItem>)) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...(typeof patch === "function" ? patch(it) : patch) } : it)));
@@ -436,86 +429,29 @@ export function ChatApp({
 
   // ---- voice
 
-  const voiceOn = !!settings?.voice?.available;
-  const playerRef = useRef<HTMLAudioElement | null>(null);
-  // The Blob URL backing the current (or just-finished) player; revoked on
-  // every exit path so a stopped or replaced answer doesn't leak its audio.
-  const playerUrlRef = useRef<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
   const stopSpeaking = useCallback(() => {
-    playerRef.current?.pause();
-    playerRef.current = null;
-    if (playerUrlRef.current) {
-      URL.revokeObjectURL(playerUrlRef.current);
-      playerUrlRef.current = null;
-    }
+    stopSpeech();
     setSpeaking(false);
   }, []);
 
   // Leaving the chat shouldn't leave an answer talking to an empty room.
-  useEffect(() => () => stopSpeaking(), [stopSpeaking]);
+  useEffect(() => () => stopSpeech(), []);
 
-  const speak = async ({ id, spoken }: Reply) => {
+  const speak = ({ id, spoken }: Reply) => {
     stopSpeaking();
     if (!spoken.trim()) return;
-    let player: HTMLAudioElement | null = null;
-    try {
-      const res = await fetch("/api/assistant/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: spoken }) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const url = URL.createObjectURL(await res.blob());
-      playerUrlRef.current = url;
-      player = new Audio(url);
-      playerRef.current = player;
-      const finish = () => {
-        if (playerUrlRef.current === url) {
-          URL.revokeObjectURL(url);
-          playerUrlRef.current = null;
-        }
-        if (playerRef.current === player) {
-          playerRef.current = null;
-          setSpeaking(false);
-        }
-      };
-      player.onended = finish;
-      player.onerror = finish;
-      setSpeaking(true);
-      await player.play();
-    } catch {
-      // Also reached when player.play() rejects (e.g. autoplay policy): the
-      // URL was already stashed above, so stopSpeaking() revokes it here too.
-      // Stopping the playback by hand rejects play() the same way; whoever
-      // stopped it already cleaned up, and the answer isn't unreadable.
-      if (playerRef.current !== player) return;
-      stopSpeaking();
-      update(id, { spokenError: "Não consegui ler em voz alta." });
-    }
+    if (speakText(spoken, () => setSpeaking(false))) setSpeaking(true);
+    else update(id, { spokenError: "Este navegador não lê em voz alta." });
   };
 
-  const sendRecording = async (wav: Blob) => {
+  const dictation = useDictation((heard) => {
     setVoiceNotice(null);
-    const res = await fetch("/api/assistant/voice/transcribe", {
-      method: "POST",
-      headers: { "Content-Type": "audio/wav", "X-Filename": "gravacao.wav" },
-      body: wav,
-    }).catch(() => null);
-    const data = (await res?.json().catch(() => null)) as { text?: string; error?: string } | null;
-    if (!res?.ok) {
-      setItems((prev) => [...prev, { id: uid(), role: "assistant", text: "", tools: [], error: data?.error ?? "Não consegui transcrever o áudio. Tente de novo.", provider: "voz" }]);
-      return;
-    }
-    const heard = data?.text?.trim() ?? "";
-    if (!heard) {
-      setVoiceNotice("Não ouvi nada — tente de novo.");
-      return;
-    }
-    // Don't wait for the answer: the recorder is still showing "Transcrevendo…"
-    // until this resolves, and the typing bubble already covers the answering.
-    void sendText(heard, true).then((reply) => void speak(reply));
-  };
-
-  const recorder = useVoiceRecorder(sendRecording, setVoiceNotice);
+    void sendText(heard, true).then((reply) => speak(reply));
+  }, setVoiceNotice);
+  const voiceOn = dictation.supported;
 
   const newConversation = () => {
     abortRef.current?.abort();
@@ -640,9 +576,9 @@ export function ChatApp({
           </div>
         )}
 
-        {(voiceNotice || speaking || recorder.state === "processing") && (
+        {(voiceNotice || speaking || dictation.listening) && (
           <div className="cx-voicebar" role="status">
-            <span>{recorder.state === "processing" ? "Transcrevendo…" : voiceNotice}</span>
+            <span>{dictation.listening ? "Ouvindo…" : voiceNotice}</span>
             {speaking && (
               <button type="button" className="btn-text" onClick={stopSpeaking}>
                 ■ Parar voz
@@ -668,14 +604,6 @@ export function ChatApp({
                 </span>
               )
             )}
-            {visionSwitchTarget && (
-              <span className="cx-vision-hint">
-                {engine!.name} não vê imagens.
-                <button type="button" className="btn-text" onClick={() => void chooseEngine(visionSwitchTarget.id)}>
-                  Usar {visionSwitchTarget.name}
-                </button>
-              </span>
-            )}
           </div>
         )}
 
@@ -698,7 +626,7 @@ export function ChatApp({
                   </button>
                 ))}
                 <button type="button" className="cx-engine-more" onClick={() => { setEngineMenu(false); setSettingsOpen(true); }}>
-                  Configurar motores…
+                  Configurar agente…
                 </button>
               </div>
             )}
@@ -727,28 +655,20 @@ export function ChatApp({
           {voiceOn && (
             <button
               type="button"
-              className={`cx-mic${recorder.state === "recording" ? " is-recording" : ""}`}
-              aria-label={recorder.state === "recording" ? "Parar gravação" : "Falar"}
-              disabled={busy || recorder.state === "processing"}
+              className={`cx-mic${dictation.listening ? " is-recording" : ""}`}
+              aria-label={dictation.listening ? "Parar de ouvir" : "Falar"}
+              disabled={busy}
               onClick={() => {
-                if (recorder.state === "recording") {
-                  recorder.stop();
+                if (dictation.listening) {
+                  dictation.stop();
                   return;
                 }
                 setVoiceNotice(null);
                 stopSpeaking();
-                void recorder.start();
+                dictation.start();
               }}
             >
-              {recorder.state === "recording" ? (
-                <>
-                  <IconStop /> {recorder.elapsed}s
-                </>
-              ) : recorder.state === "processing" ? (
-                "…"
-              ) : (
-                <IconMic />
-              )}
+              <IconMic />
             </button>
           )}
           <textarea
