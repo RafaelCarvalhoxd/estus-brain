@@ -81,25 +81,15 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
   quadro.
 
 - **Conversa** (`/chat`, o balão ao lado da engrenagem na home) — um chat
-  com o cérebro. Sem IA nenhuma, ele já funciona com **atalhos prontos** por
-  módulo: "Quanto gastei este mês?", "Contas a pagar do mês que vem",
+  com o cérebro. Sem agente nenhum, ele já funciona com **atalhos prontos**
+  por módulo: "Quanto gastei este mês?", "Contas a pagar do mês que vem",
   "Lançar um gasto" (com formulário), "Lançar vários gastos", "Criar
   lembrete", "Treino de hoje"… As respostas vêm em cards, com ações nas
   linhas (excluir lançamento, marcar conta como paga). Texto livre como
-  "gastei 45 no mercado" abre o formulário já preenchido. Com um **motor de
-  IA** conectado, qualquer pergunta vai para ele, que usa as mesmas
-  ferramentas e mantém a conversa (histórico salvo, dá para trocar de motor
-  no meio). Motores:
-  - *Claude (sua conta)* e *GPT (sua conta ChatGPT)* — rodam o Claude Code e
-    o Codex já logados neste servidor, sem API key, com shell e arquivos
-    desligados: só enxergam o MCP do Estus Brain. Uso pessoal; com
-    `ASSISTANT_MULTI_USER=true` ficam desligados.
-  - *Claude / GPT por API key* — chaves salvas criptografadas com
-    `VAULT_ENCRYPTION_KEY` (ou `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
-  - *Ollama* — modelo local.
-  - *Apple Intelligence* — o modelo on-device do macOS, via a ponte Swift em
-    `apple-bridge/` (`swift build -c release`), iniciada sob demanda. Como o
-    modelo é pequeno, recebe só as ferramentas do módulo selecionado.
+  "gastei 45 no mercado" abre o formulário já preenchido. Com um **agente
+  externo** conectado (veja "Conectando um agente" abaixo), qualquer
+  pergunta vai para ele, que usa as mesmas ferramentas pelo MCP e mantém a
+  conversa (histórico salvo).
 
 ### Ferramentas e MCP
 
@@ -107,19 +97,20 @@ Tudo que o assistente faz é uma **ferramenta** em
 `backend/internal/assistant` (33 hoje: gastos, categorias, cartões, contas,
 notas, lembretes, agenda, hábitos, treino, dieta, documentos, quadros e um
 resumo do dia). A mesma lista serve os atalhos do chat
-(`POST /api/assistant/tools/{nome}`), os motores de IA e o **servidor MCP**
-em `/mcp` (streamable HTTP, exige `Authorization: Bearer <token>`). O cofre
-de senhas fica de fora de propósito, e ferramentas que excluem exigem
-`confirm: true`.
+(`POST /api/assistant/tools/{nome}`) e o **servidor MCP** em `/mcp`
+(streamable HTTP, exige `Authorization: Bearer <token>`). O cofre de senhas
+fica de fora de propósito, e ferramentas que excluem exigem `confirm: true`.
+Gerar e editar imagem (`generate_image`/`edit_image`) só funcionam com
+`OPENAI_API_KEY` definida no ambiente do backend.
 
-Para usar por fora, a tela *Motor de IA e conexões* mostra o token e os
-trechos prontos:
-- **Claude Code / Codex**: apontam direto para `/mcp` com o token.
-- **Claude Desktop** (só fala stdio): `go build -o estus-mcp ./cmd/estus-mcp`
-  em `backend/` gera um relay que repassa para o `/mcp` do app.
-- **Claude.ai / ChatGPT na web**: os conectores chamam da nuvem deles, então
-  precisam de um endereço público só para `/mcp`; por enquanto com o token
-  na URL (`?token=`). Login OAuth para esses conectores ainda não existe.
+Para usar por fora, a tela de configuração do agente (Chat > Configurar
+agente… > MCP) mostra o token e um trecho pronto: o agente externo (Hermes,
+OpenClaw…) aponta para `/mcp` com o token. Para um agente que só fala stdio,
+`go build -o estus-mcp ./cmd/estus-mcp` em `backend/` gera um relay que
+repassa para o `/mcp` do app. Conectores que chamam da nuvem (ex.:
+Claude.ai/ChatGPT na web) precisam de um endereço público só para `/mcp`;
+por enquanto com o token na URL (`?token=`) — login OAuth para esses
+conectores ainda não existe.
 
 A arquitetura não assume "só finanças": o backend é um serviço isolado com
 sua própria API, cada módulo mora em arquivos próprios (domínio, repositório,
@@ -238,25 +229,30 @@ Detalhes que valem saber:
 - O `.app` guarda o caminho absoluto do repo: se mover o projeto de pasta,
   rode `scripts/make-app.sh` de novo.
 
-## Voz
+## Conectando um agente
 
-Converse com o Estus falando. Tudo é processado no próprio Mac, pela ponte
-`apple-bridge/`: a transcrição usa o reconhecimento de fala on-device da Apple
-(pt-BR) e a resposta é lida com uma voz do sistema. Nenhum áudio sai da máquina
-e funciona com qualquer motor de IA (ou sem nenhum, só com os atalhos).
+O chat do Estus responde por um agente externo que fala o formato de chat
+da OpenAI — [Hermes Agent](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server/)
+ou [OpenClaw](https://docs.openclaw.ai/gateway/openai-http-api), por exemplo.
+O agente usa as ferramentas do Estus pelo MCP.
 
-- **No chat web:** clique no 🎙️ ao lado da caixa de mensagem, fale e clique de
-  novo (ou só pare de falar por 2 segundos; o limite é 2 minutos). A frase vira
-  sua mensagem e a resposta aparece em texto e é lida em voz alta — "■ Parar voz"
-  interrompe. Perguntas digitadas continuam só em texto.
+1. Ligue a API do agente.
+   - Hermes: defina `API_SERVER_KEY` e suba o API server (porta padrão `8642`).
+   - OpenClaw: habilite o endpoint `chatCompletions` no Gateway.
+2. No MCP do agente, adicione `http://127.0.0.1:<porta do Estus>/mcp` com o
+   cabeçalho `Authorization: Bearer <token>`. O token e um exemplo pronto
+   ficam em Chat > Configurar agente… > MCP.
+3. Em Chat > Configurar agente… > Agente, preencha o endereço e o token do
+   agente e clique em "Salvar e ligar".
+4. Avisos: crie no agente uma tarefa agendada que chama as ferramentas de
+   lembretes e agenda do Estus (ex.: toda manhã às 8h, "liste os lembretes e
+   eventos de hoje e me mande") e envia pelo canal dele (WhatsApp, Telegram…).
+   O Estus não manda notificações sozinho.
 
-Requisitos: macOS 26+ e a ponte compilada (`cd apple-bridge && swift build -c release`).
-Na primeira transcrição o macOS baixa o modelo de fala pt-BR. A voz padrão é
-`Luciana`; para outra (ex.: uma "Premium", baixada em Ajustes do Sistema >
-Acessibilidade > Conteúdo Falado), defina `ASSISTANT_VOICE` no `.env` do backend
-com o nome exatamente como `say -v '?'` imprime — incluindo o parêntese quando
-houver, como em `Eddy (Portuguese (Brazil))`.
-Num servidor sem macOS a voz fica indisponível e o resto do app funciona normalmente.
+Também dá para configurar pelo `.env` do backend: `AGENT_URL`, `AGENT_TOKEN`
+e `AGENT_MODEL`. A instalação nova começa sem agente (`provider: "none"`),
+então mesmo configurando só pelo `.env` é preciso um clique em "Salvar e
+ligar" na aba Agente para ligar o agente.
 
 ## Configurando a sincronização com Google Calendar
 

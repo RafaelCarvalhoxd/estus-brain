@@ -31,9 +31,9 @@ const appRules = `Como o app funciona:
 - Lembretes podem repetir em dias da semana ou num dia do mês; concluir um repetido o move para a próxima vez.
 - Agenda: horário é opcional; sem horário o evento ocupa o dia todo.`
 
-// MCPServer exposes every tool over the Model Context Protocol, for AI apps
-// the owner connects (Claude Desktop, Claude Code, Codex…) and for the chat's
-// own CLI-based engines.
+// MCPServer exposes every tool over the Model Context Protocol, for the
+// external agent behind the chat and for any other MCP client the owner
+// connects (Claude Desktop, Claude.ai, ChatGPT…).
 func (r *Registry) MCPServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "estus-brain", Title: "Estus Brain", Version: "1.0.0"}, &mcp.ServerOptions{
 		Instructions: serverInstructions,

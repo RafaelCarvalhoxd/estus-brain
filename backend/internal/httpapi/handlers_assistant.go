@@ -65,7 +65,7 @@ func (h *AssistantHandlers) ListTools(w http.ResponseWriter, r *http.Request) {
 
 // CallTool runs one tool. Replies {"result": …}, or {"error": "…"} with a
 // status that says whose fault it was — the shape the chat's ready-made
-// flows and the Apple Intelligence bridge both read.
+// flows read.
 func (h *AssistantHandlers) CallTool(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {

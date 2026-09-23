@@ -106,9 +106,9 @@ func (r *Registry) addFiles() {
 				"folder":  str("Pasta onde salvar (nome, caminho ou id); padrão Início"),
 				// content marked required (not just required for txt/pdf): a
 				// schema that only requires it conditionally let a small
-				// model (confirmed live with Apple Intelligence) omit it
-				// every time, hit "file is empty" from Document.Validate,
-				// and retry identically instead of correcting.
+				// local model omit it every time, hit "file is empty" from
+				// Document.Validate, and retry identically instead of
+				// correcting.
 			}, "name", "format", "content"),
 			run: typed(func(ctx context.Context, in struct {
 				Name    string     `json:"name"`

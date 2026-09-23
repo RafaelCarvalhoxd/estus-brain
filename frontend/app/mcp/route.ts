@@ -1,8 +1,9 @@
 import type { NextRequest } from "next/server";
 
-// The MCP endpoint, published on the app's own address so AI apps outside
-// the server (Claude Desktop through estus-mcp, Claude Code, Codex…) reach it
-// through the same edge as the app. The Go server checks the bearer token.
+// The MCP endpoint, published on the app's own address so the external
+// agent behind the chat, and any other MCP client outside the server
+// (Claude Desktop through estus-mcp, Claude.ai, ChatGPT…), reach it through
+// the same edge as the app. The Go server checks the bearer token.
 const API_URL = process.env.API_URL ?? "http://localhost:8080";
 const FORWARDED = ["authorization", "content-type", "accept", "mcp-session-id", "mcp-protocol-version", "last-event-id"];
 
