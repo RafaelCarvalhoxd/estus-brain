@@ -82,6 +82,10 @@ export function useDictation(onHeard: (text: string) => void, onNotice: (msg: st
   return { supported, listening, start, stop };
 }
 
+// The utterance playing now. cancel() fires the previous one's onend/onerror
+// after a new one may have started, so only the current one reports its end.
+let current: SpeechSynthesisUtterance | null = null;
+
 /** Reads text aloud with the first pt-BR voice; false when the browser can't. */
 export function speakText(text: string, onEnd: () => void): boolean {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
@@ -89,13 +93,20 @@ export function speakText(text: string, onEnd: () => void): boolean {
   utterance.lang = "pt-BR";
   const voice = window.speechSynthesis.getVoices().find((v) => v.lang.replace("_", "-").startsWith("pt-BR"));
   if (voice) utterance.voice = voice;
-  utterance.onend = onEnd;
-  utterance.onerror = onEnd;
+  const finish = () => {
+    if (current !== utterance) return;
+    current = null;
+    onEnd();
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
+  current = utterance;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
   return true;
 }
 
 export function stopSpeech() {
+  current = null;
   if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }

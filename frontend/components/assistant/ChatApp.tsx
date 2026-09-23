@@ -10,9 +10,9 @@ import { speakText, stopSpeech, useDictation } from "./browserVoice";
 import { IconClose, IconMic, IconPaperclip, IconPlus, IconTrash } from "../icons";
 
 // The chat: pick a module, tap a ready-made question or fill a short form,
-// and the answer comes back as a sentence and a card — no AI needed. With an
-// engine connected, anything typed goes to it instead, and it can use the
-// very same tools. Which conversation is open lives in the URL (?c=).
+// and the answer comes back as a sentence and a card — no AI needed. With the
+// external agent turned on, anything typed goes to it instead, and it can use
+// the very same tools. Which conversation is open lives in the URL (?c=).
 
 let seq = 0;
 const uid = () => `local-${Date.now()}-${seq++}`;
@@ -176,7 +176,7 @@ export function ChatApp({
   }, []);
 
   useEffect(() => {
-    // Checking each engine takes a moment, so it happens after first paint.
+    // Checking the agent takes a moment, so it happens after first paint.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSettings();
   }, [loadSettings]);
@@ -192,7 +192,10 @@ export function ChatApp({
     if (el && items.length > 0) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [items]);
 
-  const engine = settings?.providers.find((p) => p.id === settings.provider && p.available) ?? null;
+  // Turned on is enough, even if the agent is down right now: the backend
+  // then says why ("O agente não respondeu em …") instead of typed text
+  // quietly falling through to the shortcuts.
+  const engine = settings?.providers.find((p) => p.id === settings.provider) ?? null;
   const moduleColor = MODULES.find((m) => m.key === module)?.color ?? "var(--brain-glow)";
 
   const update = (id: string, patch: Partial<ChatItem> | ((item: ChatItem) => Partial<ChatItem>)) =>
@@ -391,7 +394,7 @@ export function ChatApp({
 
   // ---- typing
 
-  // Typed or spoken, a message goes the same way: to the AI engine, or to the
+  // Typed or spoken, a message goes the same way: to the agent, or to the
   // ready-made flows without one. The reply comes back for reading aloud.
   const sendText = async (text: string, voice: boolean): Promise<Reply> => {
     if (engine) return sendToAI(text, voice);
@@ -406,7 +409,7 @@ export function ChatApp({
       .slice(0, 4)
       .map((f) => f.id);
     const replyId = uid();
-    const reply = "Sem um motor de IA conectado, eu entendo os atalhos prontos. Talvez seja um destes, ou conecte uma IA para conversar livremente.";
+    const reply = "Sem o agente ligado, eu entendo os atalhos prontos. Talvez seja um destes, ou ligue o agente para conversar livremente.";
     setItems((prev) => [
       ...prev,
       { id: uid(), role: "user", text, tools: [], voice },
@@ -418,8 +421,8 @@ export function ChatApp({
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     const text = input.trim();
-    // A lone attachment is a valid message when there's an engine to read
-    // it — the flows path (no engine) has nothing to do with a bare file.
+    // A lone attachment is a valid message when the agent is there to read
+    // it — the flows path (no agent) has nothing to do with a bare file.
     if ((!text && !(engine && attachment)) || busy) return;
     setInput("");
     setVoiceNotice(null);
@@ -513,7 +516,7 @@ export function ChatApp({
           ))}
         </ul>
         <button type="button" className="btn-outline cx-engine-settings" onClick={() => setSettingsOpen(true)}>
-          Motor de IA e conexões
+          Agente e conexões
         </button>
       </aside>
 
@@ -540,7 +543,7 @@ export function ChatApp({
               <p>
                 {engine
                   ? `Pergunte qualquer coisa: ${engine.name} responde usando os seus dados. Ou use um atalho.`
-                  : "Escolha um atalho abaixo ou escreva o que precisa. Para conversar livremente, conecte um motor de IA."}
+                  : "Escolha um atalho abaixo ou escreva o que precisa. Para conversar livremente, ligue o agente."}
               </p>
               <div className="cx-welcome-grid">
                 {quick.map((f) => (
@@ -701,7 +704,7 @@ export function ChatApp({
         <EngineSettings
           settings={settings}
           onClose={() => setSettingsOpen(false)}
-          onChanged={() => void loadSettings()}
+          onChanged={loadSettings}
         />
       )}
     </div>

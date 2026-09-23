@@ -11,11 +11,7 @@ async function proxy(request: NextRequest, { params }: { params: Promise<{ path:
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const res = await fetch(target, {
     method: request.method,
-    headers: {
-      "Content-Type": request.headers.get("content-type") ?? "application/json",
-      // A recording's format travels in its name.
-      ...(request.headers.get("x-filename") ? { "X-Filename": request.headers.get("x-filename")! } : {}),
-    },
+    headers: { "Content-Type": request.headers.get("content-type") ?? "application/json" },
     body: hasBody ? request.body : undefined,
     // Required by fetch to stream a request body.
     ...(hasBody ? { duplex: "half" } : {}),

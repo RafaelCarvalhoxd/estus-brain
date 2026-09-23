@@ -41,7 +41,15 @@ function Snippet({ title, text, hint, token, reveal }: { title: string; text: st
   );
 }
 
-export function EngineSettings({ settings, onClose, onChanged }: { settings: AssistantSettings | null; onClose: () => void; onChanged: () => void }) {
+export function EngineSettings({
+  settings,
+  onClose,
+  onChanged,
+}: {
+  settings: AssistantSettings | null;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
   const [tab, setTab] = useState<"agent" | "mcp">("agent");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -56,17 +64,25 @@ export function EngineSettings({ settings, onClose, onChanged }: { settings: Ass
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const save = async (body: Record<string, unknown>) => {
+  // True when saved, so the form knows whether to clear the token it sent.
+  const save = async (body: Record<string, unknown>): Promise<boolean> => {
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/assistant/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    setSaving(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error ?? "Não foi possível salvar.");
-      return;
+    try {
+      const res = await fetch("/api/assistant/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Não foi possível salvar.");
+        return false;
+      }
+      await onChanged();
+      return true;
+    } catch {
+      setError("Não foi possível falar com o servidor do Estus. Tente de novo.");
+      return false;
+    } finally {
+      setSaving(false);
     }
-    onChanged();
   };
 
   const token = settings?.mcp.token ?? "";
@@ -141,23 +157,42 @@ function AgentForm({
 }: {
   settings: AssistantSettings;
   saving: boolean;
-  save: (body: Record<string, unknown>) => Promise<void>;
-  onTest: () => void;
+  save: (body: Record<string, unknown>) => Promise<boolean>;
+  onTest: () => Promise<void>;
 }) {
+  const { agent } = settings;
   const status = settings.providers.find((p) => p.id === "agent");
-  const [url, setURL] = useState(settings.agent.url);
-  const [model, setModel] = useState(settings.agent.model);
+  // The inputs hold only what this screen saved; .env values show as
+  // placeholders, so saving never copies them into the database.
+  const [url, setURL] = useState(agent.url);
+  const [model, setModel] = useState(agent.model);
   const [token, setToken] = useState("");
+  const [testing, setTesting] = useState(false);
   const on = settings.provider === "agent";
-  const dirty = url !== settings.agent.url || model !== settings.agent.model || token.trim() !== "";
+  const dirty = url !== agent.url || model !== agent.model || token.trim() !== "";
+  const fromEnv = (value: string) => `do .env: ${value}`;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const body: Record<string, unknown> = { agent_url: url, agent_model: model, provider: "agent" };
     if (token.trim()) body.agent_token = token;
-    await save(body);
-    setToken("");
+    if (await save(body)) setToken("");
   };
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      await onTest();
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const tokenPlaceholder = agent.has_token
+    ? "Token salvo — cole outro para trocar"
+    : agent.env_token
+      ? fromEnv("AGENT_TOKEN")
+      : "API_SERVER_KEY do Hermes ou token do Gateway";
 
   return (
     <form className="es-agent" onSubmit={(e) => void submit(e)}>
@@ -166,7 +201,7 @@ function AgentForm({
       </p>
       <label className="es-field">
         <span>Endereço</span>
-        <input value={url} placeholder="http://127.0.0.1:8642" onChange={(e) => setURL(e.target.value)} />
+        <input value={url} placeholder={agent.env_url ? fromEnv(agent.env_url) : "http://127.0.0.1:8642"} onChange={(e) => setURL(e.target.value)} />
       </label>
       <label className="es-field">
         <span>Token</span>
@@ -174,7 +209,7 @@ function AgentForm({
           type="password"
           value={token}
           autoComplete="off"
-          placeholder={settings.agent.has_token ? "Token salvo — cole outro para trocar" : "API_SERVER_KEY do Hermes ou token do Gateway"}
+          placeholder={tokenPlaceholder}
           onChange={(e) => setToken(e.target.value)}
           disabled={!settings.can_store_keys}
         />
@@ -184,7 +219,7 @@ function AgentForm({
         <span>Modelo</span>
         {status?.models && status.models.length > 0 ? (
           <select value={model} onChange={(e) => setModel(e.target.value)}>
-            <option value="">O primeiro que o agente oferece</option>
+            <option value="">{agent.env_model ? fromEnv(agent.env_model) : "O primeiro que o agente oferece"}</option>
             {status.models.map((m) => (
               <option key={m} value={m}>
                 {m}
@@ -192,22 +227,22 @@ function AgentForm({
             ))}
           </select>
         ) : (
-          <input value={model} placeholder="hermes-agent ou openclaw/default" onChange={(e) => setModel(e.target.value)} />
+          <input value={model} placeholder={agent.env_model ? fromEnv(agent.env_model) : "hermes-agent ou openclaw/default"} onChange={(e) => setModel(e.target.value)} />
         )}
       </label>
       <div className="es-inline">
         <button type="submit" className="btn-primary" disabled={saving || (!dirty && on)}>
           {saving ? "Salvando…" : "Salvar e ligar"}
         </button>
-        <button type="button" className="btn-outline" onClick={onTest}>
-          Testar conexão
+        <button type="button" className="btn-outline" onClick={() => void test()} disabled={testing || saving}>
+          {testing ? "Testando…" : "Testar conexão"}
         </button>
         {on && (
           <button type="button" className="btn-text" onClick={() => void save({ provider: "none" })}>
             Desligar
           </button>
         )}
-        {settings.agent.has_token && (
+        {agent.has_token && (
           <button type="button" className="btn-text" onClick={() => void save({ agent_token: "" })}>
             Remover token
           </button>

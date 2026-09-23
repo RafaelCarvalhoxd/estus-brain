@@ -79,29 +79,21 @@ export interface ConversationSummary {
   updated_at: string;
 }
 
-/** What the agent's model can do, as the settings screen shows it. */
-export interface Capabilities {
-  supports_image_gen: boolean;
-  supports_vision: boolean;
-  supports_voice: boolean;
-}
-
 export interface ProviderStatus {
   id: string;
   name: string;
-  kind: "login" | "api" | "local";
   available: boolean;
   detail: string;
   model: string;
   models?: string[];
-  capabilities: Capabilities;
 }
 
 export interface AssistantSettings {
   /** "agent" when the chat answers through the external agent, "none" for shortcuts only. */
   provider: string;
   providers: ProviderStatus[];
-  agent: { url: string; model: string; has_token: boolean };
+  /** Saved values only; env_* is what .env gives for whatever is left empty. */
+  agent: { url: string; model: string; has_token: boolean; env_url: string; env_model: string; env_token: boolean };
   mcp: { url: string; token: string };
   can_store_keys: boolean;
 }
