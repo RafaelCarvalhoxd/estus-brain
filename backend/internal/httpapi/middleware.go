@@ -11,8 +11,8 @@ import (
 
 // withMiddleware wraps every request with request-id tagging, structured
 // access logging, and panic recovery — the three things that are unsafe to
-// skip on a service that will run unattended behind an mTLS edge with no
-// human watching a terminal.
+// skip on a service that will run unattended with no human watching a
+// terminal.
 func withMiddleware(next http.Handler) http.Handler {
 	return recoverPanic(logRequests(next))
 }

@@ -1,8 +1,7 @@
 // Command estus-mcp connects AI apps that only speak MCP over stdio (Claude
 // Desktop, for one) to an Estus Brain server. It is a thin relay: it lists the
 // server's tools over streamable HTTP and forwards every call, so it needs no
-// database — just the server's URL, its token and, behind the mTLS edge, a
-// client certificate.
+// database — just the server's URL and its token.
 //
 // Claude Desktop config (claude_desktop_config.json):
 //
@@ -11,9 +10,7 @@
 //	    "command": "/path/to/estus-mcp",
 //	    "env": {
 //	      "ESTUS_MCP_URL": "https://brain.example.com/mcp",
-//	      "ESTUS_MCP_TOKEN": "estus_…",
-//	      "ESTUS_CLIENT_CERT": "/path/client.crt",
-//	      "ESTUS_CLIENT_KEY": "/path/client.key"
+//	      "ESTUS_MCP_TOKEN": "estus_…"
 //	    }
 //	  }
 //	}
@@ -21,7 +18,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -61,22 +57,13 @@ func run() error {
 		return fmt.Errorf("ESTUS_MCP_TOKEN is required")
 	}
 
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if cert, key := os.Getenv("ESTUS_CLIENT_CERT"), os.Getenv("ESTUS_CLIENT_KEY"); cert != "" && key != "" {
-		pair, err := tls.LoadX509KeyPair(cert, key)
-		if err != nil {
-			return fmt.Errorf("client certificate: %w", err)
-		}
-		transport.TLSClientConfig = &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12}
-	}
-
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "estus-mcp-relay", Version: "1.0.0"}, nil)
 	remote, err := client.Connect(ctx, &mcp.StreamableClientTransport{
 		Endpoint:   url,
-		HTTPClient: &http.Client{Transport: authTransport{token: token, base: transport}},
+		HTTPClient: &http.Client{Transport: authTransport{token: token, base: http.DefaultTransport}},
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", url, err)

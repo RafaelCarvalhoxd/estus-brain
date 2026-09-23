@@ -5,9 +5,6 @@ backend/bin/
 # Documentos enviados pelo módulo Documentos: ficam no projeto, nunca no git.
 backend/data/
 
-# CA e certificados do mTLS: chave privada da CA e dos clientes, nunca no git.
-deploy/mtls/ca/
-deploy/mtls/clients/
 .env
 
 # Lixo do Finder

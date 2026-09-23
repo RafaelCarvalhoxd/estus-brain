@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,14 +13,16 @@ import (
 // VaultHandlers serves the password manager module: plain CRUD for vault
 // entries plus revealing one in plaintext. It's intentionally a separate
 // handler struct from Handlers so this module's routes can be reviewed and
-// evolved without touching the ledger's. Access control lives outside the
-// app entirely — the mTLS edge in front of it is the only gate.
+// evolved without touching the ledger's.
 type VaultHandlers struct {
 	vault *service.VaultService
+	// appPassword must be typed again to reveal a password; empty blocks
+	// every reveal.
+	appPassword string
 }
 
-func NewVaultHandlers(vault *service.VaultService) *VaultHandlers {
-	return &VaultHandlers{vault: vault}
+func NewVaultHandlers(vault *service.VaultService, appPassword string) *VaultHandlers {
+	return &VaultHandlers{vault: vault, appPassword: appPassword}
 }
 
 func (h *VaultHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -76,10 +79,20 @@ func (h *VaultHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reveal handles POST /api/vault/{id}/reveal, decrypting and returning the
-// entry's plaintext password. Whoever reaches this endpoint has already
-// cleared the mTLS edge in front of the app, so there is no further gate
-// here.
+// entry's plaintext password. The body must carry the app password
+// ({"password": "..."}), so an open session alone can't read the vault.
 func (h *VaultHandlers) Reveal(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrValidation))
+		return
+	}
+	if h.appPassword == "" || subtle.ConstantTimeCompare([]byte(req.Password), []byte(h.appPassword)) != 1 {
+		writeJSON(w, http.StatusUnauthorized, errorBody{Error: "senha incorreta"})
+		return
+	}
 	id := r.PathValue("id")
 	password, err := h.vault.Reveal(r.Context(), id)
 	if err != nil {

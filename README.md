@@ -31,9 +31,8 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
     lançamentos porque é sobre o que ainda vai acontecer, não sobre o que já
     aconteceu.
 - **Senhas** (`/senhas`) — um cofre de senhas criptografado (AES-256-GCM).
-  Não tem checagem extra pra revelar: a proteção é o mTLS na borda (ver
-  "Deploy com mTLS") — quem chega até o app já provou quem é com o
-  certificado.
+  Revelar uma senha pede de novo a senha do app (`APP_PASSWORD`), mesmo
+  com o login feito.
 - **Notas** (`/notas`) — um app de escrita: cadernos na lateral, a lista no
   meio e a nota aberta à direita, com editor
   [Tiptap](https://tiptap.dev) (MIT). Títulos, listas, checklists, citações,
@@ -117,8 +116,7 @@ Para usar por fora, a tela *Motor de IA e conexões* mostra o token e os
 trechos prontos:
 - **Claude Code / Codex**: apontam direto para `/mcp` com o token.
 - **Claude Desktop** (só fala stdio): `go build -o estus-mcp ./cmd/estus-mcp`
-  em `backend/` gera um relay que repassa para o `/mcp` do app, com suporte
-  ao certificado cliente do mTLS (`ESTUS_CLIENT_CERT` / `ESTUS_CLIENT_KEY`).
+  em `backend/` gera um relay que repassa para o `/mcp` do app.
 - **Claude.ai / ChatGPT na web**: os conectores chamam da nuvem deles, então
   precisam de um endereço público só para `/mcp`; por enquanto com o token
   na URL (`?token=`). Login OAuth para esses conectores ainda não existe.
@@ -142,11 +140,11 @@ não derruba os outros — o servidor simplesmente não monta aquelas rotas.
   chamadas que precisam rodar no navegador (ex.: `POST
   /api/vault/[id]/reveal`) passam por Route Handlers do Next.js que só
   repassam para o Go. O Go nunca é exposto publicamente.
-- **A app não tem login nem sessão de usuário — quem entra é quem tem o
-  certificado.** Em produção o único ponto exposto na internet é o proxy
-  Caddy (`deploy/Caddyfile`), que exige um certificado de cliente (mTLS)
-  assinado pela sua própria CA antes de sequer repassar a requisição pro
-  Next.js. Ver "Deploy com mTLS" abaixo.
+- **Uma senha, no ambiente, é o login.** O Next.js (`frontend/proxy.ts`)
+  manda para `/entrar` toda requisição sem o cookie de sessão; o login
+  compara o que foi digitado com `APP_PASSWORD`. O cookie dura 30 dias e é
+  assinado com uma chave derivada da senha: trocar a senha desloga todo
+  mundo. Só `/mcp` fica de fora, protegido pelo token do MCP.
 - **Dinheiro é inteiro, sempre.** `amount_cents bigint` no Postgres,
   `domain.Cents int64` no Go. Nenhuma soma financeira passa por `float`.
 - **A regra da fatura é uma função pura e testada:**
@@ -155,8 +153,8 @@ não derruba os outros — o servidor simplesmente não monta aquelas rotas.
   `password_ciphertext`/`password_nonce` (AES-256-GCM); a chave mestra vem
   de `VAULT_ENCRYPTION_KEY` (variável de ambiente, nunca no banco). A rota de
   listagem nunca seleciona essas colunas — só a rota de "revelar" as
-  descriptografa, e ela pode ser chamada à vontade por quem já passou pelo
-  mTLS (não há checagem extra dentro do app).
+  descriptografa, e o Go só responde se o corpo trouxer a `APP_PASSWORD`
+  certa.
 - **Backend em camadas, um handler/serviço/repo por módulo:** `domain`
   (regras de negócio, sem I/O) → `store/postgres` (SQL explícito, sem ORM) →
   `service` (orquestra repositórios) → `httpapi` (HTTP puro, sem framework —
@@ -193,9 +191,11 @@ npm run dev
 Abra `http://localhost:3000`. O seed (`backend/migrations/0002_seed.up.sql`)
 já cria as 7 categorias e um cartão.
 
-Para rodar tudo containerizado: `docker compose up --build`. O serviço
-`caddy` (mTLS) fica atrás de um profile e não sobe nesse comando — ele é só
-para produção, ver "Deploy com mTLS" abaixo.
+Defina `APP_PASSWORD` em `backend/.env` e em `frontend/.env.local` (o mesmo
+valor): sem ela ninguém entra.
+
+Para rodar tudo containerizado: `docker compose up --build`, com
+`APP_PASSWORD` no `.env` da raiz.
 
 ## App do Mac
 
@@ -232,9 +232,8 @@ Detalhes que valem saber:
   `components/`, `lib/`, `public/`, `next.config.*` ou `package.json` for
   mais novo que o último build.
 - A janela usa o **perfil padrão do Chrome**.
-- Esse fluxo é só local, sem mTLS — o Chrome fala direto com `localhost`. O
-  mTLS entra quando você expõe o app numa VPS pública; ver "Deploy com
-  mTLS".
+- A senha de login vem de `APP_PASSWORD` no `backend/.env`; o script a
+  repassa ao frontend.
 - Logs em `~/Library/Logs/EstusBrain/`.
 - O `.app` guarda o caminho absoluto do repo: se mover o projeto de pasta,
   rode `scripts/make-app.sh` de novo.
@@ -295,41 +294,6 @@ com o nome exatamente como `say -v '?'` imprime — incluindo o parêntese quand
 houver, como em `Eddy (Portuguese (Brazil))`.
 Num servidor sem macOS a voz fica indisponível e o resto do app funciona normalmente.
 
-## Deploy com mTLS
-
-Em produção (VPS com IP público — ex.: Contabo) o único serviço exposto na
-internet é o `caddy` do `docker-compose.yml`: ele termina o HTTPS público de
-verdade (Let's Encrypt, via `DOMAIN`) e **exige um certificado de cliente
-válido antes de repassar qualquer requisição** para o frontend. `backend` e
-`frontend` publicam suas portas só em `127.0.0.1` — inalcançáveis de fora da
-máquina mesmo que o firewall da VPS esteja aberto.
-
-**Não existe login nem sessão de usuário no app.** O certificado de cliente
-é a única credencial que existe: quem tem, entra e usa tudo (inclusive
-revelar qualquer senha do módulo Senhas, sem checagem extra); quem não tem,
-nem chega a completar a conexão HTTPS. Como funciona por dentro (CA própria,
-o que o Caddy verifica, como revogar um certificado vazado, troubleshooting)
-está em **[`deploy/mtls/README.md`](deploy/mtls/README.md)** — aqui vai só o
-passo a passo para colocar no ar:
-
-1. Aponte o DNS do seu domínio (ex.: `vault.seudominio.com`) para o IP da
-   VPS. Abra as portas 80 e 443 no firewall (Caddy precisa da 80 para emitir
-   o certificado via ACME).
-2. Na raiz do projeto, crie um `.env` com `DOMAIN=vault.seudominio.com` (e
-   `VAULT_ENCRYPTION_KEY` etc., se for usar esses módulos).
-3. Gere a CA e o certificado do seu Mac: `deploy/mtls/issue-client-cert.sh
-   mac`. Cria `deploy/mtls/ca/` (a CA — nunca vai pro git) e
-   `deploy/mtls/clients/mac/client.p12`.
-4. Importe o `client.p12` no Keychain do Mac (duplo clique, ou Keychain
-   Access → File → Import Items) com a senha definida no passo 3. A partir
-   daí o Safari/Chrome oferecem esse certificado sozinhos ao abrir o
-   domínio do vault.
-5. Suba tudo na VPS: `docker compose --profile mtls up -d --build`. O Caddy
-   só passa a servir o site depois de emitir o certificado Let's Encrypt
-   (leva alguns segundos na primeira vez).
-6. Outro dispositivo (iPhone etc.): `deploy/mtls/issue-client-cert.sh
-   iphone` — reaproveita a CA existente, emite mais um certificado.
-
 ## Configurando a sincronização com Google Calendar
 
 A Agenda funciona 100% localmente sem isso — a sincronização é opcional.
@@ -354,21 +318,18 @@ Para ativar:
 
 ## O que falta antes de "subir na infra"
 
-1. **mTLS na borda** — um reverse proxy (Caddy/Traefik/Nginx) validando
-   certificado de cliente na frente do Next.js. O Go nunca fica exposto
-   publicamente nesse desenho.
-2. **Backups do Postgres** — agora com mais dado sensível (senhas
+1. **Backups do Postgres** — agora com mais dado sensível (senhas
    criptografadas inclusas) que antes; `pg_dump` agendado + guardar
    `VAULT_ENCRYPTION_KEY` em um cofre separado do backup do banco (backup do
    banco sem a chave é só ruído para quem não deveria ler; junte os dois e
    você perdeu a proteção).
-3. **Gastos recorrentes automáticos** — hoje `is_recurring` é só uma flag
+2. **Gastos recorrentes automáticos** — hoje `is_recurring` é só uma flag
    manual por lançamento financeiro; não se recria sozinho todo mês.
-4. **Push/dois-sentidos completo na Agenda** — a sincronização de hoje é
+3. **Push/dois-sentidos completo na Agenda** — a sincronização de hoje é
    "puxar do Google" sob demanda + "empurrar ao criar localmente";
    não há webhook de mudanças, então uma edição feita direto no Google só
    aparece aqui depois do próximo "Sincronizar agora".
-5. **Gestão de cartões** — hoje um cartão só existe via seed/API; não tem
+4. **Gestão de cartões** — hoje um cartão só existe via seed/API; não tem
    tela para cadastrar um novo cartão, editar dia de fechamento/vencimento,
    ou ver a fatura por cartão quando houver mais de um.
 

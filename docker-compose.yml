@@ -22,6 +22,8 @@ services:
     environment:
       PORT: 8080
       DATABASE_URL: postgres://estus:estus@postgres:5432/estus_vault?sslmode=disable
+      # Senha de login do app, pedida de novo para revelar uma senha do cofre.
+      APP_PASSWORD: ${APP_PASSWORD:-}
       # Cofre de senhas — deixe em branco para rodar sem esse módulo.
       VAULT_ENCRYPTION_KEY: ${VAULT_ENCRYPTION_KEY:-}
       # Agenda / Google Calendar — deixe em branco para rodar só localmente.
@@ -32,9 +34,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Só em loopback: em produção o único jeito de entrar é pelo Caddy, que
-    # fala com este serviço pela rede interna do compose, não pela porta
-    # publicada no host.
     ports:
       - "127.0.0.1:8080:8080"
 
@@ -44,38 +43,11 @@ services:
     environment:
       API_URL: http://backend:8080
       PORT: 3000
+      APP_PASSWORD: ${APP_PASSWORD:-}
     depends_on:
       - backend
     ports:
       - "127.0.0.1:3000:3000"
 
-  # Borda mTLS: único serviço exposto publicamente (80/443). Emite o
-  # certificado HTTPS de verdade (Let's Encrypt, via DOMAIN) e só repassa a
-  # requisição para o frontend depois de validar um certificado de cliente
-  # assinado pela CA em deploy/mtls/ca/ca.crt — ver "Deploy com mTLS" no
-  # README. Fica atrás do profile "mtls": `docker compose up --build`
-  # sozinho (uso local) não sobe nem exige DOMAIN; produção usa
-  # `docker compose --profile mtls up -d --build`.
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    profiles: ["mtls"]
-    environment:
-      # Obrigatório só quando você de fato sobe este serviço (profile mtls) —
-      # ver "Deploy com mTLS" no README.
-      DOMAIN: ${DOMAIN:-}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./deploy/mtls/ca:/mtls:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend
-
 volumes:
   estus_vault_pgdata:
-  caddy_data:
-  caddy_config:

@@ -69,11 +69,6 @@
   gap: 10px;
   white-space: nowrap;
 }
-.vault-row-error {
-  grid-column: 1 / -1;
-  margin: 4px 0 0;
-}
-
 .vault-row-edit {
   grid-column: 1 / -1;
   display: flex;

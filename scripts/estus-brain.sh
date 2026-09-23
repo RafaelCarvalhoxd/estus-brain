@@ -155,8 +155,14 @@ if ! listening "$WEB_PORT"; then
     npm run build >>"$LOG_DIR/frontend.log" 2>&1 || die "O build do frontend falhou. Veja frontend.log."
   fi
 
+  # A senha de login mora só no backend/.env; o front precisa dela para
+  # conferir o login e o cookie de sessão.
+  app_password="$(sed -n 's/^APP_PASSWORD=//p' "$ROOT/backend/.env" | tail -1)"
+  app_password="${app_password%\"}"; app_password="${app_password#\"}"
+  app_password="${app_password%\'}"; app_password="${app_password#\'}"
+
   # O binário direto, não npx: um wrapper a menos pra sobrar órfão no --stop.
-  ./node_modules/.bin/next start -p "$WEB_PORT" >>"$LOG_DIR/frontend.log" 2>&1 &
+  APP_PASSWORD="$app_password" ./node_modules/.bin/next start -p "$WEB_PORT" >>"$LOG_DIR/frontend.log" 2>&1 &
   echo $! >"$RUN_DIR/frontend.pid"
   wait_for 60 curl -fsS -o /dev/null "$URL/" || die "O frontend não respondeu em 60s. Veja frontend.log."
 fi

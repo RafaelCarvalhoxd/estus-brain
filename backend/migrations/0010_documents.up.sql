@@ -2,7 +2,7 @@
 -- the server's disk (DOCUMENTS_DIR), and only the metadata lives here. A
 -- personal archive is mostly PDFs and scans; putting them in Postgres would
 -- bloat every backup of a database that is otherwise tiny, and the files are
--- already protected by the same mTLS edge as everything else.
+-- already protected by the same login as everything else.
 create table document_folders (
     id         uuid primary key default gen_random_uuid(),
     parent_id  uuid references document_folders(id) on delete restrict,
