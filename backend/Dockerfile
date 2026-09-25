@@ -10,6 +10,8 @@ RUN adduser -D -u 10001 estus
 WORKDIR /app
 COPY --from=build /bin/api ./api
 COPY --from=build /src/migrations ./migrations
+# Documentos e o token do MCP ficam em /app/data: monte um volume aí.
+RUN mkdir -p data && chown estus data
 USER estus
 EXPOSE 8080
 ENTRYPOINT ["./api"]

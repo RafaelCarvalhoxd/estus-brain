@@ -1,13 +1,14 @@
+# Deploy (Cubeship/Dokploy): só o frontend recebe domínio, na porta 3000.
+# Backend e Postgres ficam na rede interna. Variáveis vêm do painel (ou de
+# um .env ao lado deste arquivo).
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: estus
-      POSTGRES_PASSWORD: estus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-estus}
       POSTGRES_DB: estus_vault
-    ports:
-      - "5434:5432"
     volumes:
       - estus_vault_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,21 +22,26 @@ services:
     restart: unless-stopped
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://estus:estus@postgres:5432/estus_vault?sslmode=disable
+      DATABASE_URL: postgres://estus:${POSTGRES_PASSWORD:-estus}@postgres:5432/estus_vault?sslmode=disable
       # Senha de login do app, pedida de novo para revelar uma senha do cofre.
       APP_PASSWORD: ${APP_PASSWORD:-}
       # Cofre de senhas — deixe em branco para rodar sem esse módulo.
       VAULT_ENCRYPTION_KEY: ${VAULT_ENCRYPTION_KEY:-}
-      # Agenda / Google Calendar — deixe em branco para rodar só localmente.
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/google/oauth/callback}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      DOCUMENTS_DIR: /app/data/documents
+      ASSISTANT_DIR: /app/data/assistant
+      MCP_TOKEN: ${MCP_TOKEN:-}
+      ASSISTANT_TZ: ${ASSISTANT_TZ:-America/Sao_Paulo}
+      AGENT_URL: ${AGENT_URL:-}
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      AGENT_MODEL: ${AGENT_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - estus_vault_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:8080:8080"
+    expose:
+      - "8080"
 
   frontend:
     build: ./frontend
@@ -46,8 +52,9 @@ services:
       APP_PASSWORD: ${APP_PASSWORD:-}
     depends_on:
       - backend
-    ports:
-      - "127.0.0.1:3000:3000"
+    expose:
+      - "3000"
 
 volumes:
   estus_vault_pgdata:
+  estus_vault_data:

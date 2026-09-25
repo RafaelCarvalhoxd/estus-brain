@@ -53,8 +53,8 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
   backend não tem fuso.
 - **Lembretes** (`/lembretes`) — lembretes simples com data opcional,
   agrupados por atrasado/hoje/próximos.
-- **Agenda** (`/agenda`) — eventos locais, com sincronização opcional (via
-  OAuth) com o Google Calendar.
+- **Agenda** (`/agenda`) — eventos com data, horário e local, numa grade
+  do mês.
 - **Treino** (`/treino`) — seus treinos (nome, foco, dias da semana e
   exercícios com séries, repetições, carga e descanso). A tela abre no treino
   de hoje, mostra a semana em sete colunas e, em dia de descanso, diz qual é
@@ -186,48 +186,43 @@ Defina `APP_PASSWORD` em `backend/.env` e em `frontend/.env.local` (o mesmo
 valor): sem ela ninguém entra.
 
 Para rodar tudo containerizado: `docker compose up --build`, com
-`APP_PASSWORD` no `.env` da raiz.
+`APP_PASSWORD` no `.env` da raiz. Localmente o `docker compose` também
+carrega o `docker-compose.override.yml`, que publica as portas em
+`127.0.0.1` (Postgres na 5434, API na 8080, app na 3000).
 
-## App do Mac
+## Deploy (Cubeship)
 
-`scripts/make-app.sh` cria um **Estus Brain.app** em `~/Applications` — ícone
-próprio no Dock, Spotlight e Launchpad. Abrir o app sobe o que estiver
-faltando (Docker, Postgres, backend, frontend) e abre uma janela do Chrome
-em *app mode*, sem barra de endereço nem abas.
+O Cubeship funciona como o Dokploy: ele sobe o `docker-compose.yml` e põe
+o domínio na frente de um serviço.
+
+1. Crie um app do tipo Docker Compose apontando para este repositório, com
+   o arquivo `docker-compose.yml`.
+2. Defina as variáveis no painel:
+   - `APP_PASSWORD` — a senha de login. Sem ela ninguém entra.
+   - `POSTGRES_PASSWORD` — senha forte do banco. Só vale na primeira subida,
+     quando o volume do Postgres ainda está vazio.
+   - `VAULT_ENCRYPTION_KEY` — `openssl rand -base64 32`. Sem ela o cofre de
+     senhas fica desligado. Guarde uma cópia fora do servidor: sem a chave,
+     as senhas do backup não abrem.
+   - Opcionais: `MCP_TOKEN`, `ASSISTANT_TZ`, `AGENT_URL`, `AGENT_TOKEN`,
+     `AGENT_MODEL`, `OPENAI_API_KEY`.
+3. Aponte o domínio para o serviço `frontend`, porta `3000`, com HTTPS. É o
+   único serviço exposto: o `/mcp` também passa por ele.
+
+Dois volumes guardam os dados: `estus_vault_pgdata` (o banco) e
+`estus_vault_data` (arquivos de Documentos e o token do MCP). As migrations
+rodam sozinhas quando o backend sobe.
+
+Para levar os dados da máquina para o servidor:
 
 ```bash
-scripts/make-app.sh          # cria/atualiza o .app
-scripts/make-app.sh --icon   # redesenha o ícone antes (fonte: scripts/icon/)
+docker compose exec -T postgres pg_dump -U estus -d estus_vault --clean --if-exists > estus.sql
 ```
 
-O `.app` é só um atalho de três linhas: a lógica mora em
-`scripts/estus-brain.sh`, que também roda direto no terminal.
-
-```bash
-scripts/estus-brain.sh            # sobe o que falta e abre a janela
-scripts/estus-brain.sh --rebuild  # força rebuild do frontend
-scripts/estus-brain.sh --stop     # derruba backend e frontend
-```
-
-Detalhes que valem saber:
-
-- **Portas 37887 (app) e 37888 (API)**, não as 3000/8080 do passo a passo
-  acima — são portas que nenhuma outra ferramenta de dev costuma disputar, e
-  ficam abaixo de 49152, onde o macOS começa a sortear portas efêmeras. Se
-  você seguiu o passo a passo antes, ajuste `PORT` em `backend/.env` e
-  `API_URL` em `frontend/.env.local`.
-- O script **força** `FRONTEND_URL` para a porta do app, sobrescrevendo o
-  `.env`.
-- Roda o **build de produção** (`next start`), não o dev server — bem mais
-  leve de memória. O rebuild acontece sozinho quando algo em `app/`,
-  `components/`, `lib/`, `public/`, `next.config.*` ou `package.json` for
-  mais novo que o último build.
-- A janela usa o **perfil padrão do Chrome**.
-- A senha de login vem de `APP_PASSWORD` no `backend/.env`; o script a
-  repassa ao frontend.
-- Logs em `~/Library/Logs/EstusBrain/`.
-- O `.app` guarda o caminho absoluto do repo: se mover o projeto de pasta,
-  rode `scripts/make-app.sh` de novo.
+Depois, no servidor, rode `psql -U estus -d estus_vault < estus.sql` no
+container do Postgres, com o backend parado. Os arquivos de Documentos
+(`backend/data/documents`) vão para o volume `estus_vault_data`, em
+`documents/`.
 
 ## Conectando um agente
 
@@ -258,28 +253,6 @@ começa sem agente (`provider: "none"`), então mesmo configurando só pelo
 `.env` é preciso um clique em "Salvar e ligar" na aba Agente para ligar o
 agente.
 
-## Configurando a sincronização com Google Calendar
-
-A Agenda funciona 100% localmente sem isso — a sincronização é opcional.
-Para ativar:
-
-1. No [Google Cloud Console](https://console.cloud.google.com/), crie (ou
-   escolha) um projeto e ative a **Google Calendar API** em
-   "APIs e serviços → Biblioteca".
-2. Configure a tela de consentimento OAuth em
-   "APIs e serviços → Tela de consentimento OAuth" (modo "Externo" funciona
-   para uso pessoal — adicione sua própria conta Google como usuário de
-   teste enquanto o app estiver em modo "Testando").
-3. Crie uma credencial em "APIs e serviços → Credenciais → Criar
-   credenciais → ID do cliente OAuth", tipo **Aplicativo da Web**, e
-   registre `http://localhost:8080/api/google/oauth/callback` (ou a URL real
-   do seu backend em produção) como URI de redirecionamento autorizada.
-4. Copie o Client ID e o Client Secret gerados para `GOOGLE_CLIENT_ID` e
-   `GOOGLE_CLIENT_SECRET` no `.env`, e confirme que `GOOGLE_REDIRECT_URL`
-   bate exatamente com a URI registrada.
-5. Em `/agenda`, clique em "Conectar Google Agenda" e depois em
-   "Sincronizar agora".
-
 ## O que falta antes de "subir na infra"
 
 1. **Backups do Postgres** — agora com mais dado sensível (senhas
@@ -289,11 +262,7 @@ Para ativar:
    você perdeu a proteção).
 2. **Gastos recorrentes automáticos** — hoje `is_recurring` é só uma flag
    manual por lançamento financeiro; não se recria sozinho todo mês.
-3. **Push/dois-sentidos completo na Agenda** — a sincronização de hoje é
-   "puxar do Google" sob demanda + "empurrar ao criar localmente";
-   não há webhook de mudanças, então uma edição feita direto no Google só
-   aparece aqui depois do próximo "Sincronizar agora".
-4. **Gestão de cartões** — hoje um cartão só existe via seed/API; não tem
+3. **Gestão de cartões** — hoje um cartão só existe via seed/API; não tem
    tela para cadastrar um novo cartão, editar dia de fechamento/vencimento,
    ou ver a fatura por cartão quando houver mais de um.
 
