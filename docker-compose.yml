@@ -1,14 +1,15 @@
-# Deploy (Cubeship/Dokploy): só o frontend recebe domínio, na porta 3000.
-# Backend e Postgres ficam na rede interna. Variáveis vêm do painel (ou de
-# um .env ao lado deste arquivo).
+# Só para rodar na máquina. Em produção cada serviço é um app do Cubeship,
+# construído pelo Dockerfile, e o banco é o gerenciado por ele.
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: estus
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-estus}
+      POSTGRES_PASSWORD: estus
       POSTGRES_DB: estus_vault
+    ports:
+      - "127.0.0.1:5434:5432"
     volumes:
       - estus_vault_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,19 +19,18 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://estus:${POSTGRES_PASSWORD:-estus}@postgres:5432/estus_vault?sslmode=disable
+      DATABASE_URL: postgres://estus:estus@postgres:5432/estus_vault?sslmode=disable
       # Senha de login do app, pedida de novo para revelar uma senha do cofre.
       APP_PASSWORD: ${APP_PASSWORD:-}
       # Cofre de senhas — deixe em branco para rodar sem esse módulo.
       VAULT_ENCRYPTION_KEY: ${VAULT_ENCRYPTION_KEY:-}
-      DOCUMENTS_DIR: /app/data/documents
-      ASSISTANT_DIR: /app/data/assistant
       MCP_TOKEN: ${MCP_TOKEN:-}
-      ASSISTANT_TZ: ${ASSISTANT_TZ:-America/Sao_Paulo}
       AGENT_URL: ${AGENT_URL:-}
       AGENT_TOKEN: ${AGENT_TOKEN:-}
       AGENT_MODEL: ${AGENT_MODEL:-}
@@ -40,11 +40,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    expose:
-      - "8080"
+    ports:
+      - "127.0.0.1:8080:8080"
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     restart: unless-stopped
     environment:
       API_URL: http://backend:8080
@@ -52,8 +54,8 @@ services:
       APP_PASSWORD: ${APP_PASSWORD:-}
     depends_on:
       - backend
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
 
 volumes:
   estus_vault_pgdata:

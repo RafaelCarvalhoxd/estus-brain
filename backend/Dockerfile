@@ -1,8 +1,9 @@
+# Construído a partir da raiz do repositório: docker build -f backend/Dockerfile .
 FROM golang:1.26-alpine AS build
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
-COPY . .
+COPY backend/ .
 RUN CGO_ENABLED=0 go build -o /bin/api ./cmd/api
 
 FROM alpine:3.20

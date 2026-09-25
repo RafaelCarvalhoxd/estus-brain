@@ -1,15 +1,16 @@
-FROM node:20-alpine AS deps
+# Construído a partir da raiz do repositório: docker build -f frontend/Dockerfile .
+FROM node:24-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/ .
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:24-alpine
 RUN addgroup -S estus && adduser -S estus -G estus
 WORKDIR /app
 ENV NODE_ENV=production

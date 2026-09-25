@@ -186,43 +186,37 @@ Defina `APP_PASSWORD` em `backend/.env` e em `frontend/.env.local` (o mesmo
 valor): sem ela ninguém entra.
 
 Para rodar tudo containerizado: `docker compose up --build`, com
-`APP_PASSWORD` no `.env` da raiz. Localmente o `docker compose` também
-carrega o `docker-compose.override.yml`, que publica as portas em
-`127.0.0.1` (Postgres na 5434, API na 8080, app na 3000).
+`APP_PASSWORD` no `.env` da raiz. O compose é só para a máquina: publica
+as portas em `127.0.0.1` (Postgres na 5434, API na 8080, app na 3000).
 
 ## Deploy (Cubeship)
 
-O Cubeship funciona como o Dokploy: ele sobe o `docker-compose.yml` e põe
-o domínio na frente de um serviço.
+Em produção o Estus roda em
+[Cubeship](https://cubeship.dev), no projeto `estus-brain`, como dois apps
+construídos a partir deste repositório (branch `main`):
 
-1. Crie um app do tipo Docker Compose apontando para este repositório, com
-   o arquivo `docker-compose.yml`.
-2. Defina as variáveis no painel:
-   - `APP_PASSWORD` — a senha de login. Sem ela ninguém entra.
-   - `POSTGRES_PASSWORD` — senha forte do banco. Só vale na primeira subida,
-     quando o volume do Postgres ainda está vazio.
-   - `VAULT_ENCRYPTION_KEY` — `openssl rand -base64 32`. Sem ela o cofre de
-     senhas fica desligado. Guarde uma cópia fora do servidor: sem a chave,
-     as senhas do backup não abrem.
-   - Opcionais: `MCP_TOKEN`, `ASSISTANT_TZ`, `AGENT_URL`, `AGENT_TOKEN`,
-     `AGENT_MODEL`, `OPENAI_API_KEY`.
-3. Aponte o domínio para o serviço `frontend`, porta `3000`, com HTTPS. É o
-   único serviço exposto: o `/mcp` também passa por ele.
+| App | Dockerfile | Porta | Domínio |
+|---|---|---|---|
+| `estus-api` | `backend/Dockerfile` | 8080 | nenhum, só a rede interna |
+| `estus-front` | `frontend/Dockerfile` | 3000 | o endereço público |
 
-Dois volumes guardam os dados: `estus_vault_pgdata` (o banco) e
-`estus_vault_data` (arquivos de Documentos e o token do MCP). As migrations
-rodam sozinhas quando o backend sobe.
+Os Dockerfiles são construídos a partir da raiz do repositório
+(`docker build -f backend/Dockerfile .`).
 
-Para levar os dados da máquina para o servidor:
+- **Banco:** o Postgres gerenciado `estus-db`, ligado ao `estus-api`. O
+  Cubeship injeta o `DATABASE_URL`. As migrations rodam sozinhas quando a
+  API sobe.
+- **Volume:** `/app/data` no `estus-api` guarda os arquivos de Documentos e
+  o token do MCP.
+- **Variáveis do `estus-api`:** `APP_PASSWORD`, `VAULT_ENCRYPTION_KEY` e, se
+  usar, `MCP_TOKEN`, `AGENT_URL`, `AGENT_TOKEN`, `AGENT_MODEL` e
+  `OPENAI_API_KEY`. Guarde a `VAULT_ENCRYPTION_KEY` fora do servidor: sem
+  ela, as senhas do backup não abrem.
+- **Variáveis do `estus-front`:** `APP_PASSWORD` (o mesmo valor), `PORT=3000`
+  e `API_URL`, apontando para o endereço interno do `estus-api`
+  (`http://cubeship-estus-brain-production-estus-api:8080`).
 
-```bash
-docker compose exec -T postgres pg_dump -U estus -d estus_vault --clean --if-exists > estus.sql
-```
-
-Depois, no servidor, rode `psql -U estus -d estus_vault < estus.sql` no
-container do Postgres, com o backend parado. Os arquivos de Documentos
-(`backend/data/documents`) vão para o volume `estus_vault_data`, em
-`documents/`.
+O `/mcp` passa pelo `estus-front`, então fica no mesmo endereço público.
 
 ## Conectando um agente
 
