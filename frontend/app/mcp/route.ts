@@ -5,14 +5,15 @@ import type { NextRequest } from "next/server";
 // (Claude Desktop through estus-mcp, Claude.ai, ChatGPT…), reach it through
 // the same edge as the app. The Go server checks the bearer token.
 const API_URL = process.env.API_URL ?? "http://localhost:8080";
-const FORWARDED = ["authorization", "content-type", "accept", "mcp-session-id", "mcp-protocol-version", "last-event-id"];
+// Every Mcp-* header goes through: newer clients send Mcp-Method, Mcp-Name
+// and Mcp-Param-*, and the Go server refuses a request that lacks them.
+const FORWARDED = ["authorization", "content-type", "accept", "last-event-id"];
 
 async function proxy(request: NextRequest) {
   const headers = new Headers();
-  for (const name of FORWARDED) {
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
+  request.headers.forEach((value, name) => {
+    if (FORWARDED.includes(name) || name.startsWith("mcp-")) headers.set(name, value);
+  });
   const hasBody = request.method === "POST";
   const res = await fetch(`${API_URL}/mcp${request.nextUrl.search}`, {
     method: request.method,
