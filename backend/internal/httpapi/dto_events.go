@@ -8,24 +8,22 @@ import (
 )
 
 type eventDTO struct {
-	ID            string  `json:"id"`
-	Title         string  `json:"title"`
-	Location      string  `json:"location"`
-	Notes         string  `json:"notes"`
-	StartsAt      string  `json:"starts_at"`
-	EndsAt        string  `json:"ends_at"`
-	GoogleEventID *string `json:"google_event_id,omitempty"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Location string `json:"location"`
+	Notes    string `json:"notes"`
+	StartsAt string `json:"starts_at"`
+	EndsAt   string `json:"ends_at"`
 }
 
 func toEventDTO(e domain.Event) eventDTO {
 	return eventDTO{
-		ID:            e.ID,
-		Title:         e.Title,
-		Location:      e.Location,
-		Notes:         e.Notes,
-		StartsAt:      e.StartsAt.Format(time.RFC3339),
-		EndsAt:        e.EndsAt.Format(time.RFC3339),
-		GoogleEventID: e.GoogleEventID,
+		ID:       e.ID,
+		Title:    e.Title,
+		Location: e.Location,
+		Notes:    e.Notes,
+		StartsAt: e.StartsAt.Format(time.RFC3339),
+		EndsAt:   e.EndsAt.Format(time.RFC3339),
 	}
 }
 
@@ -53,12 +51,4 @@ func (r createEventRequest) toInput() (service.NewEventInput, error) {
 		StartsAt: startsAt,
 		EndsAt:   endsAt,
 	}, nil
-}
-
-type googleStatusDTO struct {
-	Connected bool `json:"connected"`
-}
-
-type googleSyncResultDTO struct {
-	Imported int `json:"imported"`
 }

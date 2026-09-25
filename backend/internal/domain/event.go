@@ -5,18 +5,15 @@ import (
 	"time"
 )
 
-// Event is a local agenda entry. GoogleEventID is set once the event is
-// linked to (created from, or pushed to) a Google Calendar event; nil means
-// it only exists locally.
+// Event is an agenda entry.
 type Event struct {
-	ID            string
-	Title         string
-	Location      string
-	Notes         string
-	StartsAt      time.Time
-	EndsAt        time.Time
-	GoogleEventID *string
-	CreatedAt     time.Time
+	ID        string
+	Title     string
+	Location  string
+	Notes     string
+	StartsAt  time.Time
+	EndsAt    time.Time
+	CreatedAt time.Time
 }
 
 func (e Event) Validate() error {

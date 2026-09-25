@@ -5,8 +5,8 @@ import "net/http"
 // Modules bundles every module's handler group so NewRouter has one thing to
 // take instead of a growing positional parameter list. Each field is
 // optional (nil-safe) so a module can be wired in independently — useful in
-// development when, say, GOOGLE_CLIENT_ID isn't set yet but you still want
-// the rest of the API up.
+// development when, say, VAULT_ENCRYPTION_KEY isn't set yet but you still
+// want the rest of the API up.
 type Modules struct {
 	Bills     *BillHandlers
 	Vault     *VaultHandlers
@@ -164,10 +164,6 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 		mux.HandleFunc("POST /api/events", e.Create)
 		mux.HandleFunc("PUT /api/events/{id}", e.Update)
 		mux.HandleFunc("DELETE /api/events/{id}", e.Delete)
-		mux.HandleFunc("GET /api/google/status", e.GoogleStatus)
-		mux.HandleFunc("GET /api/google/oauth/start", e.GoogleAuthStart)
-		mux.HandleFunc("GET /api/google/oauth/callback", e.GoogleCallback)
-		mux.HandleFunc("POST /api/google/sync", e.GoogleSync)
 	}
 
 	return withMiddleware(mux)

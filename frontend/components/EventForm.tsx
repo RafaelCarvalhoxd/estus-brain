@@ -6,20 +6,10 @@ import type { Event } from "@/lib/agenda";
 import {
   createEventAction,
   deleteEventAction,
-  syncGoogleAction,
   updateEventAction,
   type CreateEventState,
 } from "@/app/agenda/actions";
 import { IconPencil, IconTrash } from "./icons";
-
-function IconSync() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2" />
-      <path d="M18 3v4h-4M6 21v-4h4" />
-    </svg>
-  );
-}
 
 function formatTimeRange(startsAt: string, endsAt: string): string {
   const start = new Date(startsAt);
@@ -125,7 +115,6 @@ export function EventRow({ event }: { event: Event }) {
           <span className="event-title">{event.title}</span>
           {event.location && <span className="event-location">{event.location}</span>}
         </div>
-        {event.google_event_id && <span className="badge">Google</span>}
       </div>
       <div className="row-actions">
         <button className="icon-btn" type="button" aria-label="Editar evento" onClick={() => setEditing(true)}>
@@ -196,32 +185,6 @@ export function NewEventForm({
         {state.status === "error" && <p className="form-error">{state.message}</p>}
         {state.status === "success" && <p className="form-success">{state.message}</p>}
       </form>
-    </div>
-  );
-}
-
-export function GoogleSyncButton() {
-  const [isPending, startTransition] = useTransition();
-  const [state, setState] = useState<{ status: "idle" | "error" | "success"; message?: string }>({ status: "idle" });
-
-  return (
-    <div className="sync-block">
-      <button
-        type="button"
-        className="btn-primary"
-        disabled={isPending}
-        onClick={() =>
-          startTransition(async () => {
-            const result = await syncGoogleAction();
-            setState(result);
-          })
-        }
-      >
-        <IconSync />
-        {isPending ? "Sincronizando…" : "Sincronizar agora"}
-      </button>
-      {state.status === "error" && <p className="form-error">{state.message}</p>}
-      {state.status === "success" && <p className="form-success">{state.message}</p>}
     </div>
   );
 }

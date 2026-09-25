@@ -81,10 +81,8 @@ func run() error {
 	reminderHandlers := httpapi.NewReminderHandlers(reminderService)
 
 	eventRepo := postgres.NewEventRepo(db)
-	googleTokenRepo := postgres.NewGoogleTokenRepo(db)
-	googleService := service.NewGoogleService(googleTokenRepo)
-	eventService := service.NewEventService(eventRepo, googleService)
-	eventHandlers := httpapi.NewEventHandlers(eventService, googleService)
+	eventService := service.NewEventService(eventRepo)
+	eventHandlers := httpapi.NewEventHandlers(eventService)
 
 	trainingService := service.NewTrainingService(postgres.NewWorkoutRepo(db))
 	trainingHandlers := httpapi.NewTrainingHandlers(trainingService)

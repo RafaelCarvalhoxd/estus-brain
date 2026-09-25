@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createEvent, deleteEvent, triggerGoogleSync, updateEvent } from "@/lib/agenda";
+import { createEvent, deleteEvent, updateEvent } from "@/lib/agenda";
 
 export type CreateEventState = {
   status: "idle" | "error" | "success";
@@ -93,19 +93,4 @@ export async function updateEventAction(
   });
   revalidatePath("/agenda");
   return {};
-}
-
-export type SyncState = {
-  status: "idle" | "error" | "success";
-  message?: string;
-};
-
-export async function syncGoogleAction(): Promise<SyncState> {
-  try {
-    const result = await triggerGoogleSync();
-    revalidatePath("/agenda");
-    return { status: "success", message: `${result.imported} evento(s) sincronizado(s).` };
-  } catch (err) {
-    return { status: "error", message: err instanceof Error ? err.message : "Falha ao sincronizar." };
-  }
 }

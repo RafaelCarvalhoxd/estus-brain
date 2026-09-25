@@ -67,55 +67,6 @@ func TestEventRepo_Integration(t *testing.T) {
 		}
 	}
 
-	googleID := "google-event-" + created.ID
-	syncedStart := starts.Add(24 * time.Hour)
-	syncedEnd := syncedStart.Add(time.Hour)
-	if err := repo.UpsertFromGoogle(ctx, googleID, domain.Event{
-		Title:    "Reunião importada",
-		StartsAt: syncedStart,
-		EndsAt:   syncedEnd,
-	}); err != nil {
-		t.Fatalf("upsert from google (insert): %v", err)
-	}
-	defer func() {
-		db.Pool.Exec(ctx, `delete from events where google_event_id = $1`, googleID)
-	}()
-
-	afterFirst, err := repo.ListRange(ctx, syncedStart.Add(-time.Minute), syncedEnd.Add(time.Minute))
-	if err != nil {
-		t.Fatalf("list range after first upsert: %v", err)
-	}
-	if len(afterFirst) != 1 {
-		t.Fatalf("expected exactly 1 event after first upsert, got %d", len(afterFirst))
-	}
-	if afterFirst[0].Title != "Reunião importada" {
-		t.Errorf("unexpected title after first upsert: %q", afterFirst[0].Title)
-	}
-
-	// Re-running the same upsert with a changed title must update the
-	// existing row rather than insert a duplicate.
-	if err := repo.UpsertFromGoogle(ctx, googleID, domain.Event{
-		Title:    "Reunião importada (atualizada)",
-		StartsAt: syncedStart,
-		EndsAt:   syncedEnd,
-	}); err != nil {
-		t.Fatalf("upsert from google (update): %v", err)
-	}
-
-	afterSecond, err := repo.ListRange(ctx, syncedStart.Add(-time.Minute), syncedEnd.Add(time.Minute))
-	if err != nil {
-		t.Fatalf("list range after second upsert: %v", err)
-	}
-	if len(afterSecond) != 1 {
-		t.Fatalf("expected upsert to update in place, got %d rows", len(afterSecond))
-	}
-	if afterSecond[0].Title != "Reunião importada (atualizada)" {
-		t.Errorf("expected title to be updated, got %q", afterSecond[0].Title)
-	}
-	if afterSecond[0].GoogleEventID == nil || *afterSecond[0].GoogleEventID != googleID {
-		t.Errorf("expected google_event_id to be set to %q", googleID)
-	}
-
 	if err := repo.Delete(ctx, created.ID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}

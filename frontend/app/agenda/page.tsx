@@ -1,8 +1,7 @@
-import { googleStatus, listEvents, type Event } from "@/lib/agenda";
+import { listEvents, type Event } from "@/lib/agenda";
 import { buildMonthGrid, currentYearMonth } from "@/lib/month";
 import { ModuleTopBar } from "@/components/ModuleTopBar";
 import { TopBar } from "@/components/TopBar";
-import { GoogleSyncButton } from "@/components/EventForm";
 import { NewEventModal } from "@/components/NewEventModal";
 import { CalendarGrid } from "@/components/CalendarGrid";
 import "../ui.css";
@@ -37,7 +36,7 @@ export default async function AgendaPage({
   const from = new Date(`${days[0].iso}T00:00:00`);
   const to = new Date(`${days[days.length - 1].iso}T23:59:59`);
 
-  const [events, google] = await Promise.all([listEvents(from, to), googleStatus()]);
+  const events = await listEvents(from, to);
   const eventsByDay = groupByDay(events);
 
   return (
@@ -48,22 +47,10 @@ export default async function AgendaPage({
           <TopBar
             month={month}
             basePath="/agenda"
-            action={
-              <div className="agenda-google-status">
-                {google.connected ? (
-                  <span className="badge">Google Agenda conectada</span>
-                ) : (
-                  <a className="agenda-connect-link" href="/api/google/oauth/start">
-                    Conectar Google Agenda
-                  </a>
-                )}
-                <NewEventModal />
-              </div>
-            }
+            action={<NewEventModal />}
           />
 
           <div className="panel cal-panel">
-            <GoogleSyncButton />
             <CalendarGrid days={days} eventsByDay={eventsByDay} />
           </div>
         </div>

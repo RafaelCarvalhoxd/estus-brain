@@ -14,7 +14,6 @@ export interface Event {
   notes: string;
   starts_at: string;
   ends_at: string;
-  google_event_id?: string;
 }
 
 export interface CreateEventInput {
@@ -23,14 +22,6 @@ export interface CreateEventInput {
   notes?: string;
   starts_at: string;
   ends_at: string;
-}
-
-export interface GoogleStatus {
-  connected: boolean;
-}
-
-export interface GoogleSyncResult {
-  imported: number;
 }
 
 async function agendaFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -67,12 +58,4 @@ export function updateEvent(id: string, input: CreateEventInput): Promise<Event>
 
 export function deleteEvent(id: string): Promise<void> {
   return agendaFetch<void>(`/api/events/${id}`, { method: "DELETE" });
-}
-
-export function googleStatus(): Promise<GoogleStatus> {
-  return agendaFetch<GoogleStatus>("/api/google/status", { cache: "no-store" });
-}
-
-export function triggerGoogleSync(): Promise<GoogleSyncResult> {
-  return agendaFetch<GoogleSyncResult>("/api/google/sync", { method: "POST" });
 }
