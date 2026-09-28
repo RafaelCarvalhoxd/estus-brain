@@ -158,6 +158,7 @@ func run() error {
 		Diet:           dietService,
 		Documents:      documentServiceOrNil(documentService, documentErr),
 		Boards:         boardService,
+		Investments:    investmentService,
 		Location:       location,
 	})
 	chat := assistant.NewChat(tools, assistantRepo, chatCfg)

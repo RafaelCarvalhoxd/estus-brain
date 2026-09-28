@@ -58,6 +58,7 @@ type Deps struct {
 	Diet           *service.DietService
 	Documents      *service.DocumentService
 	Boards         *service.BoardService
+	Investments    *service.InvestmentService
 	// Location is the owner's time zone: "today", "this month" and bare
 	// dates and times in tool input are read in it.
 	Location *time.Location
@@ -79,6 +80,7 @@ func New(deps Deps) *Registry {
 	r := &Registry{deps: deps, byName: map[string]Tool{}}
 	r.addFinance()
 	r.addBills()
+	r.addInvestments()
 	r.addNotes()
 	r.addReminders()
 	r.addAgenda()

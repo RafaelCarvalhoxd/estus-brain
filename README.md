@@ -100,7 +100,7 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
 ### Ferramentas e MCP
 
 Tudo que o assistente faz é uma **ferramenta** em
-`backend/internal/assistant` (33 hoje: gastos, categorias, cartões, contas,
+`backend/internal/assistant` (gastos, categorias, cartões, contas, investimentos,
 notas, lembretes, agenda, hábitos, treino, dieta, documentos, quadros e um
 resumo do dia). A mesma lista serve os atalhos do chat
 (`POST /api/assistant/tools/{nome}`) e o **servidor MCP** em `/mcp`

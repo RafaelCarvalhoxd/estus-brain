@@ -26,6 +26,7 @@ const appRules = `Como o app funciona:
 - Parcelado: installments com o total em amount, ou o valor da parcela com per_installment=true. Cada parcela aparece no seu mês. Não marque recurring junto. Excluir ou editar uma parcela vale para a compra inteira.
 - Categorias têm tipo: despesa conta como gasto; receita conta como entrada.
 - Saídas do mês = dinheiro que saiu de fato: débito, pix, faturas pagas e aportes em investimentos. Compra no crédito só sai quando a fatura é paga. Entradas = contas recebidas + lançamentos em receita. Saldo = entradas − saídas.
+- Investimentos são um saldo à parte: o valor inicial de investments_create não sai do saldo da conta; só os aportes de investments_contribute saem.
 - Fixos = lançamentos recorrentes, parcelas (até a última) e contas a pagar recorrentes; o resto é variável.
 - Contas: "já paguei X" é bills_pay (registra a despesa); conta a receber é bills_mark_received. Conta recorrente se repete todo mês até bills_end_series (delete_following exclui as seguintes não pagas).
 - Lembretes podem repetir em dias da semana ou num dia do mês; concluir um repetido o move para a próxima vez.
