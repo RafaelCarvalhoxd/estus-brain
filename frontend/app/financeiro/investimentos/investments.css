@@ -57,6 +57,9 @@
   padding: 0 0 0 12px;
   border-left: 2px solid var(--hairline);
 }
+.inv-initial {
+  color: var(--ink-mute);
+}
 .inv-contributions li {
   display: grid;
   grid-template-columns: 1fr auto auto;

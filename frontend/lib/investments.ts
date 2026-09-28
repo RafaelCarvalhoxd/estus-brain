@@ -16,6 +16,8 @@ export interface Contribution {
   id: string;
   amount: Money;
   date: string;
+  /** The opening amount: already invested, so it never left the balance. */
+  initial: boolean;
 }
 
 export interface Investment {

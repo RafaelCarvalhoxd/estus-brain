@@ -50,8 +50,10 @@ func TestInvestmentRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("month total: %v", err)
 	}
-	if total != 125_000 {
-		t.Errorf("month total = %d, want 125000", total)
+	// The opening 1.000,00 was already invested; only the later 250,00 left
+	// the account.
+	if total != 25_000 {
+		t.Errorf("month total = %d, want 25000", total)
 	}
 	if next, _ := repo.MonthTotal(ctx, ym.Add(1)); next != 0 {
 		t.Errorf("next month total = %d, want 0", next)
@@ -69,6 +71,9 @@ func TestInvestmentRepo(t *testing.T) {
 	}
 	if found == nil || len(found.Contributions) != 2 || found.InvestedCents() != 125_000 {
 		t.Fatalf("listed investment = %+v", found)
+	}
+	if !found.Contributions[0].Initial || found.Contributions[1].Initial {
+		t.Errorf("only the opening contribution is initial: %+v", found.Contributions)
 	}
 
 	inv.Name, inv.RateBP, inv.RatePeriod = "CDB renomeado", 1200, domain.RatePerYear

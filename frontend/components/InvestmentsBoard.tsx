@@ -130,17 +130,21 @@ function AmountDateFields({
   onAmount,
   onDate,
   disabled,
+  amountLabel,
+  dateLabel,
 }: {
   amount: string;
   date: string;
   onAmount: (v: string) => void;
   onDate: (v: string) => void;
   disabled: boolean;
+  amountLabel: string;
+  dateLabel: string;
 }) {
   return (
     <div className="row2">
       <div className="field">
-        <label htmlFor="inv-amount">Valor</label>
+        <label htmlFor="inv-amount">{amountLabel}</label>
         <input
           id="inv-amount"
           type="text"
@@ -152,7 +156,7 @@ function AmountDateFields({
         />
       </div>
       <div className="field">
-        <label htmlFor="inv-date">Data do aporte</label>
+        <label htmlFor="inv-date">{dateLabel}</label>
         <input id="inv-date" type="date" value={date} onChange={(e) => onDate(e.target.value)} disabled={disabled} />
       </div>
     </div>
@@ -217,8 +221,16 @@ function NewInvestmentForm({ onClose }: { onClose: () => void }) {
   return (
     <div className="form-grid">
       <InvestmentFieldsForm fields={fields} onChange={setFields} disabled={saving} />
-      <AmountDateFields amount={amount} date={date} onAmount={setAmount} onDate={setDate} disabled={saving} />
-      <p className="empty-note">O valor sai do saldo do mês do aporte.</p>
+      <AmountDateFields
+        amount={amount}
+        date={date}
+        onAmount={setAmount}
+        onDate={setDate}
+        disabled={saving}
+        amountLabel="Valor inicial"
+        dateLabel="Investido desde"
+      />
+      <p className="empty-note">O valor inicial não sai do saldo. Os aportes seguintes saem.</p>
       <FormFooter
         error={error}
         saving={saving}
@@ -262,7 +274,15 @@ function ContributeForm({ investment, onClose }: { investment: Investment; onClo
 
   return (
     <div className="form-grid">
-      <AmountDateFields amount={amount} date={date} onAmount={setAmount} onDate={setDate} disabled={saving} />
+      <AmountDateFields
+        amount={amount}
+        date={date}
+        onAmount={setAmount}
+        onDate={setDate}
+        disabled={saving}
+        amountLabel="Valor"
+        dateLabel="Data do aporte"
+      />
       <p className="empty-note">O valor sai do saldo do mês do aporte.</p>
       <FormFooter
         error={error}
@@ -295,7 +315,7 @@ function InvestmentRow({ investment, onDialog }: { investment: Investment; onDia
   }
 
   function removeInvestment() {
-    if (!confirm(`Excluir "${investment.name}"? Os aportes voltam para o saldo dos meses em que foram feitos.`)) return;
+    if (!confirm(`Excluir "${investment.name}"? Os aportes feitos depois do valor inicial voltam para o saldo dos meses em que foram feitos.`)) return;
     remove(() => deleteInvestmentAction(investment.id));
   }
 
@@ -350,7 +370,10 @@ function InvestmentRow({ investment, onDialog }: { investment: Investment; onDia
         <ul className="inv-contributions">
           {[...investment.contributions].reverse().map((c) => (
             <li key={c.id}>
-              <span>{formatDay(c.date)}</span>
+              <span>
+                {formatDay(c.date)}
+                {c.initial && <span className="inv-initial"> · valor inicial</span>}
+              </span>
               <span className="tab">{c.amount.formatted}</span>
               <button
                 className="icon-btn bad"
@@ -358,7 +381,8 @@ function InvestmentRow({ investment, onDialog }: { investment: Investment; onDia
                 aria-label={`Excluir aporte de ${formatDay(c.date)}`}
                 disabled={busy}
                 onClick={() => {
-                  if (confirm(`Excluir o aporte de ${c.amount.formatted}? O valor volta para o saldo daquele mês.`)) {
+                  const effect = c.initial ? "O saldo não muda." : "O valor volta para o saldo daquele mês.";
+                  if (confirm(`Excluir o aporte de ${c.amount.formatted}? ${effect}`)) {
                     remove(() => deleteContributionAction(investment.id, c.id));
                   }
                 }}

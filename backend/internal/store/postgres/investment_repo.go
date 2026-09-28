@@ -44,10 +44,10 @@ func (r *InvestmentRepo) Create(ctx context.Context, inv domain.Investment, firs
 	if err != nil {
 		return domain.Investment{}, fmt.Errorf("create investment: %w", err)
 	}
-	first.InvestmentID = inv.ID
+	first.InvestmentID, first.Initial = inv.ID, true
 	err = tx.QueryRow(ctx, `
-		insert into investment_contributions (investment_id, amount_cents, contributed_on)
-		values ($1, $2, $3)
+		insert into investment_contributions (investment_id, amount_cents, contributed_on, is_initial)
+		values ($1, $2, $3, true)
 		returning id, created_at`,
 		first.InvestmentID, int64(first.AmountCents), first.Date,
 	).Scan(&first.ID, &first.CreatedAt)
@@ -90,7 +90,7 @@ func (r *InvestmentRepo) List(ctx context.Context) ([]domain.Investment, error) 
 	}
 
 	crows, err := r.db.Pool.Query(ctx, `
-		select id, investment_id, amount_cents, contributed_on, created_at
+		select id, investment_id, amount_cents, contributed_on, is_initial, created_at
 		from investment_contributions
 		order by contributed_on asc, created_at asc`)
 	if err != nil {
@@ -100,7 +100,7 @@ func (r *InvestmentRepo) List(ctx context.Context) ([]domain.Investment, error) 
 	for crows.Next() {
 		var c domain.InvestmentContribution
 		var cents int64
-		if err := crows.Scan(&c.ID, &c.InvestmentID, &cents, &c.Date, &c.CreatedAt); err != nil {
+		if err := crows.Scan(&c.ID, &c.InvestmentID, &cents, &c.Date, &c.Initial, &c.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan contribution: %w", err)
 		}
 		c.AmountCents = domain.Cents(cents)
@@ -178,11 +178,12 @@ func (r *InvestmentRepo) DeleteContribution(ctx context.Context, investmentID, i
 }
 
 // MonthTotal is what was contributed in ym: money that left the account.
+// The initial amount stays out.
 func (r *InvestmentRepo) MonthTotal(ctx context.Context, ym domain.YearMonth) (domain.Cents, error) {
 	var total int64
 	err := r.db.Pool.QueryRow(ctx, `
 		select coalesce(sum(amount_cents), 0) from investment_contributions
-		where contributed_on >= $1 and contributed_on < $2`,
+		where not is_initial and contributed_on >= $1 and contributed_on < $2`,
 		ym.FirstDay(), ym.Add(1).FirstDay(),
 	).Scan(&total)
 	if err != nil {

@@ -59,7 +59,10 @@ type InvestmentContribution struct {
 	AmountCents  Cents
 	// Date is a calendar day (midnight UTC); its month is the month the
 	// money left the account.
-	Date      time.Time
+	Date time.Time
+	// Initial is the amount the investment was opened with: money already
+	// invested before, so it never leaves the month's balance.
+	Initial   bool
 	CreatedAt time.Time
 }
 

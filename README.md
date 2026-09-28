@@ -14,7 +14,7 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
   aproximar com a roda; o painel de ajustes no topo guarda densidade das
   dobras, brilho, velocidade, tamanho e relevo no navegador. Respeita
   `prefers-reduced-motion` (vira uma imagem parada).
-- **Financeiro** (`/financeiro`) — um módulo com cinco seções por abas:
+- **Financeiro** (`/financeiro`) — um módulo com seis seções por abas:
   - *Dashboard* — o pulso do mês: total gasto (com variação vs. mês anterior),
     gasto por categoria, ritmo semanal.
   - *Lançamentos* — o extrato completo do mês e o formulário de novo
@@ -30,6 +30,12 @@ Seu app pessoal — um cérebro com dez módulos em volta, rodando num servidor 
     pendente/pago) a partir da data de vencimento — separado do extrato de
     lançamentos porque é sobre o que ainda vai acontecer, não sobre o que já
     aconteceu.
+  - *Investimentos* — cada investimento tem nome, tipo (CDB, Tesouro,
+    LCI/LCA…) e rendimento em % ao mês ou ao ano. O dinheiro investido é
+    um saldo à parte: o valor inicial não mexe no saldo da conta, e cada
+    aporte seguinte entra nas saídas do mês em que foi feito. O valor de
+    hoje é uma estimativa, com juros compostos sobre cada aporte desde a
+    data dele.
 - **Senhas** (`/senhas`) — um cofre de senhas criptografado (AES-256-GCM).
   Revelar uma senha pede de novo a senha do app (`APP_PASSWORD`), mesmo
   com o login feito.

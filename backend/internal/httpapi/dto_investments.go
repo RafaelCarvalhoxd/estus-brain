@@ -10,10 +10,12 @@ type contributionDTO struct {
 	ID     string   `json:"id"`
 	Amount moneyDTO `json:"amount"`
 	Date   string   `json:"date"`
+	// Initial is the opening amount, which never left the balance.
+	Initial bool `json:"initial"`
 }
 
 func toContributionDTO(c domain.InvestmentContribution) contributionDTO {
-	return contributionDTO{ID: c.ID, Amount: toMoneyDTO(c.AmountCents), Date: c.Date.Format(time.DateOnly)}
+	return contributionDTO{ID: c.ID, Amount: toMoneyDTO(c.AmountCents), Date: c.Date.Format(time.DateOnly), Initial: c.Initial}
 }
 
 type investmentDTO struct {
