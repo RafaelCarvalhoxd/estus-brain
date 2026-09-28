@@ -299,6 +299,8 @@
   background: var(--surface);
   margin-bottom: 24px;
   overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
 }
 .module-tab {
   padding: 7px 14px;

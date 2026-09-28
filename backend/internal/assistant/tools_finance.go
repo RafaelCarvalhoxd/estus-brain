@@ -330,7 +330,7 @@ func (r *Registry) addFinance() {
 
 	r.add(Tool{
 		Name: "finance_month_summary", Title: "Resumo do mês", Module: "financeiro", ReadOnly: true,
-		Description: "Resumo financeiro de um mês. gasto = despesas lançadas no mês (inclui crédito). entradas = contas recebidas + lançamentos em categoria de receita. saidas = dinheiro que saiu de fato (débito, pix e faturas de cartão pagas; compra no crédito só sai quando a fatura é paga). saldo = entradas − saidas. fixos = recorrentes e parcelas (até a última) + contas recorrentes ainda a pagar; o resto é variável. Traz também gasto por categoria com orçamento e contas em aberto do mês.",
+		Description: "Resumo financeiro de um mês. gasto = despesas lançadas no mês (inclui crédito). entradas = contas recebidas + lançamentos em categoria de receita. saidas = dinheiro que saiu de fato (débito, pix, faturas de cartão pagas e aportes em investimentos; compra no crédito só sai quando a fatura é paga). saldo = entradas − saidas. fixos = recorrentes e parcelas (até a última) + contas recorrentes ainda a pagar; o resto é variável. Traz também gasto por categoria com orçamento e contas em aberto do mês.",
 		Input:       object(map[string]any{"month": str("Mês AAAA-MM, ou atual/passado/proximo; padrão atual")}),
 		run: typed(func(ctx context.Context, in struct {
 			Month string `json:"month"`

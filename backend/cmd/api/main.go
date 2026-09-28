@@ -74,6 +74,9 @@ func run() error {
 		return fmt.Errorf("ASSISTANT_TZ: %w", err)
 	}
 
+	investmentService := service.NewInvestmentService(postgres.NewInvestmentRepo(db), location)
+	dashboardService.WithInvestments(investmentService.MonthTotal)
+
 	cardSpendingService := service.NewCardSpendingService(postgres.NewCardSpendingRepo(db), cardRepo, location)
 
 	reminderRepo := postgres.NewReminderRepo(db)
@@ -176,6 +179,7 @@ func run() error {
 		Assistant:    assistantHandlers,
 		MCP:          mcpHandler,
 		CardSpending: httpapi.NewCardSpendingHandlers(cardSpendingService),
+		Investments:  httpapi.NewInvestmentHandlers(investmentService),
 	})
 
 	srv := &http.Server{

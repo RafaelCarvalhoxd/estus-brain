@@ -41,7 +41,11 @@ export default async function FinanceDashboardPage({
         <div className="tile">
           <p className="tile-label">Saídas</p>
           <p className="tile-figure tab">{summary.paid_out.formatted}</p>
-          <p className="tile-sub">débito, pix e faturas pagas</p>
+          <p className="tile-sub">
+            {summary.invested.cents > 0
+              ? `débito, pix, faturas e ${summary.invested.formatted} em aportes`
+              : "débito, pix e faturas pagas"}
+          </p>
         </div>
         <div className="tile">
           <p className="tile-label">Saldo</p>

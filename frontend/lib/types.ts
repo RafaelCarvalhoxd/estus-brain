@@ -76,9 +76,11 @@ export interface MonthSummary {
   previous_month: Money;
   recurring: Money;
   variable: Money;
-  /** What actually left the account in the month: débito, pix and card
-   * invoices paid. */
+  /** What actually left the account in the month: débito, pix, card
+   * invoices paid and investment contributions. */
   paid_out: Money;
+  /** The month's investment contributions, already inside paid_out. */
+  invested: Money;
   /** Recurring bills due this month and not paid yet — fixed spending to come. */
   open_fixed: Money;
   open_installments: Money;

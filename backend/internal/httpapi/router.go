@@ -8,17 +8,18 @@ import "net/http"
 // development when, say, VAULT_ENCRYPTION_KEY isn't set yet but you still
 // want the rest of the API up.
 type Modules struct {
-	Bills     *BillHandlers
-	Vault     *VaultHandlers
-	Notes     *NoteHandlers
-	Reminders *ReminderHandlers
-	Events    *EventHandlers
-	Documents *DocumentHandlers
-	Training  *TrainingHandlers
-	Diet      *DietHandlers
-	Boards    *BoardHandlers
-	Habits    *HabitHandlers
-	Assistant *AssistantHandlers
+	Bills       *BillHandlers
+	Vault       *VaultHandlers
+	Notes       *NoteHandlers
+	Reminders   *ReminderHandlers
+	Events      *EventHandlers
+	Documents   *DocumentHandlers
+	Training    *TrainingHandlers
+	Diet        *DietHandlers
+	Boards      *BoardHandlers
+	Habits      *HabitHandlers
+	Assistant   *AssistantHandlers
+	Investments *InvestmentHandlers
 	// CardSpending is the Cartões dashboard.
 	CardSpending *CardSpendingHandlers
 	// MCP serves the Model Context Protocol; it checks its own token.
@@ -54,6 +55,15 @@ func NewRouter(h *Handlers, m Modules) http.Handler {
 	mux.HandleFunc("PATCH /api/transactions/{id}", h.UpdateTransaction)
 	mux.HandleFunc("PUT /api/transactions/{id}", h.ReplaceTransaction)
 	mux.HandleFunc("DELETE /api/transactions/{id}", h.DeleteTransaction)
+
+	if iv := m.Investments; iv != nil {
+		mux.HandleFunc("GET /api/investments", iv.List)
+		mux.HandleFunc("POST /api/investments", iv.Create)
+		mux.HandleFunc("PUT /api/investments/{id}", iv.Update)
+		mux.HandleFunc("DELETE /api/investments/{id}", iv.Delete)
+		mux.HandleFunc("POST /api/investments/{id}/contributions", iv.Contribute)
+		mux.HandleFunc("DELETE /api/investments/{id}/contributions/{cid}", iv.DeleteContribution)
+	}
 
 	if b := m.Bills; b != nil {
 		mux.HandleFunc("GET /api/bills", b.List)

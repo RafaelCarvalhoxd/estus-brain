@@ -9,6 +9,7 @@ const TABS = [
   { href: "/financeiro/categorias", label: "Categorias" },
   { href: "/financeiro/cartoes", label: "Cartões" },
   { href: "/financeiro/contas", label: "Contas" },
+  { href: "/financeiro/investimentos", label: "Investimentos" },
 ];
 
 export function FinanceTabs() {

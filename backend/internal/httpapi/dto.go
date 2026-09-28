@@ -151,6 +151,7 @@ type monthSummaryDTO struct {
 	Recurring        moneyDTO                `json:"recurring"`
 	Variable         moneyDTO                `json:"variable"`
 	PaidOut          moneyDTO                `json:"paid_out"`
+	Invested         moneyDTO                `json:"invested"`
 	OpenFixed        moneyDTO                `json:"open_fixed"`
 	OpenInstallments moneyDTO                `json:"open_installments"`
 	OpenInvoice      moneyDTO                `json:"open_invoice"`
@@ -192,6 +193,7 @@ func toMonthSummaryDTO(s service.MonthSummary) monthSummaryDTO {
 		Recurring:        toMoneyDTO(s.RecurringCents),
 		Variable:         toMoneyDTO(s.VariableCents),
 		PaidOut:          toMoneyDTO(s.PaidOutCents),
+		Invested:         toMoneyDTO(s.InvestedCents),
 		OpenFixed:        toMoneyDTO(s.OpenFixedCents),
 		OpenInstallments: toMoneyDTO(s.OpenInstallmentCents),
 		OpenInvoice:      toMoneyDTO(s.OpenInvoiceCents),

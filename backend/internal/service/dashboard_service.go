@@ -13,6 +13,14 @@ type DashboardService struct {
 	// openFixed, when set, adds the month's unpaid recurring bills to its
 	// fixed spending.
 	openFixed func(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
+	// invested, when set, adds the month's investment contributions to what
+	// left the account.
+	invested func(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)
+}
+
+// WithInvestments counts contributions as money that left the account.
+func (s *DashboardService) WithInvestments(f func(ctx context.Context, ym domain.YearMonth) (domain.Cents, error)) {
+	s.invested = f
 }
 
 // WithOpenFixedBills counts unpaid recurring bills as fixed spending.
@@ -58,8 +66,10 @@ type MonthSummary struct {
 	PreviousMonthCents domain.Cents
 	RecurringCents     domain.Cents
 	// PaidOutCents is what actually left the account this month, the
-	// balance's outflow.
+	// balance's outflow. It includes InvestedCents.
 	PaidOutCents domain.Cents
+	// InvestedCents is the month's investment contributions.
+	InvestedCents domain.Cents
 	// OpenFixedCents is the month's recurring bills still to be paid: fixed
 	// spending that is not an expense yet.
 	OpenFixedCents       domain.Cents
@@ -88,6 +98,12 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 	paidOut, err := s.transactions.PaidOutTotal(ctx, ym)
 	if err != nil {
 		return MonthSummary{}, err
+	}
+	var invested domain.Cents
+	if s.invested != nil {
+		if invested, err = s.invested(ctx, ym); err != nil {
+			return MonthSummary{}, err
+		}
 	}
 	var openFixed domain.Cents
 	if s.openFixed != nil {
@@ -143,7 +159,8 @@ func (s *DashboardService) MonthSummary(ctx context.Context, ym domain.YearMonth
 		TotalCents:           total,
 		PreviousMonthCents:   previousTotal,
 		RecurringCents:       recurring,
-		PaidOutCents:         paidOut,
+		PaidOutCents:         paidOut + invested,
+		InvestedCents:        invested,
 		OpenFixedCents:       openFixed,
 		VariableCents:        total - recurring,
 		OpenInstallmentCents: openInstallments,
